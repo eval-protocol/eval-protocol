@@ -1,0 +1,274 @@
+---
+title: CLI Reference Overview
+description: 'Command-line interface guide for Reward Protocol'
+---
+
+# CLI Reference Overview
+
+The Reward Protocol CLI provides powerful commands for developing, testing, and deploying reward functions. All commands are available through the `reward-protocol` command.
+
+## Available Commands
+
+<CardGroup cols={2}>
+  <Card
+    title="run"
+    icon="play"
+    href="/cli-reference/run"
+  >
+    Execute comprehensive evaluations with datasets
+  </Card>
+  <Card
+    title="preview"
+    icon="eye"
+    href="/cli-reference/preview"
+  >
+    Quick evaluation preview with sample data
+  </Card>
+  <Card
+    title="deploy"
+    icon="rocket"
+    href="/cli-reference/deploy"
+  >
+    Deploy reward functions to production
+  </Card>
+  <Card
+    title="help"
+    icon="question"
+    href="#help"
+  >
+    Get help and usage information
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+### Get Help
+
+```bash
+# General help
+reward-protocol --help
+
+# Command-specific help
+reward-protocol run --help
+reward-protocol preview --help
+reward-protocol deploy --help
+```
+
+### Basic Usage
+
+```bash
+# Run evaluation with configuration
+reward-protocol run --config-path ./conf --config-name run_eval
+
+# Preview with sample data
+reward-protocol preview --metrics-folders "word_count=./metrics" --samples ./samples.jsonl
+
+# Deploy to production
+reward-protocol deploy --id my-evaluator --metrics-folders "metric=./path" --force
+```
+
+## Global Options
+
+Available for all commands:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--verbose` | Enable verbose logging | `false` |
+| `--help` | Show help message | - |
+| `--version` | Show version information | - |
+
+## Configuration with Hydra
+
+The `run` command uses Hydra for configuration management:
+
+```bash
+# Basic configuration
+reward-protocol run --config-name config.yaml --config-path ./conf
+
+# Override parameters
+reward-protocol run \
+  --config-name config.yaml \
+  --config-path ./conf \
+  evaluation_params.limit_samples=10 \
+  generation.model_name="new-model"
+
+# Multiple overrides
+reward-protocol run \
+  --config-name config.yaml \
+  --config-path ./conf \
+  evaluation_params.limit_samples=10 \
+  generation.enabled=false \
+  evaluation_params.output_name="custom_results"
+```
+
+## Authentication
+
+### Environment Variables
+
+Set up authentication using environment variables:
+
+```bash
+export FIREWORKS_API_KEY="your_api_key"
+export FIREWORKS_ACCOUNT_ID="your_account_id"
+```
+
+### Configuration File
+
+Alternative authentication using `~/.fireworks/auth.ini`:
+
+```ini
+[fireworks]
+api_key = YOUR_API_KEY
+account_id = YOUR_ACCOUNT_ID
+```
+
+## Common Workflows
+
+### 1. Development Workflow
+
+```bash
+# 1. Create and test reward function locally
+reward-protocol preview --metrics-folders "my_metric=./metrics" --samples ./test_samples.jsonl
+
+# 2. Run comprehensive evaluation
+reward-protocol run --config-path ./conf --config-name dev_eval evaluation_params.limit_samples=20
+
+# 3. Deploy when ready
+reward-protocol deploy --id dev-evaluator --metrics-folders "my_metric=./metrics" --force
+```
+
+### 2. Production Workflow
+
+```bash
+# 1. Full evaluation with production data
+reward-protocol run --config-path ./conf --config-name prod_eval
+
+# 2. Deploy to production
+reward-protocol deploy --id prod-evaluator --metrics-folders "metrics=./metrics" --force
+
+# 3. Local development server (for testing)
+reward-protocol deploy --id test-server --target local-serve --function-ref my_module.my_function --force
+```
+
+### 3. Batch Processing
+
+```bash
+# Process large datasets efficiently
+reward-protocol run \
+  --config-path ./conf \
+  --config-name batch_eval \
+  evaluation_params.batch_size=100 \
+  evaluation_params.limit_samples=10000
+```
+
+## Error Handling
+
+### Common Issues
+
+1. **Authentication Error**
+   ```bash
+   Error: Missing FIREWORKS_API_KEY
+   ```
+   Solution: Set environment variables or auth.ini file
+
+2. **Configuration Error**
+   ```bash
+   Error: Config file not found
+   ```
+   Solution: Check config path and file name
+
+3. **Module Import Error**
+   ```bash
+   Error: Cannot import reward function
+   ```
+   Solution: Ensure proper Python path and module structure
+
+### Debugging
+
+Enable verbose logging for troubleshooting:
+
+```bash
+reward-protocol run --config-path ./conf --config-name config --verbose
+```
+
+## Output Formats
+
+### Standard Output
+
+```bash
+# JSON format
+reward-protocol run --config-path ./conf --config-name config --output-format json
+
+# Table format (default)
+reward-protocol run --config-path ./conf --config-name config --output-format table
+```
+
+### File Output
+
+Results are automatically saved to timestamped directories:
+
+```
+outputs/
+├── 2024-01-15_14-30-22/
+│   ├── evaluation_results.jsonl
+│   ├── preview_input_output_pairs.jsonl
+│   └── config.yaml
+```
+
+## Advanced Usage
+
+### Custom Metrics Folders
+
+```bash
+reward-protocol preview \
+  --metrics-folders "accuracy=./metrics/accuracy" "length=./metrics/length" \
+  --samples ./samples.jsonl
+```
+
+### Function Reference
+
+```bash
+# Deploy specific function
+reward-protocol deploy \
+  --id custom-evaluator \
+  --function-ref my_module.specific_function \
+  --force
+```
+
+### Local Development Server
+
+```bash
+# Start local server with tunnel
+reward-protocol deploy \
+  --id local-dev \
+  --target local-serve \
+  --function-ref my_rewards.test_function \
+  --verbose \
+  --force
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card
+    title="Run Command"
+    icon="play"
+    href="/cli-reference/run"
+  >
+    Detailed run command reference
+  </Card>
+  <Card
+    title="Preview Command"
+    icon="eye"
+    href="/cli-reference/preview"
+  >
+    Preview command guide
+  </Card>
+  <Card
+    title="Deploy Command"
+    icon="rocket"
+    href="/cli-reference/deploy"
+  >
+    Deploy command reference
+  </Card>
+</CardGroup>

@@ -1,0 +1,146 @@
+---
+title: Examples Overview
+description: 'Explore real-world examples and use cases for Reward Protocol'
+---
+
+# Examples Overview
+
+Reward Protocol includes comprehensive examples to help you understand and implement various evaluation scenarios. Each example demonstrates best practices and common patterns.
+
+## Available Examples
+
+<CardGroup cols={2}>
+  <Card
+    title="Math Evaluation"
+    icon="calculator"
+    href="/examples/math-evaluation"
+  >
+    Evaluate mathematical reasoning using GSM8K dataset
+  </Card>
+  <Card
+    title="Code Execution"
+    icon="terminal"
+    href="/examples/code-execution"
+  >
+    Test and validate generated code with E2B sandboxes
+  </Card>
+  <Card
+    title="Tool Calling"
+    icon="tools"
+    href="/examples/tool-calling"
+  >
+    Verify function calling and API usage patterns
+  </Card>
+  <Card
+    title="APPS Coding"
+    icon="code"
+    href="/examples/apps-coding"
+  >
+    Comprehensive coding evaluation using APPS dataset
+  </Card>
+</CardGroup>
+
+## Example Structure
+
+Each example follows a consistent structure:
+
+```
+examples/
+├── example_name/
+│   ├── README.md          # Detailed documentation
+│   ├── main.py           # Main execution script
+│   ├── conf/             # Configuration files
+│   │   └── config.yaml   # Hydra configuration
+│   └── dataset.jsonl     # Sample data (if applicable)
+```
+
+## Running Examples
+
+### Method 1: CLI with Configuration
+
+Most examples can be run using the CLI with Hydra configuration:
+
+```bash
+reward-protocol run --config-path examples/math_example/conf --config-name run_eval
+```
+
+### Method 2: Direct Python Execution
+
+Some examples can be run directly:
+
+```bash
+cd examples/math_example
+python main.py
+```
+
+### Method 3: Custom Parameters
+
+Override configuration parameters:
+
+```bash
+reward-protocol run \
+  --config-path examples/math_example/conf \
+  --config-name run_eval \
+  evaluation_params.limit_samples=10 \
+  generation.model_name="accounts/fireworks/models/llama-v3p1-405b-instruct"
+```
+
+## Key Patterns
+
+### 1. Dataset Integration
+
+Examples demonstrate how to work with different data formats:
+
+- **HuggingFace Datasets**: Direct integration with popular datasets
+- **JSONL Files**: Custom data formats
+- **Derived Datasets**: Transforming existing datasets
+
+### 2. Evaluation Workflows
+
+Common evaluation patterns:
+
+- **Generation + Evaluation**: Generate responses and evaluate them
+- **Evaluation Only**: Evaluate pre-generated responses
+- **Batch Processing**: Handle large datasets efficiently
+
+### 3. Configuration Management
+
+Examples show how to use Hydra for:
+
+- **Dataset Configuration**: Flexible data loading
+- **Model Configuration**: Different providers and models
+- **Evaluation Parameters**: Customizable evaluation settings
+
+## Getting Started
+
+1. **Choose an Example**: Select an example that matches your use case
+2. **Review Documentation**: Read the README.md in the example directory
+3. **Install Dependencies**: Ensure all required packages are installed
+4. **Run the Example**: Follow the execution instructions
+5. **Customize**: Modify the configuration for your needs
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card
+    title="Math Evaluation"
+    icon="calculator"
+    href="/examples/math-evaluation"
+  >
+    Start with mathematical reasoning
+  </Card>
+  <Card
+    title="Developer Guide"
+    icon="book"
+    href="/developer-guide/getting-started"
+  >
+    Learn the fundamentals
+  </Card>
+  <Card
+    title="API Reference"
+    icon="api"
+    href="/api-reference/overview"
+  >
+    Explore the API
+  </Card>
+</CardGroup>

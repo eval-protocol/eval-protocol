@@ -1,0 +1,228 @@
+---
+title: Math Evaluation
+description: 'Evaluate mathematical reasoning and problem-solving with GSM8K dataset'
+---
+
+# Math Evaluation Example
+
+This example demonstrates how to evaluate mathematical reasoning using the GSM8K dataset. It showcases pattern matching for final answers and flexible evaluation criteria.
+
+## Overview
+
+The math evaluation example uses:
+- **Dataset**: GSM8K (Grade School Math 8K) from HuggingFace
+- **Task**: Evaluate mathematical word problem solving
+- **Metrics**: Exact match of numerical answers
+- **Pattern**: Extract answers from `<answer>` tags
+
+## Quick Start
+
+Run the math evaluation example:
+
+```bash
+reward-protocol run --config-path examples/math_example/conf --config-name run_eval
+```
+
+## Configuration
+
+The example uses Hydra configuration for flexibility:
+
+```yaml
+# examples/math_example/conf/run_eval.yaml
+defaults:
+  - dataset: gsm8k_math_prompts
+  - generation: fireworks_generation
+  - evaluation: math_evaluation
+  - _self_
+
+evaluation_params:
+  limit_samples: 50
+  output_name: "math_example_results"
+```
+
+## Reward Function
+
+The math reward function extracts and compares numerical answers:
+
+```python
+from reward_protocol import reward_function
+from reward_protocol.models import EvaluateResult, MetricResult
+import re
+
+@reward_function
+def math_reward(
+    messages: List[Dict[str, Any]],
+    ground_truth: Optional[Dict[str, Any]] = None,
+    **kwargs: Any
+) -> EvaluateResult:
+    """Evaluate mathematical reasoning with answer extraction."""
+    
+    if not messages:
+        return EvaluateResult(score=0.0, reason="No messages provided")
+    
+    # Get the response
+    response = messages[-1].get("content", "")
+    
+    # Extract answer from response
+    answer_match = re.search(r'<answer>(.*?)</answer>', response, re.IGNORECASE)
+    if not answer_match:
+        return EvaluateResult(
+            score=0.0,
+            reason="No answer found in required format",
+            metrics={}
+        )
+    
+    predicted_answer = answer_match.group(1).strip()
+    
+    # Get ground truth
+    if not ground_truth:
+        return EvaluateResult(score=0.0, reason="No ground truth provided")
+    
+    expected_answer = str(ground_truth.get("answer", "")).strip()
+    
+    # Compare answers (handle various formats)
+    is_correct = normalize_answer(predicted_answer) == normalize_answer(expected_answer)
+    score = 1.0 if is_correct else 0.0
+    
+    return EvaluateResult(
+        score=score,
+        reason=f"Predicted: {predicted_answer}, Expected: {expected_answer}",
+        metrics={
+            "exact_match": MetricResult(
+                score=score,
+                success=is_correct,
+                reason=f"Answer match: {is_correct}"
+            )
+        }
+    )
+
+def normalize_answer(answer: str) -> str:
+    """Normalize answer for comparison."""
+    # Remove common formatting
+    answer = re.sub(r'[,$\s]', '', answer)
+    # Handle decimals
+    try:
+        return str(float(answer))
+    except ValueError:
+        return answer.lower()
+```
+
+## Dataset Configuration
+
+The example uses a derived dataset configuration:
+
+```yaml
+# conf/dataset/gsm8k_math_prompts.yaml
+defaults:
+  - base_derived_dataset
+  - _self_
+
+base_dataset: "gsm8k"
+system_prompt: |
+  Solve the following math problem step by step.
+  Show your work clearly.
+  Put your final numerical answer between <answer> and </answer> tags.
+
+output_format: "evaluation_format"
+derived_max_samples: 100
+```
+
+## Sample Output
+
+```json
+{
+  "id": "gsm8k_001",
+  "score": 1.0,
+  "reason": "Predicted: 24, Expected: 24",
+  "metrics": {
+    "exact_match": {
+      "score": 1.0,
+      "success": true,
+      "reason": "Answer match: true"
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Janet's ducks lay 16 eggs per day. She eats 3 for breakfast and bakes 4 into muffins for her friends. How many eggs does she sell?"
+    },
+    {
+      "role": "assistant",
+      "content": "I need to find how many eggs Janet sells.\n\nGiven information:\n- Janet's ducks lay 16 eggs per day\n- She eats 3 eggs for breakfast\n- She bakes 4 eggs into muffins\n\nCalculation:\nTotal eggs laid = 16\nEggs used for breakfast = 3\nEggs used for muffins = 4\nTotal eggs used = 3 + 4 = 7\n\nEggs available to sell = 16 - 7 = 9\n\n<answer>9</answer>"
+    }
+  ]
+}
+```
+
+## Advanced Features
+
+### Custom Evaluation Parameters
+
+```bash
+# Limit samples for quick testing
+reward-protocol run \
+  --config-path examples/math_example/conf \
+  --config-name run_eval \
+  evaluation_params.limit_samples=10
+
+# Use different model
+reward-protocol run \
+  --config-path examples/math_example/conf \
+  --config-name run_eval \
+  generation.model_name="accounts/fireworks/models/llama-v3p1-405b-instruct"
+```
+
+### Evaluation Only Mode
+
+Skip generation and evaluate existing responses:
+
+```bash
+reward-protocol run \
+  --config-path examples/math_example/conf \
+  --config-name run_eval \
+  generation.enabled=false
+```
+
+## Integration with TRL
+
+The example can be used with TRL for RLHF training:
+
+```python
+from examples.trl_integration import convert_dataset_to_jsonl
+from reward_protocol.integrations.trl import TRLAdapter
+
+# Convert dataset
+convert_dataset_to_jsonl("gsm8k", "gsm8k_trl.jsonl")
+
+# Create TRL adapter
+adapter = TRLAdapter(reward_function=math_reward)
+
+# Use in training loop
+# (see examples/trl_integration/ for complete example)
+```
+
+## Key Learnings
+
+1. **Answer Extraction**: Use consistent patterns for extracting answers
+2. **Normalization**: Handle various answer formats robustly
+3. **Configuration**: Leverage Hydra for flexible parameter management
+4. **Dataset Integration**: Work seamlessly with HuggingFace datasets
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Code Execution"
+    icon="terminal"
+    href="/examples/code-execution"
+  >
+    Learn about code evaluation
+  </Card>
+  <Card
+    title="TRL Integration"
+    icon="graduation-cap"
+    href="/integrations/trl"
+  >
+    Use with RLHF training
+  </Card>
+</CardGroup>

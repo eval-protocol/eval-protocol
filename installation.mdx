@@ -1,0 +1,93 @@
+---
+title: Installation
+description: 'Install Reward Protocol and get up and running'
+---
+
+# Installation
+
+Reward Protocol is available as a Python package and can be installed using pip.
+
+## Basic Installation
+
+```bash
+pip install reward-protocol
+```
+
+## Optional Dependencies
+
+### TRL Integration
+
+Install the additional dependencies required for running TRL-based training examples:
+
+```bash
+pip install "reward-protocol[trl]"
+```
+
+This includes:
+- `torch>=1.9`
+- `trl>=0.7.0`
+- `peft>=0.7.0`
+- `transformers>=4.0.0`
+- `accelerate>=0.28.0`
+
+### Development Dependencies
+
+For development and testing:
+
+```bash
+pip install "reward-protocol[dev]"
+```
+
+### OpenEvals Integration
+
+To use OpenEvals metrics:
+
+```bash
+pip install "reward-protocol[openevals]"
+```
+
+## Development Installation
+
+If you want to contribute to Reward Protocol or run from source:
+
+```bash
+git clone https://github.com/fireworks-ai/reward-kit
+cd reward-kit
+pip install -e ".[dev]"
+```
+
+## Requirements
+
+- Python 3.10 or higher
+- pip or your preferred package manager
+
+## Verification
+
+Verify your installation by running:
+
+```bash
+reward-protocol --help
+```
+
+You should see the CLI help output, confirming that Reward Protocol is properly installed.
+
+## Next Steps
+
+Now that you have Reward Protocol installed, you can:
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="bolt"
+    href="/quickstart"
+  >
+    Create your first reward function
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/examples/overview"
+  >
+    Explore practical examples
+  </Card>
+</CardGroup>
