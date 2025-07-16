@@ -1,0 +1,660 @@
+---
+title: 'Fireworks AI Integration'
+description: 'Deploy and scale reward functions on the Fireworks AI platform'
+---
+
+# Fireworks AI Integration
+
+[Fireworks AI](https://fireworks.ai) provides a high-performance platform for deploying and scaling AI models and evaluation functions. Reward Protocol includes native integration with Fireworks AI, enabling seamless deployment of reward functions to production environments.
+
+## Overview
+
+The Fireworks AI integration provides:
+- **One-click deployment** of reward functions to scalable infrastructure
+- **Automatic API generation** with authentication and rate limiting
+- **Built-in monitoring** and performance analytics
+- **Global distribution** for low-latency evaluation
+- **Enterprise-grade security** and compliance
+
+## Prerequisites
+
+### Account Setup
+
+1. **Create Fireworks AI Account**: Sign up at [fireworks.ai](https://fireworks.ai)
+2. **Get API Credentials**: Obtain your API key and Account ID from the dashboard
+3. **Set Environment Variables**:
+
+```bash
+export FIREWORKS_API_KEY="your_api_key_here"
+export FIREWORKS_ACCOUNT_ID="your_account_id_here"
+```
+
+Or create a config file:
+
+```bash
+mkdir -p ~/.fireworks
+cat > ~/.fireworks/auth.ini << EOF
+[fireworks]
+api_key = your_api_key_here
+account_id = your_account_id_here
+EOF
+```
+
+## Basic Deployment
+
+### Simple Deployment
+
+Deploy a reward function with minimal configuration:
+
+```python
+from reward_protocol import reward_function
+from reward_protocol.models import EvaluateResult, MetricResult
+
+@reward_function
+def quality_evaluator(messages, **kwargs) -> EvaluateResult:
+    """Evaluate response quality."""
+    response = messages[-1].get("content", "")
+    
+    # Quality metrics
+    word_count = len(response.split())
+    has_examples = "example" in response.lower() or "for instance" in response.lower()
+    proper_length = 20 <= word_count <= 200
+    
+    # Calculate scores
+    length_score = min(word_count / 100.0, 1.0)
+    example_score = 1.0 if has_examples else 0.0
+    quality_score = (length_score + example_score) / 2.0
+    
+    return EvaluateResult(
+        score=quality_score,
+        reason=f"Quality evaluation: {quality_score:.2f}",
+        metrics={
+            "length": MetricResult(
+                length_score,
+                proper_length,
+                f"Word count: {word_count}"
+            ),
+            "examples": MetricResult(
+                example_score,
+                has_examples,
+                f"Contains examples: {has_examples}"
+            )
+        }
+    )
+
+# Deploy to Fireworks AI
+deployment = quality_evaluator.deploy(
+    name="quality-evaluator-v1",
+    description="Evaluates response quality and helpfulness",
+    force=True  # Update if exists
+)
+
+print(f"Deployed! Evaluator ID: {deployment.evaluator_id}")
+print(f"API Endpoint: {deployment.api_url}")
+```
+
+### CLI Deployment
+
+Use the command-line interface for deployment:
+
+```bash
+# Deploy single metric
+reward-protocol deploy \
+  --id quality-evaluator-prod \
+  --display-name "Quality Evaluator - Production" \
+  --description "Production quality evaluation for training pipelines" \
+  --metrics-folders "quality=./rewards/quality" \
+  --target fireworks \
+  --force
+
+# Deploy multiple metrics
+reward-protocol deploy \
+  --id comprehensive-evaluator \
+  --display-name "Comprehensive Evaluation Suite" \
+  --metrics-folders \
+    "accuracy=./rewards/accuracy" \
+    "safety=./rewards/safety" \
+    "quality=./rewards/quality" \
+  --target fireworks \
+  --force \
+  --verbose
+```
+
+## Advanced Deployment Configuration
+
+### Custom Model Providers
+
+Deploy with specific model provider configurations:
+
+```python
+from reward_protocol.evaluation import create_evaluation
+
+evaluator = create_evaluation(
+    evaluator_id="multi-provider-eval",
+    metric_folders=["comprehensive=./rewards/comprehensive"],
+    display_name="Multi-Provider Evaluator",
+    description="Evaluator supporting multiple model providers",
+    providers=[
+        {
+            "providerType": "fireworks",
+            "modelId": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+            "priority": 1
+        },
+        {
+            "providerType": "anthropic", 
+            "modelId": "claude-3-sonnet-20240229",
+            "priority": 2
+        },
+        {
+            "providerType": "openai",
+            "modelId": "gpt-4",
+            "priority": 3
+        }
+    ],
+    force=True
+)
+```
+
+### Resource Configuration
+
+Configure compute resources and scaling behavior:
+
+```python
+deployment_config = {
+    "compute": {
+        "instance_type": "gpu-large",    # cpu-small, cpu-large, gpu-small, gpu-large
+        "min_instances": 1,
+        "max_instances": 10,
+        "scaling_policy": "auto"         # auto, manual
+    },
+    "networking": {
+        "timeout": 30,                   # Request timeout in seconds
+        "rate_limiting": {
+            "requests_per_minute": 1000,
+            "burst_limit": 100
+        }
+    },
+    "monitoring": {
+        "log_level": "INFO",
+        "metrics_retention": "30d",
+        "alerting": {
+            "error_rate_threshold": 0.05,
+            "latency_threshold_ms": 1000,
+            "notification_webhook": "https://your-alerts.com/webhook"
+        }
+    }
+}
+
+evaluator = create_evaluation(
+    evaluator_id="optimized-evaluator",
+    metric_folders=["optimized=./rewards/optimized"],
+    deployment_config=deployment_config,
+    force=True
+)
+```
+
+## Using Deployed Evaluators
+
+### REST API Usage
+
+Call deployed evaluators via REST API:
+
+```python
+import requests
+import json
+
+# API configuration
+api_key = "your_fireworks_api_key"
+evaluator_id = "quality-evaluator-v1"
+base_url = "https://api.fireworks.ai/v1"
+
+# Prepare evaluation request
+evaluation_request = {
+    "messages": [
+        {
+            "role": "user",
+            "content": "Explain how photosynthesis works"
+        },
+        {
+            "role": "assistant", 
+            "content": "Photosynthesis is the process by which plants convert sunlight, carbon dioxide, and water into glucose and oxygen. For example, when sunlight hits a leaf, chlorophyll absorbs the light energy and uses it to power chemical reactions that transform CO2 from the air and H2O from the roots into sugar molecules."
+        }
+    ],
+    "ground_truth": "Photosynthesis converts light energy into chemical energy",
+    "custom_params": {
+        "evaluation_mode": "detailed",
+        "include_explanations": True
+    }
+}
+
+# Make evaluation request
+response = requests.post(
+    f"{base_url}/evaluators/{evaluator_id}/evaluate",
+    headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    },
+    json=evaluation_request,
+    timeout=30
+)
+
+if response.status_code == 200:
+    result = response.json()
+    print(f"Overall Score: {result['score']:.3f}")
+    print(f"Reason: {result['reason']}")
+    
+    for metric_name, metric_result in result['metrics'].items():
+        print(f"{metric_name}: {metric_result['score']:.3f} ({'✓' if metric_result['success'] else '✗'})")
+else:
+    print(f"Error: {response.status_code} - {response.text}")
+```
+
+### Python SDK Usage
+
+Use the Fireworks AI Python SDK for convenience:
+
+```python
+from fireworks.client import Fireworks
+
+# Initialize client
+client = Fireworks(api_key="your_api_key")
+
+# Evaluate with deployed function
+result = client.evaluations.create(
+    evaluator_id="quality-evaluator-v1",
+    messages=[
+        {"role": "user", "content": "What is machine learning?"},
+        {"role": "assistant", "content": "Machine learning is a subset of AI..."}
+    ],
+    ground_truth="ML is a method for teaching computers to learn patterns",
+    parameters={
+        "evaluation_depth": "comprehensive",
+        "include_metrics": True
+    }
+)
+
+print(f"Evaluation Score: {result.score}")
+print(f"Detailed Metrics: {result.metrics}")
+```
+
+### Batch Evaluation
+
+Process multiple samples efficiently:
+
+```python
+# Prepare batch of evaluations
+batch_requests = [
+    {
+        "id": "sample_001",
+        "messages": [...],
+        "ground_truth": "..."
+    },
+    {
+        "id": "sample_002", 
+        "messages": [...],
+        "ground_truth": "..."
+    },
+    # ... more samples
+]
+
+# Submit batch request
+batch_response = requests.post(
+    f"{base_url}/evaluators/{evaluator_id}/evaluate/batch",
+    headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "requests": batch_requests,
+        "batch_config": {
+            "parallel_processing": True,
+            "timeout_per_request": 10,
+            "fail_fast": False
+        }
+    }
+)
+
+# Process batch results
+if batch_response.status_code == 200:
+    batch_result = batch_response.json()
+    for item in batch_result["results"]:
+        print(f"Sample {item['id']}: Score {item['score']:.3f}")
+        
+    print(f"Batch Summary:")
+    print(f"  Total: {batch_result['summary']['total']}")
+    print(f"  Successful: {batch_result['summary']['successful']}")
+    print(f"  Failed: {batch_result['summary']['failed']}")
+    print(f"  Average Score: {batch_result['summary']['average_score']:.3f}")
+```
+
+## Production Integration Patterns
+
+### Training Pipeline Integration
+
+Integrate with model training workflows:
+
+```python
+# training_pipeline.py
+from fireworks.client import Fireworks
+import json
+
+class FireworksEvaluationPipeline:
+    def __init__(self, evaluator_id, api_key):
+        self.client = Fireworks(api_key=api_key)
+        self.evaluator_id = evaluator_id
+    
+    def evaluate_model_outputs(self, generated_samples):
+        """Evaluate a batch of model-generated samples."""
+        
+        # Prepare evaluation requests
+        requests = []
+        for sample in generated_samples:
+            requests.append({
+                "id": sample["id"],
+                "messages": sample["conversation"],
+                "ground_truth": sample.get("expected_output"),
+                "metadata": sample.get("metadata", {})
+            })
+        
+        # Submit for evaluation
+        results = self.client.evaluations.create_batch(
+            evaluator_id=self.evaluator_id,
+            requests=requests
+        )
+        
+        # Process results
+        evaluated_samples = []
+        for result in results:
+            evaluated_samples.append({
+                "id": result["id"],
+                "score": result["score"],
+                "metrics": result["metrics"],
+                "passed_quality_threshold": result["score"] >= 0.7
+            })
+        
+        return evaluated_samples
+    
+    def get_training_metrics(self, evaluation_results):
+        """Extract metrics for training monitoring."""
+        
+        total_samples = len(evaluation_results)
+        passed_samples = sum(1 for r in evaluation_results if r["passed_quality_threshold"])
+        average_score = sum(r["score"] for r in evaluation_results) / total_samples
+        
+        return {
+            "total_samples": total_samples,
+            "quality_pass_rate": passed_samples / total_samples,
+            "average_score": average_score,
+            "score_distribution": {
+                "high": sum(1 for r in evaluation_results if r["score"] >= 0.8) / total_samples,
+                "medium": sum(1 for r in evaluation_results if 0.5 <= r["score"] < 0.8) / total_samples,
+                "low": sum(1 for r in evaluation_results if r["score"] < 0.5) / total_samples
+            }
+        }
+
+# Usage in training loop
+pipeline = FireworksEvaluationPipeline("quality-evaluator-prod", api_key)
+
+for epoch in range(num_epochs):
+    # Generate samples with current model
+    generated_samples = model.generate_batch(prompts)
+    
+    # Evaluate quality
+    evaluation_results = pipeline.evaluate_model_outputs(generated_samples)
+    
+    # Get training metrics
+    metrics = pipeline.get_training_metrics(evaluation_results)
+    
+    # Log metrics
+    wandb.log({
+        "epoch": epoch,
+        "quality_pass_rate": metrics["quality_pass_rate"],
+        "average_score": metrics["average_score"]
+    })
+    
+    # Filter high-quality samples for continued training
+    high_quality_samples = [
+        sample for sample, result in zip(generated_samples, evaluation_results)
+        if result["passed_quality_threshold"]
+    ]
+    
+    # Continue training with high-quality samples
+    train_on_samples(high_quality_samples)
+```
+
+### A/B Testing Infrastructure
+
+Set up A/B testing with multiple evaluator versions:
+
+```python
+# ab_testing.py
+from fireworks.client import Fireworks
+import random
+
+class EvaluatorABTesting:
+    def __init__(self, api_key):
+        self.client = Fireworks(api_key=api_key)
+        self.evaluators = {}
+        self.traffic_split = {}
+    
+    def register_evaluator(self, name, evaluator_id, traffic_percentage):
+        """Register an evaluator variant."""
+        self.evaluators[name] = evaluator_id
+        self.traffic_split[name] = traffic_percentage
+    
+    def evaluate_with_ab_testing(self, messages, ground_truth=None, **kwargs):
+        """Evaluate using A/B testing across evaluator variants."""
+        
+        # Select evaluator based on traffic split
+        rand = random.random()
+        cumulative = 0
+        selected_evaluator = None
+        
+        for name, percentage in self.traffic_split.items():
+            cumulative += percentage
+            if rand <= cumulative:
+                selected_evaluator = name
+                break
+        
+        if not selected_evaluator:
+            selected_evaluator = list(self.evaluators.keys())[0]  # Fallback
+        
+        # Evaluate with selected evaluator
+        evaluator_id = self.evaluators[selected_evaluator]
+        result = self.client.evaluations.create(
+            evaluator_id=evaluator_id,
+            messages=messages,
+            ground_truth=ground_truth,
+            **kwargs
+        )
+        
+        # Add metadata about which evaluator was used
+        result["evaluator_variant"] = selected_evaluator
+        result["evaluator_id"] = evaluator_id
+        
+        return result
+    
+    def collect_ab_metrics(self, results):
+        """Analyze A/B testing results."""
+        
+        variant_metrics = {}
+        for result in results:
+            variant = result["evaluator_variant"]
+            if variant not in variant_metrics:
+                variant_metrics[variant] = {
+                    "scores": [],
+                    "count": 0,
+                    "success_rate": 0
+                }
+            
+            variant_metrics[variant]["scores"].append(result["score"])
+            variant_metrics[variant]["count"] += 1
+        
+        # Calculate statistics
+        for variant, metrics in variant_metrics.items():
+            scores = metrics["scores"]
+            metrics["average_score"] = sum(scores) / len(scores)
+            metrics["success_rate"] = sum(1 for s in scores if s >= 0.7) / len(scores)
+            metrics["score_std"] = (
+                sum((s - metrics["average_score"]) ** 2 for s in scores) / len(scores)
+            ) ** 0.5
+        
+        return variant_metrics
+
+# Setup A/B test
+ab_tester = EvaluatorABTesting(api_key)
+ab_tester.register_evaluator("baseline", "quality-evaluator-v1", 0.5)
+ab_tester.register_evaluator("improved", "quality-evaluator-v2", 0.5)
+
+# Run evaluations with A/B testing
+results = []
+for sample in test_samples:
+    result = ab_tester.evaluate_with_ab_testing(
+        messages=sample["messages"],
+        ground_truth=sample["ground_truth"]
+    )
+    results.append(result)
+
+# Analyze results
+ab_metrics = ab_tester.collect_ab_metrics(results)
+for variant, metrics in ab_metrics.items():
+    print(f"{variant}: Avg Score {metrics['average_score']:.3f}, "
+          f"Success Rate {metrics['success_rate']:.2%}")
+```
+
+## Monitoring and Analytics
+
+### Performance Monitoring
+
+Monitor deployed evaluators:
+
+```python
+# monitoring.py
+from fireworks.client import Fireworks
+import time
+from datetime import datetime, timedelta
+
+class EvaluatorMonitor:
+    def __init__(self, api_key):
+        self.client = Fireworks(api_key=api_key)
+    
+    def get_evaluator_stats(self, evaluator_id, time_range="24h"):
+        """Get performance statistics for an evaluator."""
+        
+        stats = self.client.evaluators.get_stats(
+            evaluator_id=evaluator_id,
+            time_range=time_range
+        )
+        
+        return {
+            "total_requests": stats["request_count"],
+            "average_latency": stats["avg_latency_ms"],
+            "p95_latency": stats["p95_latency_ms"],
+            "error_rate": stats["error_rate"],
+            "throughput_qps": stats["requests_per_second"],
+            "average_score": stats["avg_evaluation_score"],
+            "cost": stats["total_cost_usd"]
+        }
+    
+    def health_check(self, evaluator_id):
+        """Perform health check on evaluator."""
+        
+        test_request = {
+            "messages": [
+                {"role": "user", "content": "Test health check"},
+                {"role": "assistant", "content": "This is a test response"}
+            ]
+        }
+        
+        try:
+            start_time = time.time()
+            result = self.client.evaluations.create(
+                evaluator_id=evaluator_id,
+                **test_request
+            )
+            latency = (time.time() - start_time) * 1000
+            
+            return {
+                "status": "healthy",
+                "latency_ms": latency,
+                "response_score": result["score"]
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
+    def setup_alerting(self, evaluator_id, alert_config):
+        """Setup monitoring alerts."""
+        
+        self.client.evaluators.create_alert(
+            evaluator_id=evaluator_id,
+            alert_type="latency",
+            threshold_ms=alert_config["latency_threshold"],
+            notification_webhook=alert_config["webhook_url"]
+        )
+        
+        self.client.evaluators.create_alert(
+            evaluator_id=evaluator_id,
+            alert_type="error_rate",
+            threshold_percentage=alert_config["error_rate_threshold"],
+            notification_webhook=alert_config["webhook_url"]
+        )
+
+# Usage
+monitor = EvaluatorMonitor(api_key)
+
+# Check health
+health = monitor.health_check("quality-evaluator-prod")
+print(f"Health Status: {health['status']}")
+
+# Get performance stats
+stats = monitor.get_evaluator_stats("quality-evaluator-prod", "7d")
+print(f"Average Latency: {stats['average_latency']:.2f}ms")
+print(f"Error Rate: {stats['error_rate']:.2%}")
+print(f"Total Cost: ${stats['cost']:.4f}")
+
+# Setup alerts
+monitor.setup_alerting("quality-evaluator-prod", {
+    "latency_threshold": 1000,  # 1 second
+    "error_rate_threshold": 5,  # 5%
+    "webhook_url": "https://your-alerts.com/webhook"
+})
+```
+
+## Best Practices
+
+### Security
+
+1. **API Key Management**: Use environment variables or secure vaults
+2. **Access Control**: Implement proper authentication and authorization
+3. **Data Privacy**: Ensure sensitive data is handled according to compliance requirements
+4. **Network Security**: Use HTTPS and configure proper firewall rules
+
+### Performance Optimization
+
+1. **Batch Processing**: Use batch endpoints for multiple evaluations
+2. **Caching**: Implement caching for frequently evaluated content
+3. **Resource Sizing**: Choose appropriate instance types for your workload
+4. **Auto-scaling**: Configure auto-scaling based on traffic patterns
+
+### Cost Management
+
+1. **Resource Monitoring**: Track usage and costs regularly
+2. **Efficient Batching**: Optimize batch sizes for cost-effectiveness
+3. **Instance Sizing**: Right-size compute resources
+4. **Usage Limits**: Set up billing alerts and usage limits
+
+### Reliability
+
+1. **Health Monitoring**: Implement comprehensive health checks
+2. **Error Handling**: Add retry logic and graceful error handling
+3. **Redundancy**: Deploy multiple instances across regions
+4. **Backup Plans**: Have fallback evaluators for critical workflows
+
+## Next Steps
+
+- Explore [TRL Integration](/integrations/trl) for training pipeline usage
+- Learn about [Multi-Objective Evaluation](/examples/overview) patterns
+- Check [Monitoring Best Practices](/developer-guide/evaluation-workflows)

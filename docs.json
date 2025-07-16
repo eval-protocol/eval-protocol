@@ -38,7 +38,10 @@
           {
             "group": "Development",
             "pages": [
-              "development/getting-started"
+              "development/getting-started",
+              "developer-guide/getting-started",
+              "developer-guide/reward-function-anatomy",
+              "developer-guide/evaluation-workflows"
             ]
           },
           {
@@ -50,7 +53,9 @@
           {
             "group": "Integrations",
             "pages": [
-              "integrations/overview"
+              "integrations/overview",
+              "integrations/fireworks",
+              "integrations/trl"
             ]
           },
           {
@@ -64,7 +69,10 @@
           {
             "group": "Reference",
             "pages": [
-              "cli-reference/overview"
+              "cli-reference/overview",
+              "cli-reference/run",
+              "cli-reference/preview", 
+              "cli-reference/deploy"
             ]
           }
         ]
@@ -75,7 +83,10 @@
           {
             "group": "Reference",
             "pages": [
-              "api-reference/overview"
+              "api-reference/overview",
+              "api-reference/reward-function-decorator",
+              "api-reference/reward-function-class",
+              "api-reference/data-models"
             ]
           }
         ]
@@ -87,7 +98,8 @@
             "group": "Examples",
             "pages": [
               "examples/overview",
-              "examples/math-evaluation"
+              "examples/math-evaluation",
+              "examples/code-execution"
             ]
           }
         ]

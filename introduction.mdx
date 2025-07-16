@@ -5,184 +5,257 @@ description: 'Author, reproduce, and evaluate reward functions seamlessly on Fir
 
 # Reward Protocol
 
-**Author, reproduce, and evaluate reward functions seamlessly on Fireworks, TRL, and your own infrastructure.**
+**Reward Protocol is like a universal adapter for AI evaluation — it allows reward functions to work seamlessly across any platform, infrastructure, or training pipeline.**
 
-Reward Protocol is a standardized framework for creating, deploying, and evaluating reward functions that assess AI model outputs. It provides a unified interface for building evaluation metrics across different platforms and use cases.
+Just as USB-C provides a universal standard for device connectivity, Reward Protocol establishes a universal standard for AI model evaluation, enabling reward functions to be written once and deployed anywhere.
 
 ## Why Reward Protocol?
 
-Current reward function development faces several challenges:
-- **Fragmentation**: Different platforms use incompatible reward function formats
-- **Complexity**: Setting up evaluation pipelines requires significant boilerplate
-- **Scalability**: Deploying reward functions across infrastructure is difficult
-- **Reproducibility**: Sharing and reproducing evaluation results is challenging
+Building effective AI evaluation systems today is needlessly complex and fragmented:
 
-Reward Protocol addresses these issues by providing a standardized, portable framework for reward function development and deployment.
+- **No Universal Standard**: Every platform requires custom evaluation code, making it difficult to share and reuse reward functions
+- **Infrastructure Lock-in**: Evaluation logic gets tied to specific platforms, preventing flexible deployment
+- **Development Friction**: Setting up evaluation pipelines requires extensive boilerplate and platform-specific knowledge
+- **Limited Portability**: Reward functions can't easily move between research, training, and production environments
 
-## General Architecture
+Reward Protocol solves these problems by providing **a single, standardized way to define reward functions that work everywhere**.
 
-The Reward Protocol ecosystem consists of several key components:
+## How Reward Protocol Works
 
 ```mermaid
 graph TB
-    A[Reward Functions] --> B[Protocol Layer]
-    B --> C[Evaluation Engine]
-    C --> D[Deployment Targets]
+    A[Your Reward Function] --> B[Reward Protocol]
+    B --> C[Universal Evaluation Interface]
     
-    D --> E[Fireworks AI]
-    D --> F[TRL Pipeline]
-    D --> G[Local Infrastructure]
+    C --> D[Fireworks AI]
+    C --> E[TRL Training]
+    C --> F[Local Development]
+    C --> G[Custom Infrastructure]
     
     H[Model Outputs] --> C
-    I[Evaluation Metrics] --> A
+    I[Ground Truth Data] --> A
     
-    style A fill:#ff6b35
-    style B fill:#ff8a65
-    style C fill:#e65100
+    style A fill:#2563eb
+    style B fill:#3b82f6
+    style C fill:#60a5fa
 ```
 
-### Core Components
+### The Reward Protocol Advantage
 
-- **Reward Functions**: Python functions decorated with `@reward_function` that evaluate model outputs
-- **Protocol Layer**: Standardized interface for defining evaluation criteria and data types
-- **Evaluation Engine**: Runtime that executes reward functions against model outputs
-- **Deployment Targets**: Various platforms where reward functions can be deployed and scaled
+**Write Once, Deploy Anywhere**: Define your evaluation logic once using the `@reward_function` decorator, then deploy it across any platform or infrastructure without modification.
 
-## Key Features
+**Universal Data Types**: Standardized input/output formats ensure your reward functions work consistently across different data sources and evaluation contexts.
+
+**Built-in Best Practices**: The protocol includes built-in support for metrics tracking, error handling, and evaluation result structuring.
+
+## Core Benefits
 
 <CardGroup cols={2}>
   <Card
-    title="Easy-to-use Decorator"
-    icon="wand-magic-sparkles"
+    title="Universal Compatibility"
+    icon="plug"
     href="/quickstart"
   >
-    Define reward functions with a simple `@reward_function` decorator
+    Write reward functions once, deploy anywhere — from local testing to production training pipelines
   </Card>
   <Card
-    title="Local Testing"
-    icon="flask"
+    title="Zero Lock-in"
+    icon="unlock"
     href="/quickstart"
   >
-    Quickly test your reward functions with sample data
+    Switch between platforms, cloud providers, and infrastructures without rewriting evaluation logic
   </Card>
   <Card
-    title="Flexible Evaluation"
-    icon="chart-line"
+    title="Developer Experience"
+    icon="code"
     href="/developer-guide/getting-started"
   >
-    Evaluate model outputs based on single or multiple custom metrics
+    Simple `@reward_function` decorator with rich type safety and comprehensive tooling
   </Card>
   <Card
-    title="Seamless Deployment"
+    title="Production Ready"
     icon="rocket"
     href="/cli-reference/overview"
   >
-    Deploy your reward functions to platforms like Fireworks AI
+    Built-in CLI for testing, deployment, and monitoring with enterprise-grade reliability
   </Card>
 </CardGroup>
 
-## Get Started
+## Architecture Overview
 
-<CardGroup cols={2}>
-  <Card
-    title="Installation"
-    icon="download"
-    href="/installation"
-  >
-    Install Reward Protocol and set up your development environment
-  </Card>
-  <Card
-    title="Quick Start"
-    icon="bolt"
-    href="/quickstart"
-  >
-    Create your first reward function in minutes
-  </Card>
-</CardGroup>
+Reward Protocol uses a **client-server model** where reward functions act as specialized evaluation servers that can be called by various AI training and evaluation clients.
 
-## Quick Starts
+```mermaid
+graph LR
+    subgraph "Evaluation Clients"
+        A[Training Pipeline]
+        B[Research Notebook]
+        C[Production API]
+        D[CI/CD Pipeline]
+    end
+    
+    subgraph "Reward Protocol"
+        E[Protocol Layer]
+        F[Evaluation Runtime]
+    end
+    
+    subgraph "Reward Functions"
+        G[Math Evaluator]
+        H[Code Quality Checker]
+        I[Tool Call Validator]
+        J[Custom Metrics]
+    end
+    
+    A --> E
+    B --> E
+    C --> E
+    D --> E
+    
+    E --> F
+    F --> G
+    F --> H
+    F --> I
+    F --> J
+    
+    style E fill:#3b82f6
+    style F fill:#60a5fa
+```
 
-Choose your path based on your role:
+### Key Components
+
+- **Evaluation Clients**: Any system that needs to evaluate AI model outputs — training pipelines, research environments, production APIs
+- **Protocol Layer**: Standardized communication interface that handles authentication, data serialization, and error management
+- **Evaluation Runtime**: Executes reward functions in isolated, scalable environments with proper resource management
+- **Reward Functions**: Your custom evaluation logic, packaged as portable, reusable components
+
+## Getting Started
+
+Choose your path based on what you want to accomplish:
 
 <CardGroup cols={3}>
   <Card
-    title="For Developers"
+    title="Reward Function Developers"
     icon="code"
     href="/quickstarts/developers"
   >
-    Build and deploy reward functions for your applications
+    Build and deploy custom evaluation logic for AI models
   </Card>
   <Card
-    title="For Users"
-    icon="user"
+    title="ML Engineers"
+    icon="cog"
     href="/quickstarts/users"
   >
-    Use existing reward functions to evaluate model outputs
+    Integrate existing reward functions into your training pipelines
   </Card>
   <Card
-    title="For Integrators"
+    title="Platform Integrators"
     icon="plug"
     href="/quickstarts/integrators"
   >
-    Integrate Reward Protocol into your existing workflows
+    Add Reward Protocol support to your evaluation platform
   </Card>
 </CardGroup>
 
-## Popular Use Cases
+<CardGroup cols={2}>
+  <Card
+    title="Installation & Setup"
+    icon="download"
+    href="/installation"
+  >
+    Install Reward Protocol and configure your development environment
+  </Card>
+  <Card
+    title="5-Minute Quickstart"
+    icon="bolt"
+    href="/quickstart"
+  >
+    Create, test, and deploy your first reward function
+  </Card>
+</CardGroup>
+
+## Real-World Applications
+
+Reward Protocol powers evaluation across diverse AI use cases:
 
 <CardGroup cols={2}>
   <Card
-    title="Math Evaluation"
+    title="Mathematical Reasoning"
     icon="calculator"
     href="/examples/math-evaluation"
   >
-    Evaluate mathematical reasoning and problem-solving
+    Evaluate step-by-step problem solving, formula correctness, and numerical accuracy
   </Card>
   <Card
-    title="Code Generation"
+    title="Code Generation & Quality"
     icon="terminal"
     href="/examples/overview"
   >
-    Test and validate generated code solutions
+    Test syntax correctness, functionality, efficiency, and coding best practices
   </Card>
   <Card
-    title="Tool Calling"
+    title="Function Calling & Tool Use"
     icon="tools"
     href="/examples/overview"
   >
-    Verify function calling and API usage
+    Verify API calls, parameter matching, and multi-step tool orchestration
   </Card>
   <Card
-    title="Custom Metrics"
+    title="Conversational AI Quality"
+    icon="message-circle"
+    href="/development/getting-started"
+  >
+    Assess helpfulness, safety, factual accuracy, and adherence to guidelines
+  </Card>
+  <Card
+    title="Domain-Specific Metrics"
     icon="gauge"
     href="/development/getting-started"
   >
-    Build domain-specific evaluation criteria
+    Create specialized evaluation criteria for finance, healthcare, legal, and other domains
+  </Card>
+  <Card
+    title="Training Pipeline Integration"
+    icon="repeat"
+    href="/integrations/overview"
+  >
+    Integrate with RLHF, constitutional AI, and other alignment training methods
   </Card>
 </CardGroup>
 
-## Tutorials
-
-Step-by-step guides to master Reward Protocol:
+## Learn Reward Protocol
 
 <CardGroup cols={2}>
   <Card
-    title="Creating Your First Reward Function"
+    title="Core Concepts Tutorial"
     icon="graduation-cap"
-    href="/quickstart"
+    href="/developer-guide/getting-started"
   >
-    Learn the basics of defining and testing reward functions
+    Master the fundamentals of reward function design and implementation
   </Card>
   <Card
-    title="Evaluating Model Responses"
-    icon="chart-bar"
+    title="Best Practices Guide"
+    icon="shield-check"
     href="/development/getting-started"
   >
-    Best practices for comprehensive model evaluation
+    Learn proven patterns for robust, scalable evaluation systems
+  </Card>
+  <Card
+    title="Advanced Examples"
+    icon="layers"
+    href="/examples/overview"
+  >
+    Explore complex, real-world reward function implementations
+  </Card>
+  <Card
+    title="API & CLI Reference"
+    icon="book-open"
+    href="/api-reference/overview"
+  >
+    Complete technical documentation for all features and commands
   </Card>
 </CardGroup>
 
-## Explore Reward Protocol
+## Explore the Ecosystem
 
 <CardGroup cols={2}>
   <Card
@@ -190,27 +263,27 @@ Step-by-step guides to master Reward Protocol:
     icon="file-contract"
     href="/protocol/overview"
   >
-    Understand the technical details of the Reward Protocol
+    Deep dive into the technical architecture and design principles
   </Card>
   <Card
-    title="Development Guide"
-    icon="hammer"
-    href="/development/getting-started"
-  >
-    Advanced patterns and best practices for developers
-  </Card>
-  <Card
-    title="Integration Examples"
+    title="Platform Integrations"
     icon="puzzle-piece"
     href="/integrations/overview"
   >
-    See how Reward Protocol works with different platforms
+    See how Reward Protocol connects with Fireworks, TRL, OpenAI, and more
   </Card>
   <Card
-    title="Community Support"
+    title="Contributing & Development"
+    icon="git-branch"
+    href="/community/contributing"
+  >
+    Join the community and contribute to the protocol's evolution
+  </Card>
+  <Card
+    title="Community & Support"
     icon="users"
     href="/community/support"
   >
-    Get help and connect with other developers
+    Get help, share experiences, and connect with other developers
   </Card>
 </CardGroup>

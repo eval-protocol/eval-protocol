@@ -1,0 +1,788 @@
+---
+title: 'Code Execution Example'
+description: 'Evaluate generated code by executing it and checking correctness'
+---
+
+# Code Execution Example
+
+This example demonstrates how to create reward functions that evaluate generated code by actually executing it and verifying the results. This is particularly useful for coding challenges, algorithm implementations, and programming tutorials.
+
+## Overview
+
+Code execution evaluation involves:
+- **Syntax Validation**: Checking if the code is syntactically correct
+- **Execution Safety**: Running code in a secure, isolated environment
+- **Test Case Validation**: Running the code against predefined test cases
+- **Performance Metrics**: Evaluating execution time and memory usage
+- **Code Quality**: Assessing style, efficiency, and best practices
+
+## Basic Code Execution Evaluator
+
+### Simple Python Code Evaluator
+
+```python
+from reward_protocol import reward_function
+from reward_protocol.models import EvaluateResult, MetricResult
+import ast
+import subprocess
+import tempfile
+import os
+import signal
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def timeout_context(seconds):
+    """Context manager for timing out code execution."""
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Code execution timed out after {seconds} seconds")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+
+@reward_function
+def python_code_executor(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    """
+    Evaluate Python code by executing it and checking results.
+    
+    Args:
+        messages: Conversation with code generation request and response
+        ground_truth: Expected behavior defined as test cases
+        timeout: Maximum execution time in seconds (default: 5)
+        test_cases: List of test cases to run
+    """
+    
+    # Extract code from assistant's response
+    response = messages[-1].get("content", "")
+    code = extract_python_code(response)
+    
+    if not code:
+        return EvaluateResult(
+            score=0.0,
+            reason="No Python code found in response",
+            metrics={}
+        )
+    
+    metrics = {}
+    
+    # 1. Syntax validation
+    syntax_result = validate_syntax(code)
+    metrics["syntax"] = syntax_result
+    
+    if not syntax_result.success:
+        return EvaluateResult(
+            score=0.0,
+            reason="Code has syntax errors",
+            metrics=metrics
+        )
+    
+    # 2. Execute code with test cases
+    execution_result = execute_with_tests(
+        code, 
+        ground_truth or kwargs.get("test_cases", []),
+        timeout=kwargs.get("timeout", 5)
+    )
+    metrics.update(execution_result["metrics"])
+    
+    # 3. Code quality assessment
+    quality_result = assess_code_quality(code)
+    metrics["quality"] = quality_result
+    
+    # Calculate overall score
+    weights = kwargs.get("weights", {
+        "syntax": 0.2,
+        "correctness": 0.5,
+        "performance": 0.2,
+        "quality": 0.1
+    })
+    
+    overall_score = sum(
+        metrics.get(metric, MetricResult(0.0, False, "Not evaluated")).score * weight
+        for metric, weight in weights.items()
+    )
+    
+    success_criteria = [
+        metrics["syntax"].success,
+        metrics.get("correctness", MetricResult(0.0, False, "")).success
+    ]
+    overall_success = all(success_criteria)
+    
+    return EvaluateResult(
+        score=overall_score,
+        reason=f"Code execution evaluation: {overall_score:.2f} ({'PASS' if overall_success else 'FAIL'})",
+        metrics=metrics
+    )
+
+def extract_python_code(response: str) -> str:
+    """Extract Python code from markdown code blocks or plain text."""
+    import re
+    
+    # Try to find code in markdown code blocks
+    code_block_pattern = r"```(?:python)?\s*\n(.*?)\n```"
+    matches = re.findall(code_block_pattern, response, re.DOTALL | re.IGNORECASE)
+    
+    if matches:
+        return matches[0].strip()
+    
+    # If no code blocks, look for code-like patterns
+    lines = response.split('\n')
+    code_lines = []
+    in_code = False
+    
+    for line in lines:
+        stripped = line.strip()
+        # Heuristics to identify code lines
+        if any([
+            stripped.startswith(('def ', 'class ', 'import ', 'from ')),
+            stripped.startswith(('if ', 'for ', 'while ', 'try:', 'except')),
+            stripped.endswith(':'),
+            '=' in stripped and not stripped.startswith('#'),
+            stripped.startswith(('print(', 'return '))
+        ]):
+            in_code = True
+        
+        if in_code:
+            code_lines.append(line)
+            
+        # Stop if we hit non-code content after starting code
+        if in_code and stripped and not any([
+            stripped.startswith('#'),
+            stripped.startswith(('def ', 'class ', 'import ', 'from ')),
+            stripped.startswith(('if ', 'for ', 'while ', 'try:', 'except', 'else:', 'elif ')),
+            '=' in stripped,
+            stripped.startswith(('print(', 'return ', '    ')),
+            stripped in ['{', '}', '(', ')', '[', ']']
+        ]):
+            break
+    
+    return '\n'.join(code_lines).strip()
+
+def validate_syntax(code: str) -> MetricResult:
+    """Validate Python syntax."""
+    try:
+        ast.parse(code)
+        return MetricResult(
+            score=1.0,
+            success=True,
+            reason="Code has valid Python syntax"
+        )
+    except SyntaxError as e:
+        return MetricResult(
+            score=0.0,
+            success=False,
+            reason=f"Syntax error: {str(e)}",
+            metadata={"error_type": "SyntaxError", "error_message": str(e)}
+        )
+
+def execute_with_tests(code: str, test_cases: list, timeout: int = 5) -> dict:
+    """Execute code with test cases in a secure environment."""
+    
+    if not test_cases:
+        # If no test cases provided, just try to execute the code
+        return execute_code_basic(code, timeout)
+    
+    passed_tests = 0
+    total_tests = len(test_cases)
+    execution_times = []
+    metrics = {}
+    
+    for i, test_case in enumerate(test_cases):
+        try:
+            result = execute_single_test(code, test_case, timeout)
+            if result["passed"]:
+                passed_tests += 1
+            execution_times.append(result["execution_time"])
+            
+        except Exception as e:
+            metrics[f"test_{i}_error"] = MetricResult(
+                score=0.0,
+                success=False,
+                reason=f"Test {i} failed with error: {str(e)}"
+            )
+    
+    # Calculate metrics
+    correctness_score = passed_tests / total_tests if total_tests > 0 else 0.0
+    avg_execution_time = sum(execution_times) / len(execution_times) if execution_times else 0.0
+    
+    # Performance scoring (faster is better, penalty for > 1 second)
+    performance_score = max(0.0, min(1.0, 2.0 - avg_execution_time))
+    
+    metrics.update({
+        "correctness": MetricResult(
+            score=correctness_score,
+            success=correctness_score >= 0.8,
+            reason=f"Passed {passed_tests}/{total_tests} test cases",
+            metadata={
+                "passed_tests": passed_tests,
+                "total_tests": total_tests,
+                "test_results": [
+                    execute_single_test(code, tc, timeout) 
+                    for tc in test_cases
+                ]
+            }
+        ),
+        "performance": MetricResult(
+            score=performance_score,
+            success=avg_execution_time < 1.0,
+            reason=f"Average execution time: {avg_execution_time:.3f}s",
+            metadata={"avg_execution_time": avg_execution_time}
+        )
+    })
+    
+    return {"metrics": metrics}
+
+def execute_single_test(code: str, test_case: dict, timeout: int) -> dict:
+    """Execute code with a single test case."""
+    
+    # Prepare test code
+    test_code = f"""
+import sys
+import time
+import traceback
+
+# User's code
+{code}
+
+# Test execution
+try:
+    start_time = time.time()
+    
+    # Setup test inputs
+    {test_case.get('setup', '')}
+    
+    # Execute the test
+    result = {test_case['call']}
+    
+    execution_time = time.time() - start_time
+    
+    # Check result
+    expected = {repr(test_case['expected'])}
+    passed = result == expected
+    
+    print(f"RESULT:{{passed}}:{{execution_time}}:{{result}}")
+    
+except Exception as e:
+    print(f"ERROR:{{type(e).__name__}}:{{str(e)}}")
+    traceback.print_exc()
+"""
+    
+    try:
+        with timeout_context(timeout):
+            # Execute in temporary file for security
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(test_code)
+                temp_file = f.name
+            
+            try:
+                # Run the code
+                result = subprocess.run(
+                    ['python', temp_file],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+                
+                # Parse output
+                if result.returncode == 0:
+                    output_lines = result.stdout.strip().split('\n')
+                    for line in output_lines:
+                        if line.startswith("RESULT:"):
+                            parts = line.split(':')
+                            passed = parts[1] == 'True'
+                            execution_time = float(parts[2])
+                            actual_result = ':'.join(parts[3:])
+                            
+                            return {
+                                "passed": passed,
+                                "execution_time": execution_time,
+                                "actual_result": actual_result,
+                                "expected_result": test_case['expected']
+                            }
+                    
+                    return {
+                        "passed": False,
+                        "execution_time": 0.0,
+                        "error": "Could not parse test result",
+                        "stdout": result.stdout,
+                        "stderr": result.stderr
+                    }
+                else:
+                    return {
+                        "passed": False,
+                        "execution_time": 0.0,
+                        "error": result.stderr or "Execution failed",
+                        "return_code": result.returncode
+                    }
+                    
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    
+    except TimeoutError:
+        return {
+            "passed": False,
+            "execution_time": timeout,
+            "error": f"Execution timed out after {timeout} seconds"
+        }
+    except Exception as e:
+        return {
+            "passed": False,
+            "execution_time": 0.0,
+            "error": f"Execution error: {str(e)}"
+        }
+
+def execute_code_basic(code: str, timeout: int) -> dict:
+    """Basic code execution without specific test cases."""
+    
+    try:
+        with timeout_context(timeout):
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(code)
+                temp_file = f.name
+            
+            try:
+                start_time = time.time()
+                result = subprocess.run(
+                    ['python', temp_file],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+                execution_time = time.time() - start_time
+                
+                success = result.returncode == 0
+                
+                return {
+                    "metrics": {
+                        "execution": MetricResult(
+                            score=1.0 if success else 0.0,
+                            success=success,
+                            reason="Code executed successfully" if success else f"Execution failed: {result.stderr}",
+                            metadata={
+                                "execution_time": execution_time,
+                                "stdout": result.stdout,
+                                "stderr": result.stderr,
+                                "return_code": result.returncode
+                            }
+                        )
+                    }
+                }
+                
+            finally:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    
+    except TimeoutError:
+        return {
+            "metrics": {
+                "execution": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Execution timed out after {timeout} seconds"
+                )
+            }
+        }
+    except Exception as e:
+        return {
+            "metrics": {
+                "execution": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Execution error: {str(e)}"
+                )
+            }
+        }
+
+def assess_code_quality(code: str) -> MetricResult:
+    """Assess basic code quality metrics."""
+    
+    lines = code.split('\n')
+    non_empty_lines = [line for line in lines if line.strip()]
+    
+    quality_score = 0.0
+    issues = []
+    
+    # Check for functions (good practice)
+    if any('def ' in line for line in non_empty_lines):
+        quality_score += 0.3
+    else:
+        issues.append("No functions defined")
+    
+    # Check for comments/docstrings
+    if any(line.strip().startswith('#') or '"""' in line or "'''" in line for line in lines):
+        quality_score += 0.2
+    else:
+        issues.append("No comments or docstrings")
+    
+    # Check line length (PEP 8)
+    long_lines = [line for line in lines if len(line) > 88]
+    if not long_lines:
+        quality_score += 0.2
+    else:
+        issues.append(f"{len(long_lines)} lines exceed 88 characters")
+    
+    # Check for meaningful variable names
+    import re
+    var_names = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*=', code)
+    meaningful_names = [name for name in var_names if len(name) > 2 and name not in ['a', 'b', 'c', 'x', 'y', 'z']]
+    if len(meaningful_names) >= len(var_names) * 0.7:
+        quality_score += 0.3
+    else:
+        issues.append("Consider using more descriptive variable names")
+    
+    return MetricResult(
+        score=quality_score,
+        success=quality_score >= 0.6,
+        reason=f"Code quality score: {quality_score:.2f}" + (f" - Issues: {', '.join(issues)}" if issues else ""),
+        metadata={
+            "quality_score": quality_score,
+            "issues": issues,
+            "line_count": len(non_empty_lines),
+            "max_line_length": max(len(line) for line in lines) if lines else 0
+        }
+    )
+```
+
+## Advanced Code Execution with Docker
+
+For enhanced security and language support:
+
+```python
+import docker
+import json
+import tempfile
+import os
+
+@reward_function
+def docker_code_executor(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    """
+    Execute code in isolated Docker containers for enhanced security.
+    Supports multiple programming languages.
+    """
+    
+    response = messages[-1].get("content", "")
+    language = kwargs.get("language", "python")
+    
+    # Extract code based on language
+    code = extract_code_by_language(response, language)
+    
+    if not code:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"No {language} code found in response",
+            metrics={}
+        )
+    
+    # Execute in Docker container
+    try:
+        execution_result = execute_in_docker(
+            code, 
+            language, 
+            ground_truth or kwargs.get("test_cases", []),
+            timeout=kwargs.get("timeout", 10)
+        )
+        
+        return EvaluateResult(
+            score=execution_result["score"],
+            reason=execution_result["reason"],
+            metrics=execution_result["metrics"]
+        )
+        
+    except Exception as e:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Docker execution failed: {str(e)}",
+            metrics={
+                "error": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Docker error: {str(e)}"
+                )
+            }
+        )
+
+def execute_in_docker(code: str, language: str, test_cases: list, timeout: int) -> dict:
+    """Execute code in Docker container."""
+    
+    client = docker.from_env()
+    
+    # Language-specific configurations
+    configs = {
+        "python": {
+            "image": "python:3.9-slim",
+            "extension": ".py",
+            "command": ["python", "/app/code.py"]
+        },
+        "javascript": {
+            "image": "node:16-slim",
+            "extension": ".js", 
+            "command": ["node", "/app/code.js"]
+        },
+        "java": {
+            "image": "openjdk:11-slim",
+            "extension": ".java",
+            "command": ["sh", "-c", "cd /app && javac Main.java && java Main"]
+        },
+        "cpp": {
+            "image": "gcc:latest",
+            "extension": ".cpp",
+            "command": ["sh", "-c", "cd /app && g++ -o program code.cpp && ./program"]
+        }
+    }
+    
+    if language not in configs:
+        raise ValueError(f"Unsupported language: {language}")
+    
+    config = configs[language]
+    
+    # Create temporary directory for code
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Write code to file
+        code_file = os.path.join(temp_dir, f"code{config['extension']}")
+        with open(code_file, 'w') as f:
+            f.write(code)
+        
+        # Write test cases if provided
+        if test_cases:
+            test_file = os.path.join(temp_dir, "tests.json")
+            with open(test_file, 'w') as f:
+                json.dump(test_cases, f)
+        
+        try:
+            # Run container
+            container = client.containers.run(
+                config["image"],
+                command=config["command"],
+                volumes={temp_dir: {'bind': '/app', 'mode': 'ro'}},
+                working_dir='/app',
+                detach=True,
+                remove=True,
+                mem_limit='128m',
+                cpu_period=100000,
+                cpu_quota=50000,  # 50% CPU
+                network_disabled=True,  # No network access
+                security_opt=['no-new-privileges:true']
+            )
+            
+            # Wait for execution with timeout
+            try:
+                result = container.wait(timeout=timeout)
+                logs = container.logs().decode('utf-8')
+                
+                return parse_execution_result(result, logs, test_cases, language)
+                
+            except docker.errors.ContainerError as e:
+                return {
+                    "score": 0.0,
+                    "reason": f"Container execution failed: {str(e)}",
+                    "metrics": {
+                        "error": MetricResult(0.0, False, f"Container error: {str(e)}")
+                    }
+                }
+                
+        except Exception as e:
+            return {
+                "score": 0.0,
+                "reason": f"Docker execution error: {str(e)}",
+                "metrics": {
+                    "error": MetricResult(0.0, False, f"Execution error: {str(e)}")
+                }
+            }
+
+def parse_execution_result(result, logs, test_cases, language):
+    """Parse execution results and calculate metrics."""
+    
+    exit_code = result['StatusCode']
+    
+    if exit_code != 0:
+        return {
+            "score": 0.0,
+            "reason": f"Code execution failed with exit code {exit_code}",
+            "metrics": {
+                "execution": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Exit code: {exit_code}",
+                    metadata={"logs": logs, "exit_code": exit_code}
+                )
+            }
+        }
+    
+    # If test cases provided, parse test results
+    if test_cases:
+        return parse_test_results(logs, test_cases)
+    else:
+        # Basic execution success
+        return {
+            "score": 1.0,
+            "reason": "Code executed successfully",
+            "metrics": {
+                "execution": MetricResult(
+                    score=1.0,
+                    success=True,
+                    reason="Successful execution",
+                    metadata={"logs": logs}
+                )
+            }
+        }
+
+def parse_test_results(logs, test_cases):
+    """Parse test execution results from logs."""
+    
+    # This would need to be implemented based on how test results are output
+    # For now, simple implementation
+    
+    lines = logs.strip().split('\n')
+    passed_tests = 0
+    
+    for line in lines:
+        if "TEST PASSED" in line:
+            passed_tests += 1
+    
+    total_tests = len(test_cases)
+    correctness_score = passed_tests / total_tests if total_tests > 0 else 1.0
+    
+    return {
+        "score": correctness_score,
+        "reason": f"Passed {passed_tests}/{total_tests} tests",
+        "metrics": {
+            "correctness": MetricResult(
+                score=correctness_score,
+                success=correctness_score >= 0.8,
+                reason=f"Test results: {passed_tests}/{total_tests}",
+                metadata={
+                    "passed_tests": passed_tests,
+                    "total_tests": total_tests,
+                    "logs": logs
+                }
+            )
+        }
+    }
+
+def extract_code_by_language(response: str, language: str) -> str:
+    """Extract code blocks for specific programming languages."""
+    import re
+    
+    # Language-specific patterns
+    patterns = {
+        "python": [r"```python\s*\n(.*?)\n```", r"```py\s*\n(.*?)\n```"],
+        "javascript": [r"```javascript\s*\n(.*?)\n```", r"```js\s*\n(.*?)\n```"],
+        "java": [r"```java\s*\n(.*?)\n```"],
+        "cpp": [r"```cpp\s*\n(.*?)\n```", r"```c\+\+\s*\n(.*?)\n```"],
+        "c": [r"```c\s*\n(.*?)\n```"]
+    }
+    
+    if language in patterns:
+        for pattern in patterns[language]:
+            matches = re.findall(pattern, response, re.DOTALL | re.IGNORECASE)
+            if matches:
+                return matches[0].strip()
+    
+    # Fallback to generic code block
+    generic_pattern = r"```\s*\n(.*?)\n```"
+    matches = re.findall(generic_pattern, response, re.DOTALL)
+    if matches:
+        return matches[0].strip()
+    
+    return ""
+```
+
+## Usage Examples
+
+### Basic Usage with Preview
+
+```bash
+# Create sample data for code execution testing
+cat > code_samples.jsonl << EOF
+{
+  "messages": [
+    {"role": "user", "content": "Write a function to calculate the factorial of a number"},
+    {"role": "assistant", "content": "Here's a function to calculate factorial:\n\n```python\ndef factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\n```"}
+  ],
+  "ground_truth": [
+    {
+      "call": "factorial(5)",
+      "expected": 120,
+      "setup": ""
+    },
+    {
+      "call": "factorial(0)",
+      "expected": 1,
+      "setup": ""
+    }
+  ]
+}
+EOF
+
+# Test with preview
+reward-protocol preview \
+  --metrics-folders "code_exec=./code_execution_evaluator" \
+  --samples code_samples.jsonl \
+  --verbose
+```
+
+### Integration with Training Pipeline
+
+```python
+# training_integration.py
+from reward_protocol.integrations.trl import RewardProtocolRewardModel
+from code_execution_evaluator import python_code_executor
+
+# Create reward model for training
+reward_model = RewardProtocolRewardModel(
+    reward_function=python_code_executor,
+    device="cuda",
+    batch_size=4,
+    timeout=10
+)
+
+# Use in PPO training for code generation
+ppo_trainer = PPOTrainer(
+    config=config,
+    model=coding_model,
+    tokenizer=tokenizer,
+    dataset=coding_dataset,
+    reward_model=reward_model
+)
+
+# Training loop with code execution feedback
+for epoch, batch in enumerate(ppo_trainer.dataloader):
+    # Generate code solutions
+    query_tensors = batch["input_ids"]
+    response_tensors = ppo_trainer.generate(query_tensors, max_new_tokens=200)
+    
+    # Get execution-based rewards
+    rewards = reward_model.get_rewards(query_tensors, response_tensors)
+    
+    # Train with execution feedback
+    stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
+    ppo_trainer.log_stats(stats, batch, rewards)
+```
+
+## Security Considerations
+
+1. **Sandboxing**: Always execute code in isolated environments
+2. **Resource Limits**: Set memory, CPU, and time limits
+3. **Network Isolation**: Disable network access for executed code
+4. **File System Restrictions**: Use read-only mounts and temporary directories
+5. **Input Validation**: Sanitize all user inputs before execution
+
+## Best Practices
+
+1. **Comprehensive Test Cases**: Include edge cases and error conditions
+2. **Performance Monitoring**: Track execution times and resource usage
+3. **Error Handling**: Gracefully handle compilation and runtime errors
+4. **Language Support**: Support multiple programming languages as needed
+5. **Quality Metrics**: Include code style and best practice checks
+6. **Timeout Management**: Set appropriate timeouts for different complexity levels
+
+## Next Steps
+
+- Explore [Tool Calling Example](/examples/tool-calling) for API interaction evaluation
+- Learn about [Advanced Examples](/examples/overview) for complex scenarios
+- Check [Docker Integration](/integrations/overview) for production deployment
