@@ -1,0 +1,95 @@
+---
+title: Quick Start for Users
+description: Use existing reward functions to evaluate model outputs
+---
+
+# Quick Start for Users
+
+This guide will help you use existing reward functions to evaluate AI model outputs.
+
+## Prerequisites
+
+- Python 3.8 or higher
+- Basic command-line knowledge
+- AI model outputs you want to evaluate
+
+## Installation
+
+Install Reward Protocol using pip:
+
+```bash
+pip install reward-protocol
+```
+
+## Using Existing Reward Functions
+
+1. **Browse available functions**:
+
+```bash
+reward-protocol list --source fireworks
+```
+
+2. **Use a pre-built function**:
+
+```python
+from reward_protocol import load_function
+
+# Load a math evaluation function
+math_eval = load_function("math_accuracy", source="fireworks")
+
+# Evaluate your model's output
+score = math_eval(
+    query="What is the derivative of x^2?",
+    response="The derivative of x^2 is 2x"
+)
+print(f"Math accuracy score: {score}")
+```
+
+3. **Batch evaluation**:
+
+```python
+import pandas as pd
+
+# Load your dataset
+df = pd.read_csv("model_outputs.csv")
+
+# Apply reward function to all rows
+df['reward_score'] = df.apply(
+    lambda row: math_eval(row['query'], row['response']), 
+    axis=1
+)
+
+# Analyze results
+print(f"Average score: {df['reward_score'].mean()}")
+print(f"Pass rate: {(df['reward_score'] > 0.8).mean()}")
+```
+
+## Command Line Interface
+
+Evaluate files directly from the command line:
+
+```bash
+# Evaluate a single file
+reward-protocol evaluate \
+  --function math_accuracy \
+  --input responses.jsonl \
+  --output scores.jsonl
+
+# Run with specific configuration
+reward-protocol evaluate \
+  --function math_accuracy \
+  --config eval_config.yaml \
+  --input responses.jsonl
+```
+
+## Next Steps
+
+- **Explore Functions**: Browse [available reward functions](/examples/overview)
+- **Custom Evaluation**: Learn to [create custom metrics](/quickstart)
+- **Integration**: Connect with [monitoring tools](/integrations/overview)
+
+## Need Help?
+
+- **Documentation**: Check the [User Guide](/quickstart)
+- **Community**: Get help in our [support channels](/community/support)
+- **Examples**: See [practical use cases](/examples/overview)

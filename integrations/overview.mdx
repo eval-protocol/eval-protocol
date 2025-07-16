@@ -1,0 +1,339 @@
+---
+title: Integrations Overview
+description: Connect Reward Protocol with your existing tools and workflows
+---
+
+# Integrations Overview
+
+Reward Protocol is designed to integrate seamlessly with your existing ML/AI infrastructure. This page provides an overview of supported integrations and how they work together.
+
+## Supported Integrations
+
+### ML Training Frameworks
+
+<CardGroup cols={2}>
+  <Card
+    title="TRL (Transformer Reinforcement Learning)"
+    icon="brain"
+    href="/integrations/trl"
+  >
+    Use reward functions in RLHF training pipelines
+  </Card>
+  <Card
+    title="Hugging Face Transformers"
+    icon="hugging-face"
+    href="/integrations/hugging-face"
+  >
+    Integrate with model training and evaluation workflows
+  </Card>
+</CardGroup>
+
+### AI Platforms
+
+<CardGroup cols={2}>
+  <Card
+    title="Fireworks AI"
+    icon="fire"
+    href="/integrations/fireworks"
+  >
+    Deploy and scale reward functions in the cloud
+  </Card>
+  <Card
+    title="OpenAI"
+    icon="openai"
+    href="/integrations/openai"
+  >
+    Use with OpenAI models and fine-tuning
+  </Card>
+</CardGroup>
+
+### Evaluation & Monitoring
+
+<CardGroup cols={2}>
+  <Card
+    title="Braintrust"
+    icon="chart-line"
+    href="/integrations/braintrust"
+  >
+    Connect with evaluation and monitoring workflows
+  </Card>
+  <Card
+    title="Weights & Biases"
+    icon="weight"
+    href="/integrations/wandb"
+  >
+    Track experiments and model performance
+  </Card>
+</CardGroup>
+
+### Data Processing
+
+<CardGroup cols={2}>
+  <Card
+    title="Apache Airflow"
+    icon="workflow"
+    href="/integrations/airflow"
+  >
+    Orchestrate evaluation pipelines
+  </Card>
+  <Card
+    title="Apache Spark"
+    icon="spark"
+    href="/integrations/spark"
+  >
+    Scale evaluation across distributed clusters
+  </Card>
+</CardGroup>
+
+## Integration Patterns
+
+### 1. Training-Time Integration
+Use reward functions during model training:
+
+```python
+from reward_protocol import load_function
+from transformers import Trainer
+
+# Load your reward function
+reward_fn = load_function("code_quality_evaluator")
+
+# Custom trainer with reward-based evaluation
+class RewardTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        # Standard training loss
+        loss = super().compute_loss(model, inputs, return_outputs)
+        
+        # Add reward-based regularization
+        if self.args.use_reward_regularization:
+            outputs = model(**inputs)
+            predictions = self.tokenizer.decode(outputs.logits.argmax(-1))
+            
+            reward_scores = [
+                reward_fn(query, pred) 
+                for query, pred in zip(inputs['queries'], predictions)
+            ]
+            
+            reward_loss = -torch.mean(torch.tensor(reward_scores))
+            loss += 0.1 * reward_loss
+        
+        return loss
+```
+
+### 2. Evaluation-Time Integration
+Use reward functions for model evaluation:
+
+```python
+from reward_protocol import BatchProcessor
+import pandas as pd
+
+# Set up batch processor
+processor = BatchProcessor()
+processor.add_function("math_accuracy")
+processor.add_function("code_quality")
+processor.add_function("factual_correctness")
+
+# Evaluate model outputs
+def evaluate_model_outputs(dataset_path: str):
+    df = pd.read_csv(dataset_path)
+    
+    # Batch evaluation
+    results = processor.process_dataframe(df)
+    
+    # Aggregate results
+    metrics = {
+        'math_accuracy': results['math_accuracy'].mean(),
+        'code_quality': results['code_quality'].mean(),
+        'factual_correctness': results['factual_correctness'].mean(),
+        'overall_score': results[['math_accuracy', 'code_quality', 'factual_correctness']].mean(axis=1).mean()
+    }
+    
+    return metrics
+```
+
+### 3. Serving-Time Integration
+Use reward functions in production serving:
+
+```python
+from reward_protocol import RewardProtocol
+from fastapi import FastAPI
+
+app = FastAPI()
+protocol = RewardProtocol()
+
+# Load reward functions
+quality_evaluator = protocol.load_function("response_quality")
+safety_evaluator = protocol.load_function("safety_filter")
+
+@app.post("/generate")
+async def generate_response(query: str):
+    # Generate response from your model
+    response = await your_model.generate(query)
+    
+    # Evaluate response quality
+    quality_score = quality_evaluator(query, response)
+    safety_score = safety_evaluator(query, response)
+    
+    # Filter low-quality or unsafe responses
+    if quality_score < 0.7 or safety_score < 0.9:
+        response = await your_model.generate(query, retry=True)
+    
+    return {
+        "response": response,
+        "quality_score": quality_score,
+        "safety_score": safety_score
+    }
+```
+
+## Common Integration Architectures
+
+### Microservices Architecture
+```mermaid
+graph TB
+    A[Client Application] --> B[API Gateway]
+    B --> C[Model Service]
+    B --> D[Reward Service]
+    
+    C --> E[Model Inference]
+    D --> F[Reward Function A]
+    D --> G[Reward Function B]
+    D --> H[Reward Function C]
+    
+    E --> I[Response Database]
+    F --> J[Metrics Database]
+    G --> J
+    H --> J
+    
+    style D fill:#ff6b35
+    style F fill:#ff8a65
+    style G fill:#ff8a65
+    style H fill:#ff8a65
+```
+
+### Event-Driven Architecture
+```mermaid
+graph LR
+    A[Model Output] --> B[Event Bus]
+    B --> C[Reward Evaluator]
+    B --> D[Metrics Collector]
+    B --> E[Alert System]
+    
+    C --> F[Evaluation Results]
+    D --> G[Monitoring Dashboard]
+    E --> H[Notifications]
+    
+    style C fill:#ff6b35
+    style F fill:#ff8a65
+```
+
+### Batch Processing Pipeline
+```mermaid
+graph TB
+    A[Raw Data] --> B[Data Preprocessing]
+    B --> C[Model Inference]
+    C --> D[Reward Evaluation]
+    D --> E[Results Aggregation]
+    E --> F[Report Generation]
+    
+    G[Reward Functions] --> D
+    H[Configuration] --> D
+    
+    style D fill:#ff6b35
+    style G fill:#ff8a65
+```
+
+## Configuration Management
+
+### Environment-Specific Configuration
+```yaml
+# config/development.yaml
+reward_protocol:
+  functions:
+    - name: math_accuracy
+      source: local
+      path: ./functions/math.py
+    - name: code_quality
+      source: local
+      path: ./functions/code.py
+  
+  cache:
+    enabled: true
+    size: 1000
+  
+  monitoring:
+    enabled: false
+
+# config/production.yaml
+reward_protocol:
+  functions:
+    - name: math_accuracy
+      source: fireworks
+      version: "1.2.0"
+    - name: code_quality
+      source: fireworks
+      version: "2.0.0"
+  
+  cache:
+    enabled: true
+    size: 10000
+    redis_url: "redis://cache:6379"
+  
+  monitoring:
+    enabled: true
+    metrics_endpoint: "http://prometheus:9090"
+```
+
+### Dynamic Configuration
+```python
+from reward_protocol import ConfigManager
+
+config = ConfigManager()
+
+# Load configuration from multiple sources
+config.load_from_file("config/base.yaml")
+config.load_from_env()
+config.load_from_consul("reward-protocol/config")
+
+# Use configuration
+protocol = RewardProtocol(config)
+```
+
+## Best Practices
+
+### 1. Gradual Integration
+- Start with non-critical evaluation workflows
+- Test thoroughly in staging environments
+- Monitor performance impact
+- Gradually expand to production systems
+
+### 2. Monitoring & Observability
+- Track evaluation latency and throughput
+- Monitor reward function accuracy
+- Set up alerts for evaluation failures
+- Log detailed metrics for debugging
+
+### 3. Error Handling
+- Implement fallback mechanisms
+- Handle network failures gracefully
+- Provide default scores for critical paths
+- Log errors for later analysis
+
+### 4. Security
+- Use secure communication channels
+- Validate all inputs and outputs
+- Implement proper authentication
+- Regular security audits
+
+## Getting Started
+
+1. **Choose Your Integration**: Select the platform you want to integrate with
+2. **Read the Guide**: Follow the detailed integration guide for your platform
+3. **Test Locally**: Validate the integration in your development environment
+4. **Deploy Gradually**: Roll out to production incrementally
+5. **Monitor**: Set up monitoring and alerting for your integration
+
+## Need Help?
+
+- **Integration Guides**: Check platform-specific documentation
+- **Community**: Ask questions in our [Discord](https://discord.gg/reward-protocol)
+- **Support**: Contact our [support team](/community/support)
+- **Custom Integration**: Reach out for [enterprise support](/community/feedback)
