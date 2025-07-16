@@ -1,0 +1,511 @@
+---
+title: 'TRL Integration'
+description: 'Integrate Reward Protocol with TRL (Transformer Reinforcement Learning) for training pipelines'
+---
+
+# TRL Integration
+
+[TRL (Transformer Reinforcement Learning)](https://huggingface.co/docs/trl) is a popular library for fine-tuning language models using reinforcement learning. Reward Protocol provides seamless integration with TRL, allowing you to use your reward functions directly in training pipelines.
+
+## Overview
+
+The TRL integration enables you to:
+- Use Reward Protocol reward functions as reward models in TRL training
+- Automatically convert between TRL and Reward Protocol data formats
+- Scale reward evaluation across distributed training setups
+- Monitor reward function performance during training
+
+## Installation
+
+Install TRL integration dependencies:
+
+```bash
+pip install "reward-protocol[trl]"
+```
+
+## Basic Usage
+
+### Using Reward Functions in PPO Training
+
+```python
+from trl import PPOTrainer, PPOConfig
+from reward_protocol.integrations.trl import RewardProtocolRewardModel
+from reward_protocol import reward_function
+from reward_protocol.models import EvaluateResult, MetricResult
+
+# Define your reward function
+@reward_function
+def conversation_quality_reward(messages, **kwargs) -> EvaluateResult:
+    """Evaluate conversation quality for RL training."""
+    response = messages[-1].get("content", "")
+    
+    # Quality metrics
+    length_score = min(len(response.split()) / 50.0, 1.0)
+    politeness_score = 1.0 if any(word in response.lower() for word in ["please", "thank", "sorry"]) else 0.0
+    coherence_score = 1.0 if len(response.split(".")) >= 2 else 0.5
+    
+    overall_score = (length_score + politeness_score + coherence_score) / 3.0
+    
+    return EvaluateResult(
+        score=overall_score,
+        reason=f"Conversation quality: {overall_score:.2f}",
+        metrics={
+            "length": MetricResult(length_score, length_score > 0.5, f"Length score: {length_score:.2f}"),
+            "politeness": MetricResult(politeness_score, politeness_score > 0.0, f"Politeness: {politeness_score:.2f}"),
+            "coherence": MetricResult(coherence_score, coherence_score > 0.7, f"Coherence: {coherence_score:.2f}")
+        }
+    )
+
+# Convert to TRL-compatible reward model
+reward_model = RewardProtocolRewardModel(
+    reward_function=conversation_quality_reward,
+    device="cuda",  # or "cpu"
+    batch_size=8
+)
+
+# Configure PPO training
+config = PPOConfig(
+    model_name="gpt2",
+    learning_rate=1.41e-5,
+    batch_size=8,
+    mini_batch_size=2,
+    gradient_accumulation_steps=4,
+    optimize_cuda_cache=True,
+)
+
+# Initialize PPO trainer
+ppo_trainer = PPOTrainer(
+    config=config,
+    model=model,
+    tokenizer=tokenizer,
+    dataset=dataset,
+    reward_model=reward_model,
+)
+
+# Training loop
+for epoch, batch in enumerate(ppo_trainer.dataloader):
+    query_tensors = batch["input_ids"]
+    
+    # Generate responses
+    response_tensors = ppo_trainer.generate(
+        query_tensors,
+        return_prompt=False,
+        length_sampler=LengthSampler(min_value=10, max_value=20),
+    )
+    
+    # Get rewards from Reward Protocol
+    rewards = reward_model.get_rewards(query_tensors, response_tensors)
+    
+    # PPO training step
+    stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
+    
+    ppo_trainer.log_stats(stats, batch, rewards)
+```
+
+### GRPO (Group Relative Policy Optimization) Integration
+
+```python
+from trl import GRPOTrainer, GRPOConfig
+from reward_protocol.integrations.trl import create_grpo_reward_function
+
+# Create GRPO-compatible reward function
+@reward_function
+def math_accuracy_reward(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    """Math accuracy for GRPO training."""
+    response = messages[-1].get("content", "")
+    
+    # Extract numerical answer
+    import re
+    numbers = re.findall(r'-?\d+\.?\d*', response)
+    predicted_answer = numbers[-1] if numbers else ""
+    
+    expected_answer = str(ground_truth) if ground_truth else ""
+    accuracy = 1.0 if predicted_answer == expected_answer else 0.0
+    
+    return EvaluateResult(
+        score=accuracy,
+        reason=f"Math accuracy: {accuracy}",
+        metrics={
+            "accuracy": MetricResult(
+                score=accuracy,
+                success=accuracy == 1.0,
+                reason=f"Expected {expected_answer}, got {predicted_answer}"
+            )
+        }
+    )
+
+# Configure GRPO training
+grpo_config = GRPOConfig(
+    output_dir="./grpo_math_training",
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=4,
+    learning_rate=5e-7,
+    max_length=512,
+    temperature=0.7,
+    kl_coeff=0.1,
+    num_train_epochs=3,
+)
+
+# Initialize GRPO trainer with Reward Protocol integration
+grpo_trainer = GRPOTrainer(
+    config=grpo_config,
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=train_dataset,
+    reward_function=create_grpo_reward_function(math_accuracy_reward),
+)
+
+# Train the model
+grpo_trainer.train()
+```
+
+## Advanced Integration Patterns
+
+### Multi-Reward Training
+
+Combine multiple reward functions for complex training objectives:
+
+```python
+from reward_protocol.integrations.trl import MultiRewardModel
+
+# Define multiple reward functions
+@reward_function
+def safety_reward(messages, **kwargs) -> EvaluateResult:
+    """Safety evaluation for content filtering."""
+    response = messages[-1].get("content", "")
+    
+    # Simple safety checks (replace with more sophisticated methods)
+    unsafe_patterns = ["violence", "harmful", "inappropriate"]
+    safety_score = 0.0 if any(pattern in response.lower() for pattern in unsafe_patterns) else 1.0
+    
+    return EvaluateResult(
+        score=safety_score,
+        reason=f"Safety check: {'SAFE' if safety_score > 0 else 'UNSAFE'}",
+        metrics={
+            "safety": MetricResult(safety_score, safety_score > 0.0, "Content safety evaluation")
+        }
+    )
+
+@reward_function
+def helpfulness_reward(messages, **kwargs) -> EvaluateResult:
+    """Helpfulness evaluation."""
+    response = messages[-1].get("content", "")
+    
+    # Check for helpful indicators
+    helpful_indicators = ["here's how", "you can", "try this", "solution", "answer"]
+    helpfulness_score = min(
+        sum(1 for indicator in helpful_indicators if indicator in response.lower()) / 3.0,
+        1.0
+    )
+    
+    return EvaluateResult(
+        score=helpfulness_score,
+        reason=f"Helpfulness: {helpfulness_score:.2f}",
+        metrics={
+            "helpfulness": MetricResult(
+                helpfulness_score,
+                helpfulness_score > 0.5,
+                f"Helpful indicators found: {helpfulness_score:.2f}"
+            )
+        }
+    )
+
+# Combine multiple rewards
+multi_reward_model = MultiRewardModel(
+    reward_functions=[
+        ("safety", safety_reward, 0.5),      # (name, function, weight)
+        ("helpfulness", helpfulness_reward, 0.3),
+        ("quality", conversation_quality_reward, 0.2),
+    ],
+    aggregation_method="weighted_sum",  # or "min", "max", "product"
+    device="cuda"
+)
+
+# Use in PPO training
+ppo_trainer = PPOTrainer(
+    config=config,
+    model=model,
+    tokenizer=tokenizer,
+    dataset=dataset,
+    reward_model=multi_reward_model,
+)
+```
+
+### Custom Data Processing
+
+Handle custom data formats and preprocessing:
+
+```python
+from reward_protocol.integrations.trl import TRLDataProcessor
+
+class CustomDataProcessor(TRLDataProcessor):
+    """Custom data processor for domain-specific formats."""
+    
+    def process_batch(self, batch):
+        """Process a batch of training data."""
+        processed_batch = []
+        
+        for item in batch:
+            # Convert custom format to Reward Protocol format
+            messages = [
+                {"role": "user", "content": item["prompt"]},
+                {"role": "assistant", "content": item["response"]}
+            ]
+            
+            # Add any additional context
+            processed_item = {
+                "messages": messages,
+                "ground_truth": item.get("expected_output"),
+                "metadata": {
+                    "domain": item.get("domain", "general"),
+                    "difficulty": item.get("difficulty", "medium")
+                }
+            }
+            processed_batch.append(processed_item)
+        
+        return processed_batch
+    
+    def postprocess_rewards(self, rewards, original_batch):
+        """Post-process rewards before returning to TRL."""
+        # Apply any domain-specific reward adjustments
+        processed_rewards = []
+        
+        for reward, item in zip(rewards, original_batch):
+            # Adjust reward based on difficulty
+            difficulty_multiplier = {
+                "easy": 1.0,
+                "medium": 1.2,
+                "hard": 1.5
+            }.get(item.get("difficulty", "medium"), 1.0)
+            
+            adjusted_reward = reward * difficulty_multiplier
+            processed_rewards.append(adjusted_reward)
+        
+        return processed_rewards
+
+# Use custom processor
+reward_model = RewardProtocolRewardModel(
+    reward_function=your_reward_function,
+    data_processor=CustomDataProcessor(),
+    device="cuda"
+)
+```
+
+## Configuration and Optimization
+
+### Performance Optimization
+
+```python
+# Optimized reward model configuration
+reward_model = RewardProtocolRewardModel(
+    reward_function=your_reward_function,
+    device="cuda",
+    batch_size=16,           # Larger batch for better GPU utilization
+    max_workers=4,           # Parallel processing
+    cache_size=1000,         # Cache frequent evaluations
+    enable_mixed_precision=True,  # Use mixed precision for speed
+    compile_function=True,   # JIT compile reward function
+)
+
+# Configure for distributed training
+reward_model.setup_distributed(
+    world_size=torch.distributed.get_world_size(),
+    rank=torch.distributed.get_rank()
+)
+```
+
+### Monitoring and Logging
+
+```python
+from reward_protocol.integrations.trl import RewardMonitor
+
+# Set up monitoring
+monitor = RewardMonitor(
+    log_dir="./reward_logs",
+    log_frequency=100,       # Log every 100 steps
+    metrics_to_track=["score", "accuracy", "safety"],
+    enable_wandb=True,       # Log to Weights & Biases
+    wandb_project="reward_training"
+)
+
+# Use with PPO trainer
+ppo_trainer = PPOTrainer(
+    config=config,
+    model=model,
+    tokenizer=tokenizer,
+    dataset=dataset,
+    reward_model=reward_model,
+    callbacks=[monitor]      # Add monitoring callback
+)
+```
+
+## Example Training Scripts
+
+### Complete PPO Example
+
+```python
+# complete_ppo_example.py
+import torch
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from trl import PPOTrainer, PPOConfig
+from datasets import load_dataset
+
+from reward_protocol import reward_function
+from reward_protocol.integrations.trl import RewardProtocolRewardModel
+from reward_protocol.models import EvaluateResult, MetricResult
+
+# Load model and tokenizer
+model_name = "gpt2"
+model = GPT2LMHeadModel.from_pretrained(model_name)
+tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+tokenizer.pad_token = tokenizer.eos_token
+
+# Define reward function
+@reward_function
+def sentiment_reward(messages, **kwargs) -> EvaluateResult:
+    """Reward positive sentiment in responses."""
+    response = messages[-1].get("content", "")
+    
+    # Simple sentiment scoring (replace with proper sentiment analysis)
+    positive_words = ["good", "great", "excellent", "wonderful", "amazing", "fantastic"]
+    negative_words = ["bad", "terrible", "awful", "horrible", "disappointing"]
+    
+    positive_score = sum(1 for word in positive_words if word in response.lower())
+    negative_score = sum(1 for word in negative_words if word in response.lower())
+    
+    if positive_score + negative_score == 0:
+        sentiment_score = 0.5  # Neutral
+    else:
+        sentiment_score = positive_score / (positive_score + negative_score)
+    
+    return EvaluateResult(
+        score=sentiment_score,
+        reason=f"Sentiment score: {sentiment_score:.2f}",
+        metrics={
+            "sentiment": MetricResult(
+                sentiment_score,
+                sentiment_score > 0.5,
+                f"Positive: {positive_score}, Negative: {negative_score}"
+            )
+        }
+    )
+
+# Prepare dataset
+dataset = load_dataset("imdb", split="train[:1000]")  # Small subset for demo
+def preprocess_function(examples):
+    return {"prompt": f"Review: {examples['text'][:100]}...\nWrite a positive response:"}
+
+dataset = dataset.map(preprocess_function)
+
+# Configure training
+config = PPOConfig(
+    model_name=model_name,
+    learning_rate=1.41e-5,
+    batch_size=4,
+    mini_batch_size=1,
+    gradient_accumulation_steps=4,
+    optimize_cuda_cache=True,
+    early_stopping=True,
+    target_kl=0.1,
+    ppo_epochs=4,
+)
+
+# Create reward model
+reward_model = RewardProtocolRewardModel(
+    reward_function=sentiment_reward,
+    device="cuda" if torch.cuda.is_available() else "cpu",
+    batch_size=4
+)
+
+# Initialize trainer
+ppo_trainer = PPOTrainer(
+    config=config,
+    model=model,
+    ref_model=None,  # Will use model copy
+    tokenizer=tokenizer,
+    dataset=dataset,
+    reward_model=reward_model,
+)
+
+# Training loop
+for epoch in range(3):
+    for batch in ppo_trainer.dataloader:
+        query_tensors = batch["input_ids"]
+        
+        # Generate responses
+        response_tensors = ppo_trainer.generate(
+            query_tensors,
+            return_prompt=False,
+            max_new_tokens=50,
+            do_sample=True,
+            temperature=0.7,
+        )
+        
+        # Get rewards
+        rewards = reward_model.get_rewards(query_tensors, response_tensors)
+        
+        # Training step
+        stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
+        ppo_trainer.log_stats(stats, batch, rewards)
+
+print("Training completed!")
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Memory Issues
+```python
+# Reduce batch size and enable gradient checkpointing
+config = PPOConfig(
+    batch_size=2,           # Smaller batch
+    mini_batch_size=1,
+    gradient_checkpointing=True,
+    optimize_cuda_cache=True,
+)
+```
+
+#### Slow Reward Evaluation
+```python
+# Enable caching and batch processing
+reward_model = RewardProtocolRewardModel(
+    reward_function=your_function,
+    batch_size=16,          # Process multiple samples together
+    cache_size=1000,        # Cache frequent evaluations
+    enable_compilation=True, # JIT compile for speed
+)
+```
+
+#### Reward Function Errors
+```python
+# Add error handling to reward function
+@reward_function
+def robust_reward(messages, **kwargs) -> EvaluateResult:
+    try:
+        # Your reward logic
+        return normal_evaluation(messages, **kwargs)
+    except Exception as e:
+        # Return safe fallback
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Evaluation error: {str(e)}",
+            metrics={}
+        )
+```
+
+## Best Practices
+
+1. **Start Simple**: Begin with basic reward functions before adding complexity
+2. **Batch Processing**: Use larger batch sizes for better GPU utilization
+3. **Monitor Training**: Track both reward scores and model performance
+4. **Regularization**: Use KL divergence constraints to prevent reward hacking
+5. **Validation**: Regularly evaluate on held-out data
+6. **Safety Checks**: Include safety constraints in multi-objective optimization
+7. **Performance Profiling**: Monitor reward evaluation speed and optimize bottlenecks
+
+## Next Steps
+
+- Explore [Fireworks Integration](/integrations/fireworks) for scalable deployment
+- Learn about [Multi-Objective Training](/examples/overview) patterns
+- Check [Performance Optimization](/developer-guide/evaluation-workflows) guides

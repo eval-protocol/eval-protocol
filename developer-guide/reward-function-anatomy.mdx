@@ -1,0 +1,632 @@
+---
+title: 'Reward Function Anatomy'
+description: 'Deep dive into the structure and components of reward functions'
+---
+
+# Reward Function Anatomy
+
+Understanding the anatomy of a reward function is crucial for building effective evaluation systems. This guide breaks down every component and explains how they work together to create robust, scalable evaluation logic.
+
+## Core Structure
+
+Every reward function in Reward Protocol follows a consistent structure:
+
+```python
+from reward_protocol import reward_function
+from reward_protocol.models import EvaluateResult, MetricResult
+from typing import List, Dict, Any, Optional
+
+@reward_function
+def my_reward_function(
+    messages: List[Dict[str, Any]],           # Required: Conversation history
+    ground_truth: Optional[Any] = None,       # Optional: Expected answer
+    original_messages: Optional[List[Dict[str, Any]]] = None,  # Optional: Original conversation
+    **kwargs: Any                            # Optional: Custom parameters
+) -> EvaluateResult:                         # Required: Standardized return type
+    """
+    Docstring explaining the evaluation criteria and behavior.
+    """
+    # Input validation
+    # Evaluation logic
+    # Result construction
+    # Return EvaluateResult
+```
+
+## Function Signature Breakdown
+
+### Required Parameters
+
+#### messages: List[Dict[str, Any]]
+The conversation history including the model's response to evaluate.
+
+```python
+messages = [
+    {
+        "role": "system",
+        "content": "You are a helpful assistant."
+    },
+    {
+        "role": "user", 
+        "content": "What is the capital of France?"
+    },
+    {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+    }
+]
+```
+
+**Key Points:**
+- Always contains at least one message
+- Last message is typically the model's response to evaluate
+- Follows OpenAI chat completion format
+- May include tool calls, function calls, or other metadata
+
+#### Return Type: EvaluateResult
+All reward functions must return an `EvaluateResult` object.
+
+```python
+return EvaluateResult(
+    score=0.85,                          # Primary score (0.0 to 1.0)
+    reason="Response demonstrates good understanding",  # Human-readable explanation
+    metrics={                            # Detailed metric breakdown
+        "accuracy": MetricResult(
+            score=0.9,
+            success=True,
+            reason="Factually correct"
+        ),
+        "clarity": MetricResult(
+            score=0.8,
+            success=True,
+            reason="Well-structured response"
+        )
+    }
+)
+```
+
+### Optional Parameters
+
+#### ground_truth: Optional[Any]
+The expected or reference answer for comparison.
+
+```python
+# String ground truth
+@reward_function
+def simple_accuracy(messages, ground_truth: str = None, **kwargs):
+    response = messages[-1].get("content", "")
+    if ground_truth is None:
+        return EvaluateResult(score=0.5, reason="No ground truth provided", metrics={})
+    
+    score = 1.0 if response.strip().lower() == ground_truth.lower() else 0.0
+    return EvaluateResult(score=score, reason=f"Match: {score == 1.0}", metrics={})
+
+# Structured ground truth
+@reward_function  
+def complex_accuracy(messages, ground_truth: Dict[str, Any] = None, **kwargs):
+    if ground_truth is None:
+        return EvaluateResult(score=0.0, reason="No ground truth", metrics={})
+    
+    expected_answer = ground_truth.get("answer")
+    expected_reasoning = ground_truth.get("reasoning", [])
+    
+    # Evaluate against structured expectations
+    # ...
+```
+
+#### original_messages: Optional[List[Dict[str, Any]]]
+The conversation before any preprocessing or modifications.
+
+```python
+@reward_function
+def preprocessing_aware_function(
+    messages, 
+    original_messages: Optional[List[Dict[str, Any]]] = None,
+    **kwargs
+):
+    # Compare processed vs original if needed
+    if original_messages:
+        original_length = len(original_messages)
+        processed_length = len(messages)
+        if original_length != processed_length:
+            # Handle preprocessing effects
+            pass
+    
+    # Continue with evaluation
+    # ...
+```
+
+#### **kwargs: Any
+Custom parameters for flexible evaluation.
+
+```python
+@reward_function
+def configurable_evaluator(
+    messages,
+    max_length: int = 100,
+    language: str = "en",
+    strict_mode: bool = False,
+    evaluation_criteria: List[str] = None,
+    **kwargs
+):
+    response = messages[-1].get("content", "")
+    
+    # Use custom parameters
+    if len(response) > max_length:
+        penalty = 0.2 if strict_mode else 0.1
+        score -= penalty
+    
+    # Apply language-specific checks
+    if language == "en":
+        # English-specific evaluation
+        pass
+    
+    # Evaluate based on custom criteria
+    if evaluation_criteria:
+        for criterion in evaluation_criteria:
+            # Apply each criterion
+            pass
+```
+
+## Input Validation Patterns
+
+### Basic Validation
+
+```python
+@reward_function
+def robust_evaluator(messages, **kwargs) -> EvaluateResult:
+    # Check for empty input
+    if not messages:
+        return EvaluateResult(
+            score=0.0,
+            reason="No messages provided",
+            metrics={}
+        )
+    
+    # Check for assistant response
+    assistant_messages = [m for m in messages if m.get("role") == "assistant"]
+    if not assistant_messages:
+        return EvaluateResult(
+            score=0.0,
+            reason="No assistant response found",
+            metrics={}
+        )
+    
+    # Get the last assistant response
+    response = assistant_messages[-1].get("content", "")
+    if not response.strip():
+        return EvaluateResult(
+            score=0.0,
+            reason="Empty assistant response",
+            metrics={}
+        )
+    
+    # Continue with evaluation logic
+    # ...
+```
+
+### Advanced Validation
+
+```python
+@reward_function
+def comprehensive_validator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    validation_errors = []
+    
+    # Message structure validation
+    if not isinstance(messages, list):
+        validation_errors.append("Messages must be a list")
+    
+    for i, message in enumerate(messages):
+        if not isinstance(message, dict):
+            validation_errors.append(f"Message {i} must be a dictionary")
+            continue
+            
+        if "role" not in message:
+            validation_errors.append(f"Message {i} missing 'role' field")
+            
+        if "content" not in message and "tool_calls" not in message:
+            validation_errors.append(f"Message {i} missing content or tool_calls")
+    
+    # Ground truth validation
+    if ground_truth is not None:
+        if kwargs.get("require_ground_truth_type") == "string" and not isinstance(ground_truth, str):
+            validation_errors.append("Ground truth must be a string")
+    
+    # Return validation errors if any
+    if validation_errors:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Validation failed: {'; '.join(validation_errors)}",
+            metrics={
+                "validation_error": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"{len(validation_errors)} validation errors",
+                    metadata={"errors": validation_errors}
+                )
+            }
+        )
+    
+    # Continue with evaluation
+    # ...
+```
+
+## Evaluation Logic Patterns
+
+### Single Metric Evaluation
+
+```python
+@reward_function
+def word_count_evaluator(messages, target_length: int = 50, **kwargs) -> EvaluateResult:
+    response = messages[-1].get("content", "")
+    word_count = len(response.split())
+    
+    # Calculate score based on proximity to target
+    if word_count == 0:
+        score = 0.0
+    else:
+        # Score decreases as distance from target increases
+        distance = abs(word_count - target_length)
+        max_distance = target_length  # Beyond this, score = 0
+        score = max(0.0, 1.0 - (distance / max_distance))
+    
+    success = 0.8 * target_length <= word_count <= 1.2 * target_length
+    
+    return EvaluateResult(
+        score=score,
+        reason=f"Word count {word_count} vs target {target_length}",
+        metrics={
+            "word_count": MetricResult(
+                score=score,
+                success=success,
+                reason=f"Response has {word_count} words",
+                metadata={
+                    "actual_count": word_count,
+                    "target_count": target_length,
+                    "distance_from_target": abs(word_count - target_length)
+                }
+            )
+        }
+    )
+```
+
+### Multi-Metric Evaluation
+
+```python
+@reward_function
+def comprehensive_quality_evaluator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    response = messages[-1].get("content", "")
+    metrics = {}
+    
+    # Accuracy metric
+    if ground_truth:
+        accuracy_score = calculate_accuracy(response, ground_truth)
+        metrics["accuracy"] = MetricResult(
+            score=accuracy_score,
+            success=accuracy_score >= 0.8,
+            reason=f"Accuracy: {accuracy_score:.2f}"
+        )
+    
+    # Length metric
+    word_count = len(response.split())
+    length_score = min(word_count / 100.0, 1.0)  # Optimal at 100 words
+    metrics["length"] = MetricResult(
+        score=length_score,
+        success=20 <= word_count <= 200,
+        reason=f"Length: {word_count} words"
+    )
+    
+    # Clarity metric
+    clarity_score = calculate_clarity(response)
+    metrics["clarity"] = MetricResult(
+        score=clarity_score,
+        success=clarity_score >= 0.7,
+        reason=f"Clarity: {clarity_score:.2f}"
+    )
+    
+    # Relevance metric
+    relevance_score = calculate_relevance(messages, response)
+    metrics["relevance"] = MetricResult(
+        score=relevance_score,
+        success=relevance_score >= 0.6,
+        reason=f"Relevance: {relevance_score:.2f}"
+    )
+    
+    # Calculate weighted overall score
+    weights = kwargs.get("metric_weights", {
+        "accuracy": 0.4,
+        "length": 0.2,
+        "clarity": 0.2,
+        "relevance": 0.2
+    })
+    
+    overall_score = sum(
+        metrics[metric].score * weights.get(metric, 0.0)
+        for metric in metrics
+        if metric in weights
+    )
+    
+    # Determine overall success
+    critical_metrics = kwargs.get("critical_metrics", ["accuracy"])
+    overall_success = all(
+        metrics[metric].success 
+        for metric in critical_metrics 
+        if metric in metrics
+    )
+    
+    return EvaluateResult(
+        score=overall_score,
+        reason=f"Comprehensive evaluation: {overall_score:.2f} ({'PASS' if overall_success else 'FAIL'})",
+        metrics=metrics
+    )
+```
+
+### Tool Calling Evaluation
+
+```python
+@reward_function
+def tool_calling_evaluator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
+    # Find assistant message with tool calls
+    assistant_message = None
+    for message in reversed(messages):
+        if message.get("role") == "assistant" and message.get("tool_calls"):
+            assistant_message = message
+            break
+    
+    if not assistant_message:
+        return EvaluateResult(
+            score=0.0,
+            reason="No tool calls found in assistant response",
+            metrics={}
+        )
+    
+    actual_calls = assistant_message.get("tool_calls", [])
+    expected_calls = ground_truth.get("tool_calls", []) if ground_truth else []
+    
+    if not expected_calls:
+        # No ground truth - evaluate based on call validity
+        return evaluate_tool_call_validity(actual_calls)
+    
+    # Compare actual vs expected calls
+    return compare_tool_calls(actual_calls, expected_calls)
+
+def compare_tool_calls(actual_calls, expected_calls):
+    metrics = {}
+    
+    # Check call count
+    count_match = len(actual_calls) == len(expected_calls)
+    metrics["call_count"] = MetricResult(
+        score=1.0 if count_match else 0.0,
+        success=count_match,
+        reason=f"Expected {len(expected_calls)} calls, got {len(actual_calls)}"
+    )
+    
+    # Check individual calls
+    call_scores = []
+    for i, expected_call in enumerate(expected_calls):
+        if i < len(actual_calls):
+            call_score = evaluate_single_call(actual_calls[i], expected_call)
+            call_scores.append(call_score)
+            metrics[f"call_{i}"] = MetricResult(
+                score=call_score,
+                success=call_score >= 0.8,
+                reason=f"Call {i} evaluation"
+            )
+    
+    # Overall score
+    overall_score = sum(call_scores) / len(expected_calls) if expected_calls else 0.0
+    
+    return EvaluateResult(
+        score=overall_score,
+        reason=f"Tool calling evaluation: {overall_score:.2f}",
+        metrics=metrics
+    )
+```
+
+## Error Handling Patterns
+
+### Graceful Degradation
+
+```python
+@reward_function
+def fault_tolerant_evaluator(messages, **kwargs) -> EvaluateResult:
+    try:
+        # Primary evaluation logic
+        result = perform_primary_evaluation(messages, **kwargs)
+        return result
+        
+    except ValueError as e:
+        # Handle value errors with partial evaluation
+        return EvaluateResult(
+            score=0.5,
+            reason=f"Partial evaluation due to value error: {str(e)}",
+            metrics={
+                "error": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"ValueError: {str(e)}",
+                    metadata={"error_type": "ValueError"}
+                )
+            }
+        )
+        
+    except Exception as e:
+        # Handle all other errors
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Evaluation failed: {str(e)}",
+            metrics={
+                "error": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Exception: {type(e).__name__}",
+                    metadata={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e)
+                    }
+                )
+            }
+        )
+```
+
+### Timeout Handling
+
+```python
+import signal
+from contextlib import contextmanager
+
+@contextmanager
+def timeout_context(seconds):
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Operation timed out after {seconds} seconds")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+
+@reward_function
+def time_bounded_evaluator(messages, timeout_seconds: int = 30, **kwargs) -> EvaluateResult:
+    try:
+        with timeout_context(timeout_seconds):
+            # Potentially slow evaluation logic
+            result = perform_complex_evaluation(messages, **kwargs)
+            return result
+            
+    except TimeoutError:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Evaluation timed out after {timeout_seconds} seconds",
+            metrics={
+                "timeout": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Timeout after {timeout_seconds}s",
+                    metadata={"timeout_seconds": timeout_seconds}
+                )
+            }
+        )
+```
+
+## Performance Optimization Patterns
+
+### Caching
+
+```python
+from functools import lru_cache
+
+@reward_function
+def cached_evaluator(messages, **kwargs) -> EvaluateResult:
+    # Extract cacheable content
+    response = messages[-1].get("content", "")
+    ground_truth = kwargs.get("ground_truth")
+    
+    # Use cached computation for expensive operations
+    expensive_result = cached_expensive_computation(response, ground_truth)
+    
+    return EvaluateResult(
+        score=expensive_result.score,
+        reason=expensive_result.reason,
+        metrics=expensive_result.metrics
+    )
+
+@lru_cache(maxsize=1000)
+def cached_expensive_computation(response: str, ground_truth: str):
+    # Expensive computation here
+    # Results are cached based on input parameters
+    pass
+```
+
+### Lazy Evaluation
+
+```python
+@reward_function
+def lazy_evaluator(messages, **kwargs) -> EvaluateResult:
+    response = messages[-1].get("content", "")
+    metrics = {}
+    
+    # Only compute expensive metrics if needed
+    quick_score = perform_quick_check(response)
+    
+    if quick_score < 0.3:
+        # Skip expensive computations for obviously poor responses
+        return EvaluateResult(
+            score=quick_score,
+            reason="Quick evaluation indicates poor quality",
+            metrics={
+                "quick_check": MetricResult(
+                    score=quick_score,
+                    success=False,
+                    reason="Failed quick quality check"
+                )
+            }
+        )
+    
+    # Perform full evaluation for promising responses
+    return perform_full_evaluation(messages, **kwargs)
+```
+
+## Testing Patterns
+
+### Self-Testing Functions
+
+```python
+@reward_function
+def self_testing_evaluator(messages, **kwargs) -> EvaluateResult:
+    # Include test mode for validation
+    if kwargs.get("test_mode"):
+        return run_self_tests()
+    
+    # Normal evaluation logic
+    return perform_normal_evaluation(messages, **kwargs)
+
+def run_self_tests():
+    """Built-in self-tests for the reward function."""
+    test_cases = [
+        {
+            "messages": [{"role": "assistant", "content": "Good response"}],
+            "expected_score_range": (0.7, 1.0)
+        },
+        {
+            "messages": [{"role": "assistant", "content": "Bad"}],
+            "expected_score_range": (0.0, 0.3)
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases):
+        result = perform_normal_evaluation(test_case["messages"])
+        expected_min, expected_max = test_case["expected_score_range"]
+        
+        if not (expected_min <= result.score <= expected_max):
+            return EvaluateResult(
+                score=0.0,
+                reason=f"Self-test {i} failed: score {result.score} not in range {test_case['expected_score_range']}",
+                metrics={}
+            )
+    
+    return EvaluateResult(
+        score=1.0,
+        reason="All self-tests passed",
+        metrics={}
+    )
+```
+
+## Best Practices Summary
+
+1. **Always Validate Input**: Check messages structure and content
+2. **Handle Errors Gracefully**: Return valid EvaluateResult even on failure
+3. **Use Meaningful Metrics**: Name metrics clearly and provide detailed reasons
+4. **Include Metadata**: Use MetricResult.metadata for debugging information
+5. **Normalize Scores**: Always return scores between 0.0 and 1.0
+6. **Document Behavior**: Use clear docstrings and reason messages
+7. **Test Edge Cases**: Handle empty responses, missing data, etc.
+8. **Optimize Performance**: Use caching and lazy evaluation where appropriate
+9. **Version Functions**: Include version information in metadata
+10. **Follow Conventions**: Use consistent naming and structure patterns
+
+## Next Steps
+
+- Learn about [Evaluation Workflows](/developer-guide/evaluation-workflows) for end-to-end processes
+- Explore [Data Models](/api-reference/data-models) for detailed type information
+- Check [Examples](/examples/overview) for real-world implementations

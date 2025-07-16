@@ -1,0 +1,357 @@
+---
+title: 'Data Models'
+description: 'Core data structures used in Reward Protocol'
+---
+
+# Data Models
+
+Reward Protocol defines standardized data models to ensure consistency across all reward functions and platforms. These models use Pydantic for type validation and serialization.
+
+## Core Models
+
+### EvaluateResult
+
+The primary return type for all reward functions.
+
+```python
+from reward_protocol.models import EvaluateResult, MetricResult
+
+class EvaluateResult:
+    score: float           # Primary score (0.0 to 1.0)
+    reason: str           # Human-readable explanation
+    metrics: Dict[str, MetricResult]  # Detailed metric breakdown
+```
+
+#### Example Usage
+
+```python
+result = EvaluateResult(
+    score=0.85,
+    reason="Response demonstrates strong understanding with minor gaps",
+    metrics={
+        "accuracy": MetricResult(
+            score=0.9,
+            success=True,
+            reason="Factually correct information provided"
+        ),
+        "completeness": MetricResult(
+            score=0.8,
+            success=True,
+            reason="Covers most important aspects"
+        )
+    }
+)
+```
+
+### MetricResult
+
+Detailed results for individual evaluation metrics.
+
+```python
+class MetricResult:
+    score: float          # Metric score (0.0 to 1.0)
+    success: bool         # Whether metric passed threshold
+    reason: str           # Explanation for this metric
+    metadata: Optional[Dict[str, Any]] = None  # Additional data
+```
+
+#### Example Usage
+
+```python
+accuracy_metric = MetricResult(
+    score=0.95,
+    success=True,
+    reason="Answer matches ground truth exactly",
+    metadata={
+        "matched_tokens": 42,
+        "total_tokens": 44,
+        "similarity_type": "exact_match"
+    }
+)
+```
+
+### Message
+
+Standardized message format following OpenAI chat completion structure.
+
+```python
+class Message:
+    role: str                    # "user", "assistant", "system"
+    content: str                 # Message text content
+    tool_calls: Optional[List[ToolCall]] = None  # Function calls
+    function_call: Optional[Dict] = None         # Legacy function call
+    name: Optional[str] = None                   # Speaker name
+```
+
+#### Example Usage
+
+```python
+from reward_protocol.models import Message
+
+user_message = Message(
+    role="user",
+    content="What's the weather in San Francisco?"
+)
+
+assistant_message = Message(
+    role="assistant",
+    content="I'll check the weather for you.",
+    tool_calls=[
+        ToolCall(
+            id="call_123",
+            type="function",
+            function=Function(
+                name="get_weather",
+                arguments='{"location": "San Francisco, CA"}'
+            )
+        )
+    ]
+)
+```
+
+### ToolCall
+
+Represents function/tool calls made by the AI model.
+
+```python
+class ToolCall:
+    id: str                      # Unique call identifier
+    type: str                    # Usually "function"
+    function: Function           # Function details
+```
+
+### Function
+
+Details of a function call.
+
+```python
+class Function:
+    name: str                    # Function name
+    arguments: str               # JSON string of arguments
+```
+
+#### Example Usage
+
+```python
+from reward_protocol.models import ToolCall, Function
+
+tool_call = ToolCall(
+    id="call_abc123",
+    type="function",
+    function=Function(
+        name="calculate_tip",
+        arguments='{"bill_amount": 50.0, "tip_percentage": 0.18}'
+    )
+)
+```
+
+## Input Data Structures
+
+### Conversation Format
+
+Reward functions receive conversations as lists of dictionaries:
+
+```python
+messages = [
+    {
+        "role": "system",
+        "content": "You are a helpful assistant."
+    },
+    {
+        "role": "user", 
+        "content": "Explain photosynthesis"
+    },
+    {
+        "role": "assistant",
+        "content": "Photosynthesis is the process by which plants..."
+    }
+]
+```
+
+### Tool Call Format
+
+For evaluating function calling capabilities:
+
+```python
+tool_call_message = {
+    "role": "assistant",
+    "content": None,
+    "tool_calls": [
+        {
+            "id": "call_123",
+            "type": "function",
+            "function": {
+                "name": "get_current_weather",
+                "arguments": '{"location": "Boston, MA"}'
+            }
+        }
+    ]
+}
+```
+
+### Ground Truth Formats
+
+Ground truth can take various forms depending on the evaluation:
+
+#### String Ground Truth
+```python
+ground_truth = "The capital of France is Paris."
+```
+
+#### Structured Ground Truth
+```python
+ground_truth = {
+    "answer": "Paris",
+    "explanation": "Paris has been the capital since...",
+    "confidence": 0.95
+}
+```
+
+#### Tool Call Ground Truth
+```python
+ground_truth = {
+    "tool_calls": [
+        {
+            "name": "get_weather",
+            "arguments": {
+                "location": "San Francisco, CA",
+                "unit": "celsius"
+            }
+        }
+    ]
+}
+```
+
+## Validation and Type Safety
+
+All models include automatic validation:
+
+```python
+from reward_protocol.models import EvaluateResult, MetricResult
+
+# This will raise a validation error
+try:
+    invalid_result = EvaluateResult(
+        score=1.5,  # Score must be 0.0-1.0
+        reason="",  # Reason cannot be empty
+        metrics={}
+    )
+except ValidationError as e:
+    print(f"Validation error: {e}")
+
+# Correct usage
+valid_result = EvaluateResult(
+    score=0.8,
+    reason="Good response quality",
+    metrics={
+        "quality": MetricResult(
+            score=0.8,
+            success=True,
+            reason="Meets quality standards"
+        )
+    }
+)
+```
+
+## Serialization
+
+All models support JSON serialization for deployment:
+
+```python
+# Convert to dict
+result_dict = result.model_dump()
+
+# Convert to JSON string
+result_json = result.model_dump_json()
+
+# Load from dict
+result_from_dict = EvaluateResult.model_validate(result_dict)
+
+# Load from JSON
+result_from_json = EvaluateResult.model_validate_json(result_json)
+```
+
+## Custom Metadata
+
+Use the metadata field in MetricResult for additional context:
+
+```python
+advanced_metric = MetricResult(
+    score=0.75,
+    success=True,
+    reason="Code passes most test cases",
+    metadata={
+        "tests_passed": 15,
+        "tests_failed": 3,
+        "execution_time": 0.245,
+        "memory_usage": "12.5MB",
+        "syntax_errors": 0,
+        "style_warnings": 2
+    }
+)
+```
+
+## Error Handling Models
+
+For handling evaluation errors gracefully:
+
+```python
+def safe_evaluation(messages, **kwargs) -> EvaluateResult:
+    try:
+        # Your evaluation logic
+        score = perform_evaluation(messages)
+        return EvaluateResult(
+            score=score,
+            reason="Evaluation completed successfully",
+            metrics={}
+        )
+    except Exception as e:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"Evaluation failed: {str(e)}",
+            metrics={
+                "error": MetricResult(
+                    score=0.0,
+                    success=False,
+                    reason=f"Exception: {type(e).__name__}",
+                    metadata={
+                        "error_type": type(e).__name__,
+                        "error_message": str(e)
+                    }
+                )
+            }
+        )
+```
+
+## Type Hints
+
+For full type safety in your reward functions:
+
+```python
+from typing import List, Dict, Any, Optional
+from reward_protocol.models import EvaluateResult, MetricResult, Message
+
+@reward_function
+def typed_reward_function(
+    messages: List[Dict[str, Any]],
+    ground_truth: Optional[str] = None,
+    **kwargs: Any
+) -> EvaluateResult:
+    # Type-safe implementation
+    pass
+```
+
+## Best Practices
+
+1. **Always validate inputs**: Use type hints and validate data early
+2. **Provide rich metadata**: Use MetricResult.metadata for debugging
+3. **Handle errors gracefully**: Return valid EvaluateResult even on failure
+4. **Use meaningful metric names**: Make evaluation criteria clear
+5. **Include detailed reasons**: Help users understand scores
+6. **Normalize scores**: Always return scores between 0.0 and 1.0
+
+## Next Steps
+
+- Learn how to use these models with the [@reward_function decorator](/api-reference/reward-function-decorator)
+- See practical examples in our [Examples](/examples/overview)
+- Explore [CLI deployment](/cli-reference/overview) with these data types

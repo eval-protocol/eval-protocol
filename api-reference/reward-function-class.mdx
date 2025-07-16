@@ -1,0 +1,438 @@
+---
+title: 'RewardFunction Class'
+description: 'Advanced reward function management and deployment using the RewardFunction class'
+---
+
+# RewardFunction Class
+
+The `RewardFunction` class provides an advanced interface for creating, managing, and deploying reward functions programmatically. While the `@reward_function` decorator is the recommended approach for most use cases, the class interface offers additional control and features.
+
+## Basic Usage
+
+```python
+from reward_protocol import RewardFunction
+from reward_protocol.models import EvaluateResult, MetricResult
+
+def my_evaluation_logic(messages, **kwargs):
+    response = messages[-1].get("content", "")
+    score = len(response.split()) / 100.0
+    
+    return EvaluateResult(
+        score=min(score, 1.0),
+        reason=f"Word count evaluation: {len(response.split())} words",
+        metrics={
+            "word_count": MetricResult(
+                score=min(score, 1.0),
+                success=len(response.split()) >= 10,
+                reason=f"Response has {len(response.split())} words"
+            )
+        }
+    )
+
+# Create RewardFunction instance
+reward_func = RewardFunction(
+    function=my_evaluation_logic,
+    name="word_count_evaluator",
+    description="Evaluates responses based on word count"
+)
+```
+
+## Constructor Parameters
+
+### function: Callable
+The evaluation function that implements your reward logic.
+
+```python
+def evaluation_function(
+    messages: List[Dict[str, Any]],
+    ground_truth: Any = None,
+    **kwargs: Any
+) -> EvaluateResult:
+    # Your logic here
+    pass
+```
+
+### name: str
+A unique identifier for your reward function.
+
+```python
+reward_func = RewardFunction(
+    function=my_logic,
+    name="math_accuracy_checker",  # Used for deployment and identification
+    description="Checks mathematical accuracy"
+)
+```
+
+### description: str (optional)
+Human-readable description of what the reward function evaluates.
+
+### metadata: Dict[str, Any] (optional)
+Additional metadata about the reward function.
+
+```python
+reward_func = RewardFunction(
+    function=my_logic,
+    name="code_quality",
+    description="Evaluates code quality and best practices",
+    metadata={
+        "version": "1.2.0",
+        "author": "ML Team",
+        "supported_languages": ["python", "javascript", "java"],
+        "evaluation_criteria": [
+            "syntax_correctness",
+            "performance",
+            "readability"
+        ]
+    }
+)
+```
+
+## Instance Methods
+
+### evaluate()
+
+Execute the reward function with provided inputs.
+
+```python
+messages = [
+    {"role": "user", "content": "Write a function to sort a list"},
+    {"role": "assistant", "content": "def sort_list(lst): return sorted(lst)"}
+]
+
+result = reward_func.evaluate(
+    messages=messages,
+    ground_truth="def sort_list(lst): return sorted(lst)",
+    custom_param="value"
+)
+
+print(f"Score: {result.score}")
+print(f"Reason: {result.reason}")
+```
+
+### deploy()
+
+Deploy the reward function to a target platform.
+
+```python
+# Deploy to Fireworks AI
+deployment = reward_func.deploy(
+    target="fireworks",
+    evaluator_id="my-code-evaluator",
+    force=True,  # Update if exists
+    providers=[
+        {
+            "providerType": "fireworks", 
+            "modelId": "accounts/fireworks/models/llama-v3p1-8b-instruct"
+        }
+    ]
+)
+
+print(f"Deployed evaluator ID: {deployment.evaluator_id}")
+print(f"Deployment URL: {deployment.url}")
+```
+
+### deploy_local()
+
+Deploy as a local server with external access.
+
+```python
+# Start local server with tunnel
+server_info = reward_func.deploy_local(
+    port=8001,
+    tunnel_type="ngrok",  # or "serveo"
+    evaluator_id="local-test-evaluator"
+)
+
+print(f"Local URL: {server_info.local_url}")
+print(f"Public URL: {server_info.public_url}")
+print(f"Server PID: {server_info.process_id}")
+```
+
+### validate()
+
+Validate the reward function configuration.
+
+```python
+validation_result = reward_func.validate()
+
+if validation_result.is_valid:
+    print("Reward function is valid")
+else:
+    print(f"Validation errors: {validation_result.errors}")
+```
+
+### test()
+
+Test the reward function with sample data.
+
+```python
+test_cases = [
+    {
+        "messages": [{"role": "assistant", "content": "Short answer"}],
+        "expected_score_range": (0.1, 0.3)
+    },
+    {
+        "messages": [{"role": "assistant", "content": "A much longer and more detailed response with explanations"}],
+        "expected_score_range": (0.7, 1.0)
+    }
+]
+
+test_results = reward_func.test(test_cases)
+for i, result in enumerate(test_results):
+    print(f"Test {i+1}: {'PASS' if result.passed else 'FAIL'} (Score: {result.score})")
+```
+
+## Properties
+
+### function_info
+
+Get information about the underlying function.
+
+```python
+info = reward_func.function_info
+print(f"Function name: {info.name}")
+print(f"Parameters: {info.parameters}")
+print(f"Return type: {info.return_type}")
+```
+
+### deployment_status
+
+Check current deployment status.
+
+```python
+status = reward_func.deployment_status
+if status.is_deployed:
+    print(f"Deployed to: {status.platform}")
+    print(f"Evaluator ID: {status.evaluator_id}")
+    print(f"Status: {status.health}")
+else:
+    print("Not currently deployed")
+```
+
+## Advanced Features
+
+### Custom Validation
+
+Add custom validation logic for your reward function:
+
+```python
+def custom_validator(messages, **kwargs):
+    """Custom validation for inputs."""
+    if not messages:
+        return False, "Messages cannot be empty"
+    
+    if len(messages) < 2:
+        return False, "Need at least user and assistant messages"
+    
+    return True, "Valid input"
+
+reward_func = RewardFunction(
+    function=my_logic,
+    name="validated_evaluator",
+    validator=custom_validator
+)
+```
+
+### Batch Evaluation
+
+Evaluate multiple conversations at once:
+
+```python
+conversations = [
+    [{"role": "assistant", "content": "Response 1"}],
+    [{"role": "assistant", "content": "Response 2"}],
+    [{"role": "assistant", "content": "Response 3"}]
+]
+
+batch_results = reward_func.evaluate_batch(
+    conversations,
+    ground_truths=["Truth 1", "Truth 2", "Truth 3"],
+    parallel=True  # Process in parallel
+)
+
+for i, result in enumerate(batch_results):
+    print(f"Conversation {i+1}: Score {result.score}")
+```
+
+### Configuration Management
+
+Save and load reward function configurations:
+
+```python
+# Save configuration
+config = reward_func.save_config("./my_evaluator_config.json")
+
+# Load configuration
+loaded_func = RewardFunction.load_config("./my_evaluator_config.json")
+
+# Export for sharing
+portable_config = reward_func.export_config(
+    include_function_code=True,  # Include source code
+    include_metadata=True
+)
+```
+
+### Monitoring and Logging
+
+Built-in monitoring capabilities:
+
+```python
+reward_func = RewardFunction(
+    function=my_logic,
+    name="monitored_evaluator",
+    enable_logging=True,
+    log_level="INFO"
+)
+
+# Evaluation calls are automatically logged
+result = reward_func.evaluate(messages)
+
+# Access logs
+logs = reward_func.get_logs(last_n=10)
+for log_entry in logs:
+    print(f"{log_entry.timestamp}: {log_entry.message}")
+```
+
+## Integration with External Systems
+
+### Weights & Biases Integration
+
+```python
+import wandb
+
+reward_func = RewardFunction(
+    function=my_logic,
+    name="wandb_evaluator",
+    integrations={
+        "wandb": {
+            "project": "reward-function-eval",
+            "log_metrics": True,
+            "log_predictions": True
+        }
+    }
+)
+
+# Evaluations automatically logged to W&B
+result = reward_func.evaluate(messages)
+```
+
+### Custom Metrics Backend
+
+```python
+def custom_metrics_handler(result, metadata):
+    # Send metrics to custom system
+    send_to_metrics_system({
+        "score": result.score,
+        "timestamp": metadata.timestamp,
+        "evaluator": metadata.evaluator_name
+    })
+
+reward_func = RewardFunction(
+    function=my_logic,
+    name="custom_metrics_evaluator",
+    metrics_handler=custom_metrics_handler
+)
+```
+
+## Error Handling and Resilience
+
+### Automatic Retry
+
+```python
+reward_func = RewardFunction(
+    function=my_logic,
+    name="resilient_evaluator",
+    retry_config={
+        "max_retries": 3,
+        "backoff_factor": 2.0,
+        "retry_on": [TimeoutError, ConnectionError]
+    }
+)
+```
+
+### Fallback Functions
+
+```python
+def fallback_evaluation(messages, **kwargs):
+    return EvaluateResult(
+        score=0.5,
+        reason="Used fallback evaluation due to primary function failure",
+        metrics={}
+    )
+
+reward_func = RewardFunction(
+    function=my_logic,
+    name="fault_tolerant_evaluator",
+    fallback_function=fallback_evaluation
+)
+```
+
+## Performance Optimization
+
+### Caching
+
+```python
+reward_func = RewardFunction(
+    function=my_logic,
+    name="cached_evaluator",
+    cache_config={
+        "enabled": True,
+        "max_size": 1000,
+        "ttl": 3600  # 1 hour
+    }
+)
+```
+
+### Async Support
+
+```python
+async def async_evaluation_logic(messages, **kwargs):
+    # Async evaluation logic
+    result = await some_async_operation(messages)
+    return EvaluateResult(score=result, reason="Async evaluation", metrics={})
+
+async_reward_func = RewardFunction(
+    function=async_evaluation_logic,
+    name="async_evaluator",
+    async_mode=True
+)
+
+# Use with async/await
+result = await async_reward_func.evaluate_async(messages)
+```
+
+## Best Practices
+
+1. **Use descriptive names**: Choose clear, unique names for your reward functions
+2. **Include metadata**: Document your evaluation criteria and parameters
+3. **Implement validation**: Add input validation for robust operation
+4. **Enable monitoring**: Use logging for debugging and optimization
+5. **Handle errors gracefully**: Implement fallback strategies
+6. **Test thoroughly**: Use the built-in testing capabilities
+7. **Version your functions**: Include version information in metadata
+
+## Migration from Decorator
+
+Converting from decorator to class-based approach:
+
+```python
+# Before: Using decorator
+@reward_function
+def my_evaluator(messages, **kwargs):
+    return EvaluateResult(...)
+
+# After: Using class
+def my_evaluation_logic(messages, **kwargs):
+    return EvaluateResult(...)
+
+my_evaluator = RewardFunction(
+    function=my_evaluation_logic,
+    name="my_evaluator"
+)
+```
+
+## Next Steps
+
+- Learn about [Data Models](/api-reference/data-models) for type definitions
+- Explore [CLI integration](/cli-reference/overview) for deployment
+- Check out [Examples](/examples/overview) for practical implementations
