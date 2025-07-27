@@ -74,47 +74,24 @@ export interface EvaluationRow {
 /**
  * Type guard to check if an object is a valid EvaluationRow
  */
-export function isEvaluationRow(obj: any): obj is EvaluationRow {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    Array.isArray(obj.messages) &&
-    obj.messages.every((msg: any) => 
-      msg &&
-      typeof msg === 'object' &&
-      typeof msg.role === 'string'
-    )
-  );
-}
+export declare function isEvaluationRow(obj: any): obj is EvaluationRow;
 
 /**
  * Type guard to check if this represents a trajectory evaluation
  */
-export function isTrajectoryEvaluation(row: EvaluationRow): boolean {
-  return (
-    row.evaluation_result !== undefined &&
-    row.evaluation_result.step_outputs !== undefined &&
-    row.evaluation_result.step_outputs.length > 0
-  );
-}
+export declare function isTrajectoryEvaluation(row: EvaluationRow): boolean;
 
 /**
  * Helper function to get assistant messages from an EvaluationRow
  */
-export function getAssistantMessages(row: EvaluationRow): Message[] {
-  return row.messages.filter(msg => msg.role === 'assistant');
-}
+export declare function getAssistantMessages(row: EvaluationRow): Message[];
 
 /**
  * Helper function to get user messages from an EvaluationRow
  */
-export function getUserMessages(row: EvaluationRow): Message[] {
-  return row.messages.filter(msg => msg.role === 'user');
-}
+export declare function getUserMessages(row: EvaluationRow): Message[];
 
 /**
  * Helper function to get input metadata value
  */
-export function getInputMetadata(row: EvaluationRow, key: string, defaultValue?: any): any {
-  return row.input_metadata?.[key] ?? defaultValue;
-}
+export declare function getInputMetadata(row: EvaluationRow, key: string, defaultValue?: any): any;
