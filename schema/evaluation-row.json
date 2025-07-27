@@ -1,0 +1,912 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eval-protocol.com/schema/evaluation-row.json",
+  "title": "EvaluationRow",
+  "description": "Model Context Protocol compatible schema for evaluation data",
+  "type": "object",
+  "definitions": {
+    "Message": {
+      "$defs": {
+        "ChatCompletionMessageToolCall": {
+          "additionalProperties": true,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "function": {
+              "$ref": "#/$defs/Function"
+            },
+            "type": {
+              "const": "function",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "function",
+            "type"
+          ],
+          "title": "ChatCompletionMessageToolCall",
+          "type": "object"
+        },
+        "Function": {
+          "additionalProperties": true,
+          "properties": {
+            "arguments": {
+              "title": "Arguments",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "arguments",
+            "name"
+          ],
+          "title": "Function",
+          "type": "object"
+        },
+        "FunctionCall": {
+          "additionalProperties": true,
+          "properties": {
+            "arguments": {
+              "title": "Arguments",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "arguments",
+            "name"
+          ],
+          "title": "FunctionCall",
+          "type": "object"
+        }
+      },
+      "description": "Chat message model compatible with OpenAI's interface.",
+      "properties": {
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "",
+          "title": "Content"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "tool_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Call Id"
+        },
+        "tool_calls": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChatCompletionMessageToolCall"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Calls"
+        },
+        "function_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FunctionCall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "MetricResult": {
+      "description": "Result of a single metric evaluation.\n\nAttributes:\n    is_score_valid (bool): Whether the score is valid for this metric (required).\n    score (float): The score for this metric.\n    reason (str): Explanation for the score.",
+      "properties": {
+        "is_score_valid": {
+          "default": true,
+          "title": "Is Score Valid",
+          "type": "boolean"
+        },
+        "score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "score",
+        "reason"
+      ],
+      "title": "MetricResult",
+      "type": "object"
+    },
+    "StepOutput": {
+      "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+      "properties": {
+        "step_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "User-defined index for the step (e.g., assistant message index, turn number). This is used by the system to map this output to the internal StepData.",
+          "title": "Step Index"
+        },
+        "base_reward": {
+          "description": "Base reward calculated by the user's reward function for this step.",
+          "title": "Base Reward",
+          "type": "number"
+        },
+        "terminated": {
+          "default": false,
+          "description": "Whether the environment signaled termination at this step.",
+          "title": "Terminated",
+          "type": "boolean"
+        },
+        "control_plane_info": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Structured info from the environment's control plane.",
+          "title": "Control Plane Info"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "description": "Optional dictionary of custom metrics for this step.",
+          "title": "Metrics",
+          "type": "object"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional explanation for the step's base reward or metrics.",
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "step_index",
+        "base_reward"
+      ],
+      "title": "StepOutput",
+      "type": "object"
+    },
+    "EvaluateResult": {
+      "$defs": {
+        "MetricResult": {
+          "description": "Result of a single metric evaluation.\n\nAttributes:\n    is_score_valid (bool): Whether the score is valid for this metric (required).\n    score (float): The score for this metric.\n    reason (str): Explanation for the score.",
+          "properties": {
+            "is_score_valid": {
+              "default": true,
+              "title": "Is Score Valid",
+              "type": "boolean"
+            },
+            "score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Score",
+              "type": "number"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "score",
+            "reason"
+          ],
+          "title": "MetricResult",
+          "type": "object"
+        },
+        "StepOutput": {
+          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+          "properties": {
+            "step_index": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "User-defined index for the step (e.g., assistant message index, turn number). This is used by the system to map this output to the internal StepData.",
+              "title": "Step Index"
+            },
+            "base_reward": {
+              "description": "Base reward calculated by the user's reward function for this step.",
+              "title": "Base Reward",
+              "type": "number"
+            },
+            "terminated": {
+              "default": false,
+              "description": "Whether the environment signaled termination at this step.",
+              "title": "Terminated",
+              "type": "boolean"
+            },
+            "control_plane_info": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Structured info from the environment's control plane.",
+              "title": "Control Plane Info"
+            },
+            "metrics": {
+              "additionalProperties": true,
+              "description": "Optional dictionary of custom metrics for this step.",
+              "title": "Metrics",
+              "type": "object"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional explanation for the step's base reward or metrics.",
+              "title": "Reason"
+            }
+          },
+          "required": [
+            "step_index",
+            "base_reward"
+          ],
+          "title": "StepOutput",
+          "type": "object"
+        }
+      },
+      "description": "The complete result of an evaluator.\nFor standard evaluation, it provides an overall score and component metrics.\nFor Reinforcement Learning, it can also provide per-step base rewards via 'step_outputs'.\n\nThis unified model serves both per-turn and per-trajectory evaluation scenarios.\n\nAttributes:\n    score (float): The overall evaluation score.\n    is_score_valid (bool): Whether the overall score is valid. Defaults to True.\n    reason (Optional[str]): Optional explanation for the overall score.\n    metrics (Dict[str, MetricResult]): Dictionary of component metrics for detailed evaluation.\n    step_outputs (Optional[List[StepOutput]]): For RL, a list of outputs for each conceptual step,\n                                              providing base rewards.\n    error (Optional[str]): Optional error message if evaluation failed.\n    trajectory_info (Optional[Dict[str, Any]]): Additional trajectory-level information.\n    final_control_plane_info (Optional[Dict[str, Any]]): The final control plane state that led to termination.",
+      "properties": {
+        "score": {
+          "description": "The overall evaluation score, typically between 0.0 and 1.0.",
+          "title": "Score",
+          "type": "number"
+        },
+        "is_score_valid": {
+          "default": true,
+          "description": "Whether the overall score is valid.",
+          "title": "Is Score Valid",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional explanation for the overall score.",
+          "title": "Reason"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricResult"
+          },
+          "description": "Dictionary of component metrics for detailed breakdown.",
+          "title": "Metrics",
+          "type": "object"
+        },
+        "step_outputs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/StepOutput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For RL, a list of outputs for each conceptual step, providing base rewards.",
+          "title": "Step Outputs"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional error message if the evaluation itself encountered an issue.",
+          "title": "Error"
+        },
+        "trajectory_info": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Additional trajectory-level information (duration, steps, termination_reason, etc.).",
+          "title": "Trajectory Info"
+        },
+        "final_control_plane_info": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The final control plane state that led to termination.",
+          "title": "Final Control Plane Info"
+        }
+      },
+      "required": [
+        "score"
+      ],
+      "title": "EvaluateResult",
+      "type": "object"
+    },
+    "EvaluationRow": {
+      "$defs": {
+        "ChatCompletionMessageToolCall": {
+          "additionalProperties": true,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "function": {
+              "$ref": "#/$defs/Function"
+            },
+            "type": {
+              "const": "function",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "function",
+            "type"
+          ],
+          "title": "ChatCompletionMessageToolCall",
+          "type": "object"
+        },
+        "EvaluateResult": {
+          "description": "The complete result of an evaluator.\nFor standard evaluation, it provides an overall score and component metrics.\nFor Reinforcement Learning, it can also provide per-step base rewards via 'step_outputs'.\n\nThis unified model serves both per-turn and per-trajectory evaluation scenarios.\n\nAttributes:\n    score (float): The overall evaluation score.\n    is_score_valid (bool): Whether the overall score is valid. Defaults to True.\n    reason (Optional[str]): Optional explanation for the overall score.\n    metrics (Dict[str, MetricResult]): Dictionary of component metrics for detailed evaluation.\n    step_outputs (Optional[List[StepOutput]]): For RL, a list of outputs for each conceptual step,\n                                              providing base rewards.\n    error (Optional[str]): Optional error message if evaluation failed.\n    trajectory_info (Optional[Dict[str, Any]]): Additional trajectory-level information.\n    final_control_plane_info (Optional[Dict[str, Any]]): The final control plane state that led to termination.",
+          "properties": {
+            "score": {
+              "description": "The overall evaluation score, typically between 0.0 and 1.0.",
+              "title": "Score",
+              "type": "number"
+            },
+            "is_score_valid": {
+              "default": true,
+              "description": "Whether the overall score is valid.",
+              "title": "Is Score Valid",
+              "type": "boolean"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional explanation for the overall score.",
+              "title": "Reason"
+            },
+            "metrics": {
+              "additionalProperties": {
+                "$ref": "#/$defs/MetricResult"
+              },
+              "description": "Dictionary of component metrics for detailed breakdown.",
+              "title": "Metrics",
+              "type": "object"
+            },
+            "step_outputs": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/StepOutput"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "For RL, a list of outputs for each conceptual step, providing base rewards.",
+              "title": "Step Outputs"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional error message if the evaluation itself encountered an issue.",
+              "title": "Error"
+            },
+            "trajectory_info": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Additional trajectory-level information (duration, steps, termination_reason, etc.).",
+              "title": "Trajectory Info"
+            },
+            "final_control_plane_info": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The final control plane state that led to termination.",
+              "title": "Final Control Plane Info"
+            }
+          },
+          "required": [
+            "score"
+          ],
+          "title": "EvaluateResult",
+          "type": "object"
+        },
+        "Function": {
+          "additionalProperties": true,
+          "properties": {
+            "arguments": {
+              "title": "Arguments",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "arguments",
+            "name"
+          ],
+          "title": "Function",
+          "type": "object"
+        },
+        "FunctionCall": {
+          "additionalProperties": true,
+          "properties": {
+            "arguments": {
+              "title": "Arguments",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "arguments",
+            "name"
+          ],
+          "title": "FunctionCall",
+          "type": "object"
+        },
+        "Message": {
+          "description": "Chat message model compatible with OpenAI's interface.",
+          "properties": {
+            "role": {
+              "title": "Role",
+              "type": "string"
+            },
+            "content": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "",
+              "title": "Content"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Name"
+            },
+            "tool_call_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tool Call Id"
+            },
+            "tool_calls": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/ChatCompletionMessageToolCall"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Tool Calls"
+            },
+            "function_call": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FunctionCall"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "role"
+          ],
+          "title": "Message",
+          "type": "object"
+        },
+        "MetricResult": {
+          "description": "Result of a single metric evaluation.\n\nAttributes:\n    is_score_valid (bool): Whether the score is valid for this metric (required).\n    score (float): The score for this metric.\n    reason (str): Explanation for the score.",
+          "properties": {
+            "is_score_valid": {
+              "default": true,
+              "title": "Is Score Valid",
+              "type": "boolean"
+            },
+            "score": {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Score",
+              "type": "number"
+            },
+            "reason": {
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "score",
+            "reason"
+          ],
+          "title": "MetricResult",
+          "type": "object"
+        },
+        "StepOutput": {
+          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+          "properties": {
+            "step_index": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "description": "User-defined index for the step (e.g., assistant message index, turn number). This is used by the system to map this output to the internal StepData.",
+              "title": "Step Index"
+            },
+            "base_reward": {
+              "description": "Base reward calculated by the user's reward function for this step.",
+              "title": "Base Reward",
+              "type": "number"
+            },
+            "terminated": {
+              "default": false,
+              "description": "Whether the environment signaled termination at this step.",
+              "title": "Terminated",
+              "type": "boolean"
+            },
+            "control_plane_info": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Structured info from the environment's control plane.",
+              "title": "Control Plane Info"
+            },
+            "metrics": {
+              "additionalProperties": true,
+              "description": "Optional dictionary of custom metrics for this step.",
+              "title": "Metrics",
+              "type": "object"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional explanation for the step's base reward or metrics.",
+              "title": "Reason"
+            }
+          },
+          "required": [
+            "step_index",
+            "base_reward"
+          ],
+          "title": "StepOutput",
+          "type": "object"
+        }
+      },
+      "description": "Unified data structure for a single evaluation unit that contains messages, \ntools, and evaluation results. This can represent either a single turn evaluation\nor a complete trajectory evaluation.\n\nThis model serves as the canonical format for evaluation data across the system,\nsupporting both row-wise batch evaluation and trajectory-based RL evaluation.",
+      "properties": {
+        "messages": {
+          "description": "List of messages in the conversation/trajectory.",
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "tools": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Available tools/functions that were provided to the agent.",
+          "title": "Tools"
+        },
+        "input_metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Metadata related to the input (dataset info, model config, session data, etc.).",
+          "title": "Input Metadata"
+        },
+        "ground_truth": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional ground truth reference for this evaluation.",
+          "title": "Ground Truth"
+        },
+        "evaluation_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvaluateResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The evaluation result for this row/trajectory."
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "title": "EvaluationRow",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "messages": {
+      "description": "List of messages in the conversation/trajectory.",
+      "items": {
+        "$ref": "#/$defs/Message"
+      },
+      "title": "Messages",
+      "type": "array"
+    },
+    "tools": {
+      "anyOf": [
+        {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Available tools/functions that were provided to the agent.",
+      "title": "Tools"
+    },
+    "input_metadata": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Metadata related to the input (dataset info, model config, session data, etc.).",
+      "title": "Input Metadata"
+    },
+    "ground_truth": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional ground truth reference for this evaluation.",
+      "title": "Ground Truth"
+    },
+    "evaluation_result": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvaluateResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The evaluation result for this row/trajectory."
+    }
+  },
+  "required": [
+    "messages"
+  ],
+  "additionalProperties": true
+}
