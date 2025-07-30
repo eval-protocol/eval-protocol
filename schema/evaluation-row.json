@@ -19,6 +19,9 @@
             },
             "type": {
               "const": "function",
+              "enum": [
+                "function"
+              ],
               "title": "Type",
               "type": "string"
             }
@@ -200,7 +203,6 @@
         "control_plane_info": {
           "anyOf": [
             {
-              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -212,7 +214,6 @@
           "title": "Control Plane Info"
         },
         "metrics": {
-          "additionalProperties": true,
           "description": "Optional dictionary of custom metrics for this step.",
           "title": "Metrics",
           "type": "object"
@@ -295,7 +296,6 @@
             "control_plane_info": {
               "anyOf": [
                 {
-                  "additionalProperties": true,
                   "type": "object"
                 },
                 {
@@ -307,7 +307,6 @@
               "title": "Control Plane Info"
             },
             "metrics": {
-              "additionalProperties": true,
               "description": "Optional dictionary of custom metrics for this step.",
               "title": "Metrics",
               "type": "object"
@@ -400,7 +399,6 @@
         "trajectory_info": {
           "anyOf": [
             {
-              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -414,7 +412,6 @@
         "final_control_plane_info": {
           "anyOf": [
             {
-              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -446,6 +443,9 @@
             },
             "type": {
               "const": "function",
+              "enum": [
+                "function"
+              ],
               "title": "Type",
               "type": "string"
             }
@@ -525,7 +525,6 @@
             "trajectory_info": {
               "anyOf": [
                 {
-                  "additionalProperties": true,
                   "type": "object"
                 },
                 {
@@ -539,7 +538,6 @@
             "final_control_plane_info": {
               "anyOf": [
                 {
-                  "additionalProperties": true,
                   "type": "object"
                 },
                 {
@@ -726,7 +724,6 @@
             "control_plane_info": {
               "anyOf": [
                 {
-                  "additionalProperties": true,
                   "type": "object"
                 },
                 {
@@ -738,7 +735,6 @@
               "title": "Control Plane Info"
             },
             "metrics": {
-              "additionalProperties": true,
               "description": "Optional dictionary of custom metrics for this step.",
               "title": "Metrics",
               "type": "object"
@@ -765,7 +761,7 @@
           "type": "object"
         }
       },
-      "description": "Unified data structure for a single evaluation unit that contains messages, \ntools, and evaluation results. This can represent either a single turn evaluation\nor a complete trajectory evaluation.\n\nThis model serves as the canonical format for evaluation data across the system,\nsupporting both row-wise batch evaluation and trajectory-based RL evaluation.",
+      "description": "Unified data structure for a single evaluation unit that contains messages,\ntools, and evaluation results. This can represent either a single turn evaluation\nor a complete trajectory evaluation.\n\nThis model serves as the canonical format for evaluation data across the system,\nsupporting both row-wise batch evaluation and trajectory-based RL evaluation.",
       "properties": {
         "messages": {
           "description": "List of messages in the conversation/trajectory.",
@@ -779,7 +775,6 @@
           "anyOf": [
             {
               "items": {
-                "additionalProperties": true,
                 "type": "object"
               },
               "type": "array"
@@ -795,7 +790,6 @@
         "input_metadata": {
           "anyOf": [
             {
-              "additionalProperties": true,
               "type": "object"
             },
             {
@@ -852,7 +846,6 @@
       "anyOf": [
         {
           "items": {
-            "additionalProperties": true,
             "type": "object"
           },
           "type": "array"
@@ -868,7 +861,6 @@
     "input_metadata": {
       "anyOf": [
         {
-          "additionalProperties": true,
           "type": "object"
         },
         {
