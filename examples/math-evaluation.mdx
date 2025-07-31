@@ -40,16 +40,16 @@ evaluation_params:
   output_name: "math_example_results"
 ```
 
-## Reward Function
+## Evaluation Function
 
-The math reward function extracts and compares numerical answers:
+The math evaluation function extracts and compares numerical answers:
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 import re
 
-@reward_function
+@evaluation_function
 def math_reward(
     messages: List[Dict[str, Any]],
     ground_truth: Optional[Dict[str, Any]] = None,
@@ -195,7 +195,7 @@ from eval_protocol.integrations.trl import TRLAdapter
 convert_dataset_to_jsonl("gsm8k", "gsm8k_trl.jsonl")
 
 # Create TRL adapter
-adapter = TRLAdapter(reward_function=math_reward)
+adapter = TRLAdapter(evaluation_function=math_reward)
 
 # Use in training loop
 # (see examples/trl_integration/ for complete example)

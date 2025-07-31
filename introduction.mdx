@@ -1,30 +1,30 @@
 ---
 title: Introduction
-description: 'Author, reproduce, and evaluate reward functions seamlessly on Fireworks, TRL, and your own infrastructure'
+description: 'Author, reproduce, and evaluate evaluation functions seamlessly on Fireworks, TRL, and your own infrastructure'
 ---
 
 # Eval Protocol
 
-**Eval Protocol is like a universal adapter for AI evaluation — it allows reward functions to work seamlessly across any platform, infrastructure, or training pipeline.**
+**Eval Protocol is like a universal adapter for AI evaluation — it allows evaluation functions to work seamlessly across any platform, infrastructure, or training pipeline.**
 
-Just as USB-C provides a universal standard for device connectivity, Eval Protocol establishes a universal standard for AI model evaluation, enabling reward functions to be written once and deployed anywhere.
+Just as USB-C provides a universal standard for device connectivity, Eval Protocol establishes a universal standard for AI model evaluation, enabling evaluation functions to be written once and deployed anywhere.
 
 ## Why Eval Protocol?
 
 Building effective AI evaluation systems today is needlessly complex and fragmented:
 
-- **No Universal Standard**: Every platform requires custom evaluation code, making it difficult to share and reuse reward functions
+- **No Universal Standard**: Every platform requires custom evaluation code, making it difficult to share and reuse evaluation functions
 - **Infrastructure Lock-in**: Evaluation logic gets tied to specific platforms, preventing flexible deployment
 - **Development Friction**: Setting up evaluation pipelines requires extensive boilerplate and platform-specific knowledge
-- **Limited Portability**: Reward functions can't easily move between research, training, and production environments
+- **Limited Portability**: Evaluation functions can't easily move between research, training, and production environments
 
-Eval Protocol solves these problems by providing **a single, standardized way to define reward functions that work everywhere**.
+Eval Protocol solves these problems by providing **a single, standardized way to define evaluation functions that work everywhere**.
 
 ## How Eval Protocol Works
 
 ```mermaid
 graph TB
-    A[Your Reward Function] --> B[Eval Protocol]
+    A[Your Evaluation Function] --> B[Eval Protocol]
     B --> C[Universal Evaluation Interface]
     
     C --> D[Fireworks AI]
@@ -42,9 +42,9 @@ graph TB
 
 ### The Eval Protocol Advantage
 
-**Write Once, Deploy Anywhere**: Define your evaluation logic once using the `@reward_function` decorator, then deploy it across any platform or infrastructure without modification.
+**Write Once, Deploy Anywhere**: Define your evaluation logic once using the `@evaluation_function` decorator, then deploy it across any platform or infrastructure without modification.
 
-**Universal Data Types**: Standardized input/output formats ensure your reward functions work consistently across different data sources and evaluation contexts.
+**Universal Data Types**: Standardized input/output formats ensure your evaluation functions work consistently across different data sources and evaluation contexts.
 
 **Built-in Best Practices**: The protocol includes built-in support for metrics tracking, error handling, and evaluation result structuring.
 
@@ -56,7 +56,7 @@ graph TB
     icon="plug"
     href="/quickstart"
   >
-    Write reward functions once, deploy anywhere — from local testing to production training pipelines
+    Write evaluation functions once, deploy anywhere — from local testing to production training pipelines
   </Card>
   <Card
     title="Zero Lock-in"
@@ -70,7 +70,7 @@ graph TB
     icon="code"
     href="/developer-guide/getting-started"
   >
-    Simple `@reward_function` decorator with rich type safety and comprehensive tooling
+    Simple `@evaluation_function` decorator with rich type safety and comprehensive tooling
   </Card>
   <Card
     title="Production Ready"
@@ -83,7 +83,7 @@ graph TB
 
 ## Architecture Overview
 
-Eval Protocol uses a **client-server model** where reward functions act as specialized evaluation servers that can be called by various AI training and evaluation clients.
+Eval Protocol uses a **client-server model** where evaluation functions act as specialized evaluation servers that can be called by various AI training and evaluation clients.
 
 ```mermaid
 graph LR
@@ -99,7 +99,7 @@ graph LR
         F[Evaluation Runtime]
     end
     
-    subgraph "Reward Functions"
+    subgraph "Evaluation Functions"
         G[Math Evaluator]
         H[Code Quality Checker]
         I[Tool Call Validator]
@@ -125,8 +125,8 @@ graph LR
 
 - **Evaluation Clients**: Any system that needs to evaluate AI model outputs — training pipelines, research environments, production APIs
 - **Protocol Layer**: Standardized communication interface that handles authentication, data serialization, and error management
-- **Evaluation Runtime**: Executes reward functions in isolated, scalable environments with proper resource management
-- **Reward Functions**: Your custom evaluation logic, packaged as portable, reusable components
+- **Evaluation Runtime**: Executes evaluation functions in isolated, scalable environments with proper resource management
+- **Evaluation Functions**: Your custom evaluation logic, packaged as portable, reusable components
 
 ## Getting Started
 
@@ -134,7 +134,7 @@ Choose your path based on what you want to accomplish:
 
 <CardGroup cols={3}>
   <Card
-    title="Reward Function Developers"
+    title="Evaluation Function Developers"
     icon="code"
     href="/quickstarts/developers"
   >
@@ -145,7 +145,7 @@ Choose your path based on what you want to accomplish:
     icon="cog"
     href="/quickstarts/users"
   >
-    Integrate existing reward functions into your training pipelines
+    Integrate existing evaluation functions into your training pipelines
   </Card>
   <Card
     title="Platform Integrators"
@@ -169,7 +169,7 @@ Choose your path based on what you want to accomplish:
     icon="bolt"
     href="/quickstart"
   >
-    Create, test, and deploy your first reward function
+    Create, test, and deploy your first evaluation function
   </Card>
 </CardGroup>
 
@@ -230,7 +230,7 @@ Eval Protocol powers evaluation across diverse AI use cases:
     icon="graduation-cap"
     href="/developer-guide/getting-started"
   >
-    Master the fundamentals of reward function design and implementation
+    Master the fundamentals of evaluation function design and implementation
   </Card>
   <Card
     title="Best Practices Guide"
@@ -244,7 +244,7 @@ Eval Protocol powers evaluation across diverse AI use cases:
     icon="layers"
     href="/examples/overview"
   >
-    Explore complex, real-world reward function implementations
+    Explore complex, real-world evaluation function implementations
   </Card>
   <Card
     title="API & CLI Reference"

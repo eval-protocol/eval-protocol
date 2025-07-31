@@ -17,14 +17,14 @@ Eval Protocol is designed to integrate seamlessly with your existing ML/AI infra
     icon="fire"
     href="/integrations/fireworks"
   >
-    Deploy and scale reward functions in the cloud with enterprise-grade infrastructure
+    Deploy and scale evaluation functions in the cloud with enterprise-grade infrastructure
   </Card>
   <Card
     title="TRL (Transformer Reinforcement Learning)"
     icon="brain"
     href="/integrations/trl"
   >
-    Use reward functions in RLHF training pipelines for model alignment
+    Use evaluation functions in RLHF training pipelines for model alignment
   </Card>
 </CardGroup>
 
@@ -83,13 +83,13 @@ Eval Protocol is designed to integrate seamlessly with your existing ML/AI infra
 ## Integration Patterns
 
 ### 1. Training-Time Integration
-Use reward functions during model training:
+Use evaluation functions during model training:
 
 ```python
 from eval_protocol import load_function
 from transformers import Trainer
 
-# Load your reward function
+# Load your evaluation function
 reward_fn = load_function("code_quality_evaluator")
 
 # Custom trainer with reward-based evaluation
@@ -115,7 +115,7 @@ class RewardTrainer(Trainer):
 ```
 
 ### 2. Evaluation-Time Integration
-Use reward functions for model evaluation:
+Use evaluation functions for model evaluation:
 
 ```python
 from eval_protocol import BatchProcessor
@@ -146,7 +146,7 @@ def evaluate_model_outputs(dataset_path: str):
 ```
 
 ### 3. Serving-Time Integration
-Use reward functions in production serving:
+Use evaluation functions in production serving:
 
 ```python
 from eval_protocol import RewardProtocol
@@ -155,7 +155,7 @@ from fastapi import FastAPI
 app = FastAPI()
 protocol = RewardProtocol()
 
-# Load reward functions
+# Load evaluation functions
 quality_evaluator = protocol.load_function("response_quality")
 safety_evaluator = protocol.load_function("safety_filter")
 
@@ -189,9 +189,9 @@ graph TB
     B --> D[Reward Service]
     
     C --> E[Model Inference]
-    D --> F[Reward Function A]
-    D --> G[Reward Function B]
-    D --> H[Reward Function C]
+    D --> F[Evaluation Function A]
+    D --> G[Evaluation Function B]
+    D --> H[Evaluation Function C]
     
     E --> I[Response Database]
     F --> J[Metrics Database]
@@ -229,7 +229,7 @@ graph TB
     D --> E[Results Aggregation]
     E --> F[Report Generation]
     
-    G[Reward Functions] --> D
+    G[Evaluation Functions] --> D
     H[Configuration] --> D
     
     style D fill:#ff6b35
@@ -302,7 +302,7 @@ protocol = RewardProtocol(config)
 
 ### 2. Monitoring & Observability
 - Track evaluation latency and throughput
-- Monitor reward function accuracy
+- Monitor evaluation function accuracy
 - Set up alerts for evaluation failures
 - Log detailed metrics for debugging
 

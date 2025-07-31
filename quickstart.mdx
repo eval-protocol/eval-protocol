@@ -1,23 +1,23 @@
 ---
 title: Quick Start
-description: 'Create your first reward function in minutes'
+description: 'Create your first evaluation function in minutes'
 ---
 
 # Quick Start
 
-Get started with Eval Protocol by creating your first reward function in just a few minutes.
+Get started with Eval Protocol by creating your first evaluation function in just a few minutes.
 
-## Create Your First Reward Function
+## Create Your First Evaluation Function
 
-Here's a simple example of a reward function that evaluates responses based on word count:
+Here's a simple example of an evaluation function that evaluates responses based on word count:
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 from typing import List, Dict, Any
 
-@reward_function
-def word_count_reward(
+@evaluation_function
+def word_count_evaluation(
     messages: List[Dict[str, Any]],
     **kwargs: Any
 ) -> EvaluateResult:
@@ -48,7 +48,7 @@ def word_count_reward(
     )
 ```
 
-## Test Your Reward Function
+## Test Your Evaluation Function
 
 Test your function with sample data:
 
@@ -90,7 +90,7 @@ reward-protocol run --config-name run_eval.yaml --config-path ./conf
 
 ## Deploy Your Function
 
-Deploy your reward function for use in production:
+Deploy your evaluation function for use in production:
 
 ```bash
 reward-protocol deploy --id my-evaluator --metrics-folders "word_count=./path/to/metrics" --force
@@ -113,7 +113,7 @@ export FIREWORKS_ACCOUNT_ID="your_account_id"
     icon="book"
     href="/developer-guide/getting-started"
   >
-    Learn the fundamentals of reward functions
+    Learn the fundamentals of evaluation functions
   </Card>
   <Card
     title="Examples"

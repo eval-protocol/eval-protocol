@@ -46,7 +46,7 @@ Contribute to the codebase:
 - Add tests and improve coverage
 
 ### 📦 Community Examples
-Share your reward functions with the community:
+Share your evaluation functions with the community:
 - Create example implementations
 - Document real-world use cases
 - Provide performance benchmarks
@@ -121,9 +121,9 @@ black --check eval_protocol/
 - **Examples**: Runnable code examples
 - **Tutorials**: Learning-oriented content
 
-## Reward Function Guidelines
+## Evaluation Function Guidelines
 
-When contributing reward functions:
+When contributing evaluation functions:
 
 ### Quality Standards
 - **Clear purpose**: Document what the function evaluates
@@ -133,8 +133,8 @@ When contributing reward functions:
 
 ### Example Structure
 ```python
-@reward_function
-def your_reward_function(query: str, response: str) -> float:
+@evaluation_function
+def your_evaluation_function(query: str, response: str) -> float:
     """
     Brief description of what this function evaluates.
     
@@ -146,7 +146,7 @@ def your_reward_function(query: str, response: str) -> float:
         Score between 0.0 and 1.0, where 1.0 is best
         
     Example:
-        >>> score = your_reward_function("What is 2+2?", "4")
+        >>> score = your_evaluation_function("What is 2+2?", "4")
         >>> print(score)  # 1.0
     """
     # Implementation here

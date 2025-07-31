@@ -1,16 +1,16 @@
 ---
-title: 'RewardFunction Class'
-description: 'Advanced reward function management and deployment using the RewardFunction class'
+title: 'EvaluationFunction Class'
+description: 'Advanced evaluation function management and deployment using the EvaluationFunction class'
 ---
 
-# RewardFunction Class
+# EvaluationFunction Class
 
-The `RewardFunction` class provides an advanced interface for creating, managing, and deploying reward functions programmatically. While the `@reward_function` decorator is the recommended approach for most use cases, the class interface offers additional control and features.
+The `EvaluationFunction` class provides an advanced interface for creating, managing, and deploying evaluation functions programmatically. While the `@evaluation_function` decorator is the recommended approach for most use cases, the class interface offers additional control and features.
 
 ## Basic Usage
 
 ```python
-from eval_protocol import RewardFunction
+from eval_protocol import EvaluationFunction
 from eval_protocol.models import EvaluateResult, MetricResult
 
 def my_evaluation_logic(messages, **kwargs):
@@ -29,8 +29,8 @@ def my_evaluation_logic(messages, **kwargs):
         }
     )
 
-# Create RewardFunction instance
-reward_func = RewardFunction(
+# Create EvaluationFunction instance
+reward_func = EvaluationFunction(
     function=my_evaluation_logic,
     name="word_count_evaluator",
     description="Evaluates responses based on word count"
@@ -53,10 +53,10 @@ def evaluation_function(
 ```
 
 ### name: str
-A unique identifier for your reward function.
+A unique identifier for your evaluation function.
 
 ```python
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="math_accuracy_checker",  # Used for deployment and identification
     description="Checks mathematical accuracy"
@@ -64,13 +64,13 @@ reward_func = RewardFunction(
 ```
 
 ### description: str (optional)
-Human-readable description of what the reward function evaluates.
+Human-readable description of what the evaluation function evaluates.
 
 ### metadata: Dict[str, Any] (optional)
-Additional metadata about the reward function.
+Additional metadata about the evaluation function.
 
 ```python
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="code_quality",
     description="Evaluates code quality and best practices",
@@ -91,7 +91,7 @@ reward_func = RewardFunction(
 
 ### evaluate()
 
-Execute the reward function with provided inputs.
+Execute the evaluation function with provided inputs.
 
 ```python
 messages = [
@@ -111,7 +111,7 @@ print(f"Reason: {result.reason}")
 
 ### deploy()
 
-Deploy the reward function to a target platform.
+Deploy the evaluation function to a target platform.
 
 ```python
 # Deploy to Fireworks AI
@@ -150,20 +150,20 @@ print(f"Server PID: {server_info.process_id}")
 
 ### validate()
 
-Validate the reward function configuration.
+Validate the evaluation function configuration.
 
 ```python
 validation_result = reward_func.validate()
 
 if validation_result.is_valid:
-    print("Reward function is valid")
+    print("Evaluation function is valid")
 else:
     print(f"Validation errors: {validation_result.errors}")
 ```
 
 ### test()
 
-Test the reward function with sample data.
+Test the evaluation function with sample data.
 
 ```python
 test_cases = [
@@ -213,7 +213,7 @@ else:
 
 ### Custom Validation
 
-Add custom validation logic for your reward function:
+Add custom validation logic for your evaluation function:
 
 ```python
 def custom_validator(messages, **kwargs):
@@ -226,7 +226,7 @@ def custom_validator(messages, **kwargs):
     
     return True, "Valid input"
 
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="validated_evaluator",
     validator=custom_validator
@@ -256,14 +256,14 @@ for i, result in enumerate(batch_results):
 
 ### Configuration Management
 
-Save and load reward function configurations:
+Save and load evaluation function configurations:
 
 ```python
 # Save configuration
 config = reward_func.save_config("./my_evaluator_config.json")
 
 # Load configuration
-loaded_func = RewardFunction.load_config("./my_evaluator_config.json")
+loaded_func = EvaluationFunction.load_config("./my_evaluator_config.json")
 
 # Export for sharing
 portable_config = reward_func.export_config(
@@ -277,7 +277,7 @@ portable_config = reward_func.export_config(
 Built-in monitoring capabilities:
 
 ```python
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="monitored_evaluator",
     enable_logging=True,
@@ -300,12 +300,12 @@ for log_entry in logs:
 ```python
 import wandb
 
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="wandb_evaluator",
     integrations={
         "wandb": {
-            "project": "reward-function-eval",
+            "project": "evaluation-function-eval",
             "log_metrics": True,
             "log_predictions": True
         }
@@ -327,7 +327,7 @@ def custom_metrics_handler(result, metadata):
         "evaluator": metadata.evaluator_name
     })
 
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="custom_metrics_evaluator",
     metrics_handler=custom_metrics_handler
@@ -339,7 +339,7 @@ reward_func = RewardFunction(
 ### Automatic Retry
 
 ```python
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="resilient_evaluator",
     retry_config={
@@ -360,7 +360,7 @@ def fallback_evaluation(messages, **kwargs):
         metrics={}
     )
 
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="fault_tolerant_evaluator",
     fallback_function=fallback_evaluation
@@ -372,7 +372,7 @@ reward_func = RewardFunction(
 ### Caching
 
 ```python
-reward_func = RewardFunction(
+reward_func = EvaluationFunction(
     function=my_logic,
     name="cached_evaluator",
     cache_config={
@@ -391,7 +391,7 @@ async def async_evaluation_logic(messages, **kwargs):
     result = await some_async_operation(messages)
     return EvaluateResult(score=result, reason="Async evaluation", metrics={})
 
-async_reward_func = RewardFunction(
+async_reward_func = EvaluationFunction(
     function=async_evaluation_logic,
     name="async_evaluator",
     async_mode=True
@@ -403,7 +403,7 @@ result = await async_reward_func.evaluate_async(messages)
 
 ## Best Practices
 
-1. **Use descriptive names**: Choose clear, unique names for your reward functions
+1. **Use descriptive names**: Choose clear, unique names for your evaluation functions
 2. **Include metadata**: Document your evaluation criteria and parameters
 3. **Implement validation**: Add input validation for robust operation
 4. **Enable monitoring**: Use logging for debugging and optimization
@@ -417,7 +417,7 @@ Converting from decorator to class-based approach:
 
 ```python
 # Before: Using decorator
-@reward_function
+@evaluation_function
 def my_evaluator(messages, **kwargs):
     return EvaluateResult(...)
 
@@ -425,7 +425,7 @@ def my_evaluator(messages, **kwargs):
 def my_evaluation_logic(messages, **kwargs):
     return EvaluateResult(...)
 
-my_evaluator = RewardFunction(
+my_evaluator = EvaluationFunction(
     function=my_evaluation_logic,
     name="my_evaluator"
 )

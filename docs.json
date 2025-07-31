@@ -40,7 +40,7 @@
             "pages": [
               "development/getting-started",
               "developer-guide/getting-started",
-              "developer-guide/reward-function-anatomy",
+              "developer-guide/evaluation-function-anatomy",
               "developer-guide/evaluation-workflows"
             ]
           },
@@ -84,8 +84,8 @@
             "group": "Reference",
             "pages": [
               "api-reference/overview",
-              "api-reference/reward-function-decorator",
-              "api-reference/reward-function-class",
+              "api-reference/evaluation-function-decorator",
+              "api-reference/evaluation-function-class",
               "api-reference/data-models"
             ]
           }

@@ -1,11 +1,11 @@
 ---
 title: Quick Start for Users
-description: Use existing reward functions to evaluate model outputs
+description: Use existing evaluation functions to evaluate model outputs
 ---
 
 # Quick Start for Users
 
-This guide will help you use existing reward functions to evaluate AI model outputs.
+This guide will help you use existing evaluation functions to evaluate AI model outputs.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ Install Eval Protocol using pip:
 pip install reward-protocol
 ```
 
-## Using Existing Reward Functions
+## Using Existing Evaluation Functions
 
 1. **Browse available functions**:
 
@@ -53,7 +53,7 @@ import pandas as pd
 # Load your dataset
 df = pd.read_csv("model_outputs.csv")
 
-# Apply reward function to all rows
+# Apply evaluation function to all rows
 df['reward_score'] = df.apply(
     lambda row: math_eval(row['query'], row['response']), 
     axis=1
@@ -84,7 +84,7 @@ reward-protocol evaluate \
 
 ## Next Steps
 
-- **Explore Functions**: Browse [available reward functions](/examples/overview)
+- **Explore Functions**: Browse [available evaluation functions](/examples/overview)
 - **Custom Evaluation**: Learn to [create custom metrics](/quickstart)
 - **Integration**: Connect with [monitoring tools](/integrations/overview)
 

@@ -1,11 +1,11 @@
 ---
 title: Quick Start for Developers
-description: Build and deploy reward functions for your applications
+description: Build and deploy evaluation functions for your applications
 ---
 
 # Quick Start for Developers
 
-This guide will help you build and deploy reward functions for your applications using Eval Protocol.
+This guide will help you build and deploy evaluation functions for your applications using Eval Protocol.
 
 ## Prerequisites
 
@@ -21,14 +21,14 @@ Install Eval Protocol using pip:
 pip install reward-protocol
 ```
 
-## Create Your First Reward Function
+## Create Your First Evaluation Function
 
-1. **Define a reward function**:
+1. **Define a evaluation function**:
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 
-@reward_function
+@evaluation_function
 def math_accuracy(query: str, response: str) -> float:
     """Evaluate mathematical accuracy of model responses."""
     # Your evaluation logic here
@@ -46,7 +46,7 @@ def math_accuracy(query: str, response: str) -> float:
 2. **Test locally**:
 
 ```python
-# Test your reward function
+# Test your evaluation function
 score = math_accuracy(
     query="What is 2 + 2?",
     response="The answer is 4"

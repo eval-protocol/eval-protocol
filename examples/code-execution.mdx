@@ -5,7 +5,7 @@ description: 'Evaluate generated code by executing it and checking correctness'
 
 # Code Execution Example
 
-This example demonstrates how to create reward functions that evaluate generated code by actually executing it and verifying the results. This is particularly useful for coding challenges, algorithm implementations, and programming tutorials.
+This example demonstrates how to create evaluation functions that evaluate generated code by actually executing it and verifying the results. This is particularly useful for coding challenges, algorithm implementations, and programming tutorials.
 
 ## Overview
 
@@ -21,7 +21,7 @@ Code execution evaluation involves:
 ### Simple Python Code Evaluator
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 import ast
 import subprocess
@@ -44,7 +44,7 @@ def timeout_context(seconds):
     finally:
         signal.alarm(0)
 
-@reward_function
+@evaluation_function
 def python_code_executor(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     """
     Evaluate Python code by executing it and checking results.
@@ -458,7 +458,7 @@ import json
 import tempfile
 import os
 
-@reward_function
+@evaluation_function
 def docker_code_executor(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     """
     Execute code in isolated Docker containers for enhanced security.
@@ -735,7 +735,7 @@ from code_execution_evaluator import python_code_executor
 
 # Create reward model for training
 reward_model = RewardProtocolRewardModel(
-    reward_function=python_code_executor,
+    evaluation_function=python_code_executor,
     device="cuda",
     batch_size=4,
     timeout=10

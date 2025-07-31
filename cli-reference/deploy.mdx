@@ -1,11 +1,11 @@
 ---
 title: 'reward-protocol deploy'
-description: 'Deploy reward functions to production environments'
+description: 'Deploy evaluation functions to production environments'
 ---
 
 # reward-protocol deploy
 
-The `deploy` command packages and deploys your reward functions to production environments, making them available for use in training pipelines, evaluation systems, and other applications.
+The `deploy` command packages and deploys your evaluation functions to production environments, making them available for use in training pipelines, evaluation systems, and other applications.
 
 ## Basic Usage
 
@@ -29,7 +29,7 @@ reward-protocol deploy --id math-accuracy-evaluator
 ```
 
 #### --metrics-folders
-Specify reward functions to deploy using the format `name=path`.
+Specify evaluation functions to deploy using the format `name=path`.
 
 ```bash
 # Single metric
@@ -86,7 +86,7 @@ Direct reference to a specific function (alternative to metrics-folders).
 ```bash
 reward-protocol deploy \
   --id simple-eval \
-  --function-ref "rewards.simple.basic_reward_function"
+  --function-ref "rewards.simple.basic_evaluation_function"
 ```
 
 #### --verbose, -v
@@ -303,7 +303,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
 
 ```
 Deploying evaluator: production-math-eval
-✓ Validating reward functions...
+✓ Validating evaluation functions...
 ✓ Packaging metrics...
 ✓ Uploading to Fireworks AI...
 ✓ Creating evaluator...
@@ -413,7 +413,7 @@ export FIREWORKS_ACCOUNT_ID="your_account"
 #### Metric Not Found
 
 ```bash
-Error: Reward function not found in ./nonexistent/path
+Error: Evaluation function not found in ./nonexistent/path
 ```
 
 **Solution:**

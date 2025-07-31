@@ -1,11 +1,11 @@
 ---
 title: 'reward-protocol preview'
-description: 'Quickly test reward functions with sample data before deployment'
+description: 'Quickly test evaluation functions with sample data before deployment'
 ---
 
 # reward-protocol preview
 
-The `preview` command allows you to quickly test reward functions with sample data, making it ideal for development, debugging, and validation before deploying to production.
+The `preview` command allows you to quickly test evaluation functions with sample data, making it ideal for development, debugging, and validation before deploying to production.
 
 ## Basic Usage
 
@@ -22,7 +22,7 @@ reward-protocol preview [OPTIONS]
 ### Required Options
 
 #### --metrics-folders
-Specify reward functions to test using the format `name=path`.
+Specify evaluation functions to test using the format `name=path`.
 
 ```bash
 # Single metric
@@ -269,7 +269,7 @@ settings:
   verbose: true
   output: "./preview_results.jsonl"
 
-# Custom parameters passed to reward functions
+# Custom parameters passed to evaluation functions
 custom_params:
   max_response_length: 500
   evaluation_mode: "strict"
@@ -387,10 +387,10 @@ cat samples.jsonl | jq .  # Check each line
 # Fix JSON syntax errors
 ```
 
-#### Missing Reward Function
+#### Missing Evaluation Function
 
 ```bash
-Error: Reward function 'my_function' not found in ./metrics/my_metric
+Error: Evaluation function 'my_function' not found in ./metrics/my_metric
 ```
 
 **Solution:**
@@ -403,7 +403,7 @@ ls -la ./metrics/my_metric/
 #### Import Errors
 
 ```bash
-Error: Failed to import reward function: ModuleNotFoundError
+Error: Failed to import evaluation function: ModuleNotFoundError
 ```
 
 **Solution:**

@@ -5,7 +5,7 @@ description: Advanced guide for developing with Eval Protocol
 
 # Development Getting Started
 
-This guide covers advanced development patterns and best practices for building robust reward functions and integrating them into production systems.
+This guide covers advanced development patterns and best practices for building robust evaluation functions and integrating them into production systems.
 
 ## Development Environment Setup
 
@@ -48,12 +48,12 @@ docker-compose up -d dev
 
 ### Complex Evaluation Logic
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.types import EvaluationResult
 import asyncio
 from typing import Dict, Any
 
-@reward_function
+@evaluation_function
 async def advanced_evaluator(
     query: str, 
     response: str, 
@@ -108,7 +108,7 @@ async def advanced_evaluator(
 ```python
 from eval_protocol.types import MultiModalInput
 
-@reward_function
+@evaluation_function
 def multimodal_evaluator(
     query: str,
     response: str,
@@ -148,7 +148,7 @@ class OptimizedEvaluator:
     def __init__(self):
         self.cache = RewardCache(max_size=10000)
     
-    @reward_function
+    @evaluation_function
     def cached_evaluator(self, query: str, response: str) -> float:
         # Check cache first
         cache_key = f"{hash(query)}_{hash(response)}"
@@ -172,7 +172,7 @@ class OptimizedEvaluator:
 ```python
 from eval_protocol.batch import BatchProcessor
 
-@reward_function.batch
+@evaluation_function.batch
 def batch_evaluator(queries: List[str], responses: List[str]) -> List[float]:
     """
     Efficient batch evaluation with vectorized operations.
@@ -199,7 +199,7 @@ from eval_protocol.exceptions import RewardProtocolError
 
 logger = logging.getLogger(__name__)
 
-@reward_function
+@evaluation_function
 def robust_evaluator(query: str, response: str) -> float:
     """
     Evaluator with comprehensive error handling.
@@ -237,7 +237,7 @@ from eval_protocol.monitoring import MetricsCollector
 
 metrics = MetricsCollector()
 
-@reward_function
+@evaluation_function
 def monitored_evaluator(query: str, response: str) -> float:
     """
     Evaluator with built-in monitoring.
@@ -271,9 +271,9 @@ def monitored_evaluator(query: str, response: str) -> float:
 ### Comprehensive Testing
 ```python
 import pytest
-from eval_protocol.testing import RewardFunctionTest
+from eval_protocol.testing import EvaluationFunctionTest
 
-class TestAdvancedEvaluator(RewardFunctionTest):
+class TestAdvancedEvaluator(EvaluationFunctionTest):
     function = advanced_evaluator
     
     def test_score_range(self):
@@ -369,14 +369,14 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Copy function code
-COPY reward_functions/ ./reward_functions/
+COPY evaluation_functions/ ./evaluation_functions/
 
 # Install functions
 RUN pip install -e .
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD python -c "from reward_functions import health_check; health_check()"
+  CMD python -c "from evaluation_functions import health_check; health_check()"
 
 # Run server
 CMD ["reward-protocol", "serve", "--host", "0.0.0.0", "--port", "8000"]
@@ -388,20 +388,20 @@ CMD ["reward-protocol", "serve", "--host", "0.0.0.0", "--port", "8000"]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: reward-function-deployment
+  name: evaluation-function-deployment
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: reward-function
+      app: evaluation-function
   template:
     metadata:
       labels:
-        app: reward-function
+        app: evaluation-function
     spec:
       containers:
-      - name: reward-function
-        image: your-registry/reward-function:latest
+      - name: evaluation-function
+        image: your-registry/evaluation-function:latest
         ports:
         - containerPort: 8000
         env:

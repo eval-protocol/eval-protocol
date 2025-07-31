@@ -5,15 +5,15 @@ description: 'Integrate Eval Protocol with TRL (Transformer Reinforcement Learni
 
 # TRL Integration
 
-[TRL (Transformer Reinforcement Learning)](https://huggingface.co/docs/trl) is a popular library for fine-tuning language models using reinforcement learning. Eval Protocol provides seamless integration with TRL, allowing you to use your reward functions directly in training pipelines.
+[TRL (Transformer Reinforcement Learning)](https://huggingface.co/docs/trl) is a popular library for fine-tuning language models using reinforcement learning. Eval Protocol provides seamless integration with TRL, allowing you to use your evaluation functions directly in training pipelines.
 
 ## Overview
 
 The TRL integration enables you to:
-- Use Eval Protocol reward functions as reward models in TRL training
+- Use Eval Protocol evaluation functions as reward models in TRL training
 - Automatically convert between TRL and Eval Protocol data formats
 - Scale reward evaluation across distributed training setups
-- Monitor reward function performance during training
+- Monitor evaluation function performance during training
 
 ## Installation
 
@@ -25,16 +25,16 @@ pip install "reward-protocol[trl]"
 
 ## Basic Usage
 
-### Using Reward Functions in PPO Training
+### Using Evaluation Functions in PPO Training
 
 ```python
 from trl import PPOTrainer, PPOConfig
 from eval_protocol.integrations.trl import RewardProtocolRewardModel
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 
-# Define your reward function
-@reward_function
+# Define your evaluation function
+@evaluation_function
 def conversation_quality_reward(messages, **kwargs) -> EvaluateResult:
     """Evaluate conversation quality for RL training."""
     response = messages[-1].get("content", "")
@@ -58,7 +58,7 @@ def conversation_quality_reward(messages, **kwargs) -> EvaluateResult:
 
 # Convert to TRL-compatible reward model
 reward_model = RewardProtocolRewardModel(
-    reward_function=conversation_quality_reward,
+    evaluation_function=conversation_quality_reward,
     device="cuda",  # or "cpu"
     batch_size=8
 )
@@ -106,10 +106,10 @@ for epoch, batch in enumerate(ppo_trainer.dataloader):
 
 ```python
 from trl import GRPOTrainer, GRPOConfig
-from eval_protocol.integrations.trl import create_grpo_reward_function
+from eval_protocol.integrations.trl import create_grpo_evaluation_function
 
-# Create GRPO-compatible reward function
-@reward_function
+# Create GRPO-compatible evaluation function
+@evaluation_function
 def math_accuracy_reward(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     """Math accuracy for GRPO training."""
     response = messages[-1].get("content", "")
@@ -152,7 +152,7 @@ grpo_trainer = GRPOTrainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=train_dataset,
-    reward_function=create_grpo_reward_function(math_accuracy_reward),
+    evaluation_function=create_grpo_evaluation_function(math_accuracy_reward),
 )
 
 # Train the model
@@ -163,13 +163,13 @@ grpo_trainer.train()
 
 ### Multi-Reward Training
 
-Combine multiple reward functions for complex training objectives:
+Combine multiple evaluation functions for complex training objectives:
 
 ```python
 from eval_protocol.integrations.trl import MultiRewardModel
 
-# Define multiple reward functions
-@reward_function
+# Define multiple evaluation functions
+@evaluation_function
 def safety_reward(messages, **kwargs) -> EvaluateResult:
     """Safety evaluation for content filtering."""
     response = messages[-1].get("content", "")
@@ -186,7 +186,7 @@ def safety_reward(messages, **kwargs) -> EvaluateResult:
         }
     )
 
-@reward_function
+@evaluation_function
 def helpfulness_reward(messages, **kwargs) -> EvaluateResult:
     """Helpfulness evaluation."""
     response = messages[-1].get("content", "")
@@ -212,7 +212,7 @@ def helpfulness_reward(messages, **kwargs) -> EvaluateResult:
 
 # Combine multiple rewards
 multi_reward_model = MultiRewardModel(
-    reward_functions=[
+    evaluation_functions=[
         ("safety", safety_reward, 0.5),      # (name, function, weight)
         ("helpfulness", helpfulness_reward, 0.3),
         ("quality", conversation_quality_reward, 0.2),
@@ -285,7 +285,7 @@ class CustomDataProcessor(TRLDataProcessor):
 
 # Use custom processor
 reward_model = RewardProtocolRewardModel(
-    reward_function=your_reward_function,
+    evaluation_function=your_evaluation_function,
     data_processor=CustomDataProcessor(),
     device="cuda"
 )
@@ -298,13 +298,13 @@ reward_model = RewardProtocolRewardModel(
 ```python
 # Optimized reward model configuration
 reward_model = RewardProtocolRewardModel(
-    reward_function=your_reward_function,
+    evaluation_function=your_evaluation_function,
     device="cuda",
     batch_size=16,           # Larger batch for better GPU utilization
     max_workers=4,           # Parallel processing
     cache_size=1000,         # Cache frequent evaluations
     enable_mixed_precision=True,  # Use mixed precision for speed
-    compile_function=True,   # JIT compile reward function
+    compile_function=True,   # JIT compile evaluation function
 )
 
 # Configure for distributed training
@@ -350,7 +350,7 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from trl import PPOTrainer, PPOConfig
 from datasets import load_dataset
 
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.integrations.trl import RewardProtocolRewardModel
 from eval_protocol.models import EvaluateResult, MetricResult
 
@@ -360,8 +360,8 @@ model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
-# Define reward function
-@reward_function
+# Define evaluation function
+@evaluation_function
 def sentiment_reward(messages, **kwargs) -> EvaluateResult:
     """Reward positive sentiment in responses."""
     response = messages[-1].get("content", "")
@@ -412,7 +412,7 @@ config = PPOConfig(
 
 # Create reward model
 reward_model = RewardProtocolRewardModel(
-    reward_function=sentiment_reward,
+    evaluation_function=sentiment_reward,
     device="cuda" if torch.cuda.is_available() else "cpu",
     batch_size=4
 )
@@ -470,17 +470,17 @@ config = PPOConfig(
 ```python
 # Enable caching and batch processing
 reward_model = RewardProtocolRewardModel(
-    reward_function=your_function,
+    evaluation_function=your_function,
     batch_size=16,          # Process multiple samples together
     cache_size=1000,        # Cache frequent evaluations
     enable_compilation=True, # JIT compile for speed
 )
 ```
 
-#### Reward Function Errors
+#### Evaluation Function Errors
 ```python
-# Add error handling to reward function
-@reward_function
+# Add error handling to evaluation function
+@evaluation_function
 def robust_reward(messages, **kwargs) -> EvaluateResult:
     try:
         # Your reward logic
@@ -496,7 +496,7 @@ def robust_reward(messages, **kwargs) -> EvaluateResult:
 
 ## Best Practices
 
-1. **Start Simple**: Begin with basic reward functions before adding complexity
+1. **Start Simple**: Begin with basic evaluation functions before adding complexity
 2. **Batch Processing**: Use larger batch sizes for better GPU utilization
 3. **Monitor Training**: Track both reward scores and model performance
 4. **Regularization**: Use KL divergence constraints to prevent reward hacking

@@ -11,18 +11,18 @@ Welcome to the Eval Protocol API reference. This section provides detailed docum
 
 <CardGroup cols={2}>
   <Card
-    title="Reward Function Decorator"
+    title="Evaluation Function Decorator"
     icon="magic"
-    href="/api-reference/reward-function-decorator"
+    href="/api-reference/evaluation-function-decorator"
   >
-    The `@reward_function` decorator for creating evaluators
+    The `@evaluation_function` decorator for creating evaluators
   </Card>
   <Card
-    title="RewardFunction Class"
+    title="EvaluationFunction Class"
     icon="class"
-    href="/api-reference/reward-function-class"
+    href="/api-reference/evaluation-function-class"
   >
-    Core class for reward function implementations
+    Core class for evaluation function implementations
   </Card>
   <Card
     title="Data Models"
@@ -42,13 +42,13 @@ Welcome to the Eval Protocol API reference. This section provides detailed docum
 
 ## Quick Reference
 
-### Basic Reward Function
+### Basic Evaluation Function
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 
-@reward_function
+@evaluation_function
 def my_reward(messages, **kwargs) -> EvaluateResult:
     # Your evaluation logic here
     return EvaluateResult(
@@ -89,10 +89,10 @@ eval_protocol/
 ├── __init__.py           # Main imports
 ├── models.py            # Data models
 ├── evaluation.py        # Evaluation creation
-├── reward_function.py   # Core decorator
+├── evaluation_function.py   # Core decorator
 ├── adapters/           # Platform adapters
 ├── integrations/       # External integrations
-├── rewards/           # Built-in reward functions
+├── rewards/           # Built-in evaluation functions
 └── utils/             # Utility functions
 ```
 
@@ -101,7 +101,7 @@ eval_protocol/
 ### Error Handling
 
 ```python
-@reward_function
+@evaluation_function
 def safe_reward(messages, **kwargs) -> EvaluateResult:
     try:
         # Your evaluation logic
@@ -118,7 +118,7 @@ def safe_reward(messages, **kwargs) -> EvaluateResult:
 ### Multiple Metrics
 
 ```python
-@reward_function
+@evaluation_function
 def multi_metric_reward(messages, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     
@@ -152,7 +152,7 @@ Eval Protocol uses comprehensive type hints:
 from typing import List, Dict, Any, Optional, Union
 from eval_protocol.models import EvaluateResult, Message
 
-@reward_function
+@evaluation_function
 def typed_reward(
     messages: Union[List[Message], List[Dict[str, Any]]],
     ground_truth: Optional[Dict[str, Any]] = None,
@@ -166,9 +166,9 @@ def typed_reward(
 
 <CardGroup cols={3}>
   <Card
-    title="Reward Function Decorator"
+    title="Evaluation Function Decorator"
     icon="magic"
-    href="/api-reference/reward-function-decorator"
+    href="/api-reference/evaluation-function-decorator"
   >
     Learn about the core decorator
   </Card>

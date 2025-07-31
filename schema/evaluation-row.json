@@ -175,7 +175,7 @@
       "type": "object"
     },
     "StepOutput": {
-      "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+      "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's evaluation function.",
       "properties": {
         "step_index": {
           "anyOf": [
@@ -190,7 +190,7 @@
           "title": "Step Index"
         },
         "base_reward": {
-          "description": "Base reward calculated by the user's reward function for this step.",
+          "description": "Base reward calculated by the user's evaluation function for this step.",
           "title": "Base Reward",
           "type": "number"
         },
@@ -268,7 +268,7 @@
           "type": "object"
         },
         "StepOutput": {
-          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's evaluation function.",
           "properties": {
             "step_index": {
               "anyOf": [
@@ -283,7 +283,7 @@
               "title": "Step Index"
             },
             "base_reward": {
-              "description": "Base reward calculated by the user's reward function for this step.",
+              "description": "Base reward calculated by the user's evaluation function for this step.",
               "title": "Base Reward",
               "type": "number"
             },
@@ -696,7 +696,7 @@
           "type": "object"
         },
         "StepOutput": {
-          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's reward function.",
+          "description": "Defines the base reward and other metrics for a single conceptual step within a rollout,\nas determined by the user's evaluation function.",
           "properties": {
             "step_index": {
               "anyOf": [
@@ -711,7 +711,7 @@
               "title": "Step Index"
             },
             "base_reward": {
-              "description": "Base reward calculated by the user's reward function for this step.",
+              "description": "Base reward calculated by the user's evaluation function for this step.",
               "title": "Base Reward",
               "type": "number"
             },

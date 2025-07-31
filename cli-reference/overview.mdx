@@ -5,7 +5,7 @@ description: 'Command-line interface guide for Eval Protocol'
 
 # CLI Reference Overview
 
-The Eval Protocol CLI provides powerful commands for developing, testing, and deploying reward functions. All commands are available through the `eval-protocol` command.
+The Eval Protocol CLI provides powerful commands for developing, testing, and deploying evaluation functions. All commands are available through the `eval-protocol` command.
 
 ## Available Commands
 
@@ -29,7 +29,7 @@ The Eval Protocol CLI provides powerful commands for developing, testing, and de
     icon="rocket"
     href="/cli-reference/deploy"
   >
-    Deploy reward functions to production
+    Deploy evaluation functions to production
   </Card>
   <Card
     title="help"
@@ -127,7 +127,7 @@ account_id = YOUR_ACCOUNT_ID
 ### 1. Development Workflow
 
 ```bash
-# 1. Create and test reward function locally
+# 1. Create and test evaluation function locally
 reward-protocol preview --metrics-folders "my_metric=./metrics" --samples ./test_samples.jsonl
 
 # 2. Run comprehensive evaluation
@@ -179,7 +179,7 @@ reward-protocol run \
 
 3. **Module Import Error**
    ```bash
-   Error: Cannot import reward function
+   Error: Cannot import evaluation function
    ```
    Solution: Ensure proper Python path and module structure
 

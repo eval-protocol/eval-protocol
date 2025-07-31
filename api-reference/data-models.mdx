@@ -5,13 +5,13 @@ description: 'Core data structures used in Eval Protocol'
 
 # Data Models
 
-Eval Protocol defines standardized data models to ensure consistency across all reward functions and platforms. These models use Pydantic for type validation and serialization.
+Eval Protocol defines standardized data models to ensure consistency across all evaluation functions and platforms. These models use Pydantic for type validation and serialization.
 
 ## Core Models
 
 ### EvaluateResult
 
-The primary return type for all reward functions.
+The primary return type for all evaluation functions.
 
 ```python
 from eval_protocol.models import EvaluateResult, MetricResult
@@ -149,7 +149,7 @@ tool_call = ToolCall(
 
 ### Conversation Format
 
-Reward functions receive conversations as lists of dictionaries:
+Evaluation functions receive conversations as lists of dictionaries:
 
 ```python
 messages = [
@@ -325,14 +325,14 @@ def safe_evaluation(messages, **kwargs) -> EvaluateResult:
 
 ## Type Hints
 
-For full type safety in your reward functions:
+For full type safety in your evaluation functions:
 
 ```python
 from typing import List, Dict, Any, Optional
 from eval_protocol.models import EvaluateResult, MetricResult, Message
 
-@reward_function
-def typed_reward_function(
+@evaluation_function
+def typed_evaluation_function(
     messages: List[Dict[str, Any]],
     ground_truth: Optional[str] = None,
     **kwargs: Any
@@ -352,6 +352,6 @@ def typed_reward_function(
 
 ## Next Steps
 
-- Learn how to use these models with the [@reward_function decorator](/api-reference/reward-function-decorator)
+- Learn how to use these models with the [@evaluation_function decorator](/api-reference/evaluation-function-decorator)
 - See practical examples in our [Examples](/examples/overview)
 - Explore [CLI deployment](/cli-reference/overview) with these data types

@@ -76,10 +76,10 @@ generation:
   enabled: true
   model_name: "accounts/fireworks/models/llama-v3p1-8b-instruct"
 
-reward_functions:
+evaluation_functions:
   - name: "my_reward"
     module_path: "rewards.my_reward"
-    function_name: "my_reward_function"
+    function_name: "my_evaluation_function"
 ```
 
 ### Dataset Configuration
@@ -140,8 +140,8 @@ defaults:
   - base_evaluation
   - _self_
 
-# Reward functions to apply
-reward_functions:
+# Evaluation functions to apply
+evaluation_functions:
   - name: "math_accuracy"
     weight: 0.7
     module_path: "rewards.math"
@@ -248,7 +248,7 @@ Contains detailed evaluation results:
   "generation_metadata": {...},
   "evaluation_results": {
     "overall_score": 0.85,
-    "reward_functions": {
+    "evaluation_functions": {
       "math_accuracy": {
         "score": 0.9,
         "reason": "Correct answer",

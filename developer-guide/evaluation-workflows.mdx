@@ -1,17 +1,17 @@
 ---
 title: 'Evaluation Workflows'
-description: 'Complete lifecycle from development to deployment of reward functions'
+description: 'Complete lifecycle from development to deployment of evaluation functions'
 ---
 
 # Evaluation Workflows
 
-This guide covers the complete lifecycle of reward function development, from initial conception to production deployment and maintenance. Understanding these workflows helps you build robust, scalable evaluation systems.
+This guide covers the complete lifecycle of evaluation function development, from initial conception to production deployment and maintenance. Understanding these workflows helps you build robust, scalable evaluation systems.
 
 ## Development Lifecycle Overview
 
 ```mermaid
 graph TD
-    A[Define Requirements] --> B[Design Reward Function]
+    A[Define Requirements] --> B[Design Evaluation Function]
     B --> C[Implement & Test Locally]
     C --> D[Validate with Sample Data]
     D --> E[Preview with Real Data]
@@ -103,11 +103,11 @@ Start with a minimal working version:
 
 ```python
 # v1_basic.py
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 import re
 
-@reward_function
+@evaluation_function
 def math_evaluator_v1(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     """Basic math evaluator - v1.0"""
     
@@ -160,7 +160,7 @@ Add features incrementally:
 
 ```python
 # v2_enhanced.py
-@reward_function
+@evaluation_function
 def math_evaluator_v2(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     """Enhanced math evaluator - v2.0"""
     
@@ -497,7 +497,7 @@ evaluation_params:
   output_name: "math_eval_comprehensive_test"
   parallel_workers: 4
 
-reward_functions:
+evaluation_functions:
   - name: "math_evaluator"
     module_path: "math_evaluator"
     function_name: "math_evaluator_v2"

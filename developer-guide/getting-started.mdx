@@ -1,15 +1,15 @@
 ---
 title: Getting Started
-description: 'Learn the fundamentals of reward functions and evaluation workflows'
+description: 'Learn the fundamentals of evaluation functions and evaluation workflows'
 ---
 
-# Getting Started with Reward Functions
+# Getting Started with Evaluation Functions
 
-This guide introduces the core concepts of Eval Protocol and walks you through creating your first reward function.
+This guide introduces the core concepts of Eval Protocol and walks you through creating your first evaluation function.
 
-## What is a Reward Function?
+## What is a Evaluation Function?
 
-A reward function is a Python function that evaluates the quality of AI model responses. It takes a conversation history and returns a score along with detailed metrics.
+A evaluation function is a Python function that evaluates the quality of AI model responses. It takes a conversation history and returns a score along with detailed metrics.
 
 ### Key Components
 
@@ -19,15 +19,15 @@ A reward function is a Python function that evaluates the quality of AI model re
 
 ## Core Concepts
 
-### 1. The `@reward_function` Decorator
+### 1. The `@evaluation_function` Decorator
 
 The decorator transforms your function into a deployable evaluator:
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult
 
-@reward_function
+@evaluation_function
 def my_evaluator(messages, **kwargs):
     # Your evaluation logic here
     return EvaluateResult(score=1.0, reason="Perfect!")
@@ -46,7 +46,7 @@ messages = [
 
 ### 3. Evaluation Results
 
-All reward functions return an `EvaluateResult`:
+All evaluation functions return an `EvaluateResult`:
 
 ```python
 EvaluateResult(
@@ -69,14 +69,14 @@ EvaluateResult(
 
 ## Step-by-Step Tutorial
 
-### Step 1: Create Your First Reward Function
+### Step 1: Create Your First Evaluation Function
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 from typing import List, Dict, Any
 
-@reward_function
+@evaluation_function
 def helpfulness_reward(
     messages: List[Dict[str, Any]], 
     **kwargs: Any
@@ -160,7 +160,7 @@ reward-protocol preview --metrics-folders "helpfulness=./path/to/your/module" --
 ### 1. Handle Edge Cases
 
 ```python
-@reward_function
+@evaluation_function
 def robust_reward(messages, **kwargs) -> EvaluateResult:
     # Check for empty messages
     if not messages:
@@ -177,7 +177,7 @@ def robust_reward(messages, **kwargs) -> EvaluateResult:
 ### 2. Use Ground Truth When Available
 
 ```python
-@reward_function
+@evaluation_function
 def accuracy_reward(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     
@@ -196,7 +196,7 @@ def accuracy_reward(messages, ground_truth=None, **kwargs) -> EvaluateResult:
 ### 3. Provide Clear Metrics
 
 ```python
-@reward_function
+@evaluation_function
 def detailed_reward(messages, **kwargs) -> EvaluateResult:
     # ... evaluation logic ...
     
@@ -225,7 +225,7 @@ def detailed_reward(messages, **kwargs) -> EvaluateResult:
 ```python
 import re
 
-@reward_function
+@evaluation_function
 def text_quality_reward(messages, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     
@@ -241,7 +241,7 @@ def text_quality_reward(messages, **kwargs) -> EvaluateResult:
 ### 2. Format Validation
 
 ```python
-@reward_function
+@evaluation_function
 def format_reward(messages, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     
@@ -256,7 +256,7 @@ def format_reward(messages, **kwargs) -> EvaluateResult:
 ### 3. Domain-Specific Evaluation
 
 ```python
-@reward_function
+@evaluation_function
 def math_reward(messages, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     
@@ -272,9 +272,9 @@ def math_reward(messages, **kwargs) -> EvaluateResult:
 
 <CardGroup cols={2}>
   <Card
-    title="Reward Function Anatomy"
+    title="Evaluation Function Anatomy"
     icon="microscope"
-    href="/developer-guide/reward-function-anatomy"
+    href="/developer-guide/evaluation-function-anatomy"
   >
     Deep dive into function structure
   </Card>

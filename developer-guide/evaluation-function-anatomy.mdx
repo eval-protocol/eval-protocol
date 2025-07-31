@@ -1,23 +1,23 @@
 ---
-title: 'Reward Function Anatomy'
-description: 'Deep dive into the structure and components of reward functions'
+title: 'Evaluation Function Anatomy'
+description: 'Deep dive into the structure and components of evaluation functions'
 ---
 
-# Reward Function Anatomy
+# Evaluation Function Anatomy
 
-Understanding the anatomy of a reward function is crucial for building effective evaluation systems. This guide breaks down every component and explains how they work together to create robust, scalable evaluation logic.
+Understanding the anatomy of a evaluation function is crucial for building effective evaluation systems. This guide breaks down every component and explains how they work together to create robust, scalable evaluation logic.
 
 ## Core Structure
 
-Every reward function in Eval Protocol follows a consistent structure:
+Every evaluation function in Eval Protocol follows a consistent structure:
 
 ```python
-from eval_protocol import reward_function
+from eval_protocol import evaluation_function
 from eval_protocol.models import EvaluateResult, MetricResult
 from typing import List, Dict, Any, Optional
 
-@reward_function
-def my_reward_function(
+@evaluation_function
+def my_evaluation_function(
     messages: List[Dict[str, Any]],           # Required: Conversation history
     ground_truth: Optional[Any] = None,       # Optional: Expected answer
     original_messages: Optional[List[Dict[str, Any]]] = None,  # Optional: Original conversation
@@ -63,7 +63,7 @@ messages = [
 - May include tool calls, function calls, or other metadata
 
 #### Return Type: EvaluateResult
-All reward functions must return an `EvaluateResult` object.
+All evaluation functions must return an `EvaluateResult` object.
 
 ```python
 return EvaluateResult(
@@ -91,7 +91,7 @@ The expected or reference answer for comparison.
 
 ```python
 # String ground truth
-@reward_function
+@evaluation_function
 def simple_accuracy(messages, ground_truth: str = None, **kwargs):
     response = messages[-1].get("content", "")
     if ground_truth is None:
@@ -101,7 +101,7 @@ def simple_accuracy(messages, ground_truth: str = None, **kwargs):
     return EvaluateResult(score=score, reason=f"Match: {score == 1.0}", metrics={})
 
 # Structured ground truth
-@reward_function  
+@evaluation_function  
 def complex_accuracy(messages, ground_truth: Dict[str, Any] = None, **kwargs):
     if ground_truth is None:
         return EvaluateResult(score=0.0, reason="No ground truth", metrics={})
@@ -117,7 +117,7 @@ def complex_accuracy(messages, ground_truth: Dict[str, Any] = None, **kwargs):
 The conversation before any preprocessing or modifications.
 
 ```python
-@reward_function
+@evaluation_function
 def preprocessing_aware_function(
     messages, 
     original_messages: Optional[List[Dict[str, Any]]] = None,
@@ -139,7 +139,7 @@ def preprocessing_aware_function(
 Custom parameters for flexible evaluation.
 
 ```python
-@reward_function
+@evaluation_function
 def configurable_evaluator(
     messages,
     max_length: int = 100,
@@ -172,7 +172,7 @@ def configurable_evaluator(
 ### Basic Validation
 
 ```python
-@reward_function
+@evaluation_function
 def robust_evaluator(messages, **kwargs) -> EvaluateResult:
     # Check for empty input
     if not messages:
@@ -207,7 +207,7 @@ def robust_evaluator(messages, **kwargs) -> EvaluateResult:
 ### Advanced Validation
 
 ```python
-@reward_function
+@evaluation_function
 def comprehensive_validator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     validation_errors = []
     
@@ -255,7 +255,7 @@ def comprehensive_validator(messages, ground_truth=None, **kwargs) -> EvaluateRe
 ### Single Metric Evaluation
 
 ```python
-@reward_function
+@evaluation_function
 def word_count_evaluator(messages, target_length: int = 50, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     word_count = len(response.split())
@@ -292,7 +292,7 @@ def word_count_evaluator(messages, target_length: int = 50, **kwargs) -> Evaluat
 ### Multi-Metric Evaluation
 
 ```python
-@reward_function
+@evaluation_function
 def comprehensive_quality_evaluator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     metrics = {}
@@ -363,7 +363,7 @@ def comprehensive_quality_evaluator(messages, ground_truth=None, **kwargs) -> Ev
 ### Tool Calling Evaluation
 
 ```python
-@reward_function
+@evaluation_function
 def tool_calling_evaluator(messages, ground_truth=None, **kwargs) -> EvaluateResult:
     # Find assistant message with tool calls
     assistant_message = None
@@ -427,7 +427,7 @@ def compare_tool_calls(actual_calls, expected_calls):
 ### Graceful Degradation
 
 ```python
-@reward_function
+@evaluation_function
 def fault_tolerant_evaluator(messages, **kwargs) -> EvaluateResult:
     try:
         # Primary evaluation logic
@@ -486,7 +486,7 @@ def timeout_context(seconds):
     finally:
         signal.alarm(0)
 
-@reward_function
+@evaluation_function
 def time_bounded_evaluator(messages, timeout_seconds: int = 30, **kwargs) -> EvaluateResult:
     try:
         with timeout_context(timeout_seconds):
@@ -516,7 +516,7 @@ def time_bounded_evaluator(messages, timeout_seconds: int = 30, **kwargs) -> Eva
 ```python
 from functools import lru_cache
 
-@reward_function
+@evaluation_function
 def cached_evaluator(messages, **kwargs) -> EvaluateResult:
     # Extract cacheable content
     response = messages[-1].get("content", "")
@@ -541,7 +541,7 @@ def cached_expensive_computation(response: str, ground_truth: str):
 ### Lazy Evaluation
 
 ```python
-@reward_function
+@evaluation_function
 def lazy_evaluator(messages, **kwargs) -> EvaluateResult:
     response = messages[-1].get("content", "")
     metrics = {}
@@ -572,7 +572,7 @@ def lazy_evaluator(messages, **kwargs) -> EvaluateResult:
 ### Self-Testing Functions
 
 ```python
-@reward_function
+@evaluation_function
 def self_testing_evaluator(messages, **kwargs) -> EvaluateResult:
     # Include test mode for validation
     if kwargs.get("test_mode"):
@@ -582,7 +582,7 @@ def self_testing_evaluator(messages, **kwargs) -> EvaluateResult:
     return perform_normal_evaluation(messages, **kwargs)
 
 def run_self_tests():
-    """Built-in self-tests for the reward function."""
+    """Built-in self-tests for the evaluation function."""
     test_cases = [
         {
             "messages": [{"role": "assistant", "content": "Good response"}],

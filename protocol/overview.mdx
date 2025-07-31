@@ -5,12 +5,12 @@ description: Technical specification of the Eval Protocol
 
 # Protocol Overview
 
-The Eval Protocol defines a standardized interface for creating, deploying, and evaluating reward functions across different platforms and environments.
+The Eval Protocol defines a standardized interface for creating, deploying, and evaluating evaluation functions across different platforms and environments.
 
 ## Core Principles
 
 ### Standardization
-- **Consistent API**: Uniform interface across all reward functions
+- **Consistent API**: Uniform interface across all evaluation functions
 - **Portable Format**: Functions work across different platforms
 - **Interoperability**: Seamless integration with existing tools
 
@@ -27,10 +27,10 @@ The Eval Protocol defines a standardized interface for creating, deploying, and 
 ## Protocol Specification
 
 ### Function Signature
-All reward functions must follow this signature:
+All evaluation functions must follow this signature:
 
 ```python
-@reward_function
+@evaluation_function
 def function_name(query: str, response: str, **kwargs) -> float:
     """
     Evaluate a model response against a query.
@@ -53,10 +53,10 @@ def function_name(query: str, response: str, **kwargs) -> float:
 - **Precision**: Use appropriate precision for your use case
 
 ### Metadata Requirements
-Every reward function must include:
+Every evaluation function must include:
 
 ```python
-@reward_function(
+@evaluation_function(
     name="function_name",
     description="Brief description of what this evaluates",
     version="1.0.0",
@@ -152,7 +152,7 @@ evaluation:
 Extend the protocol with domain-specific metrics:
 
 ```python
-@reward_function.extend
+@evaluation_function.extend
 class CustomMetric:
     def evaluate(self, query: str, response: str) -> Dict[str, float]:
         return {
@@ -166,7 +166,7 @@ class CustomMetric:
 For real-time evaluation:
 
 ```python
-@reward_function.streaming
+@evaluation_function.streaming
 async def streaming_evaluator(query: str, response_stream: AsyncIterator[str]) -> AsyncIterator[float]:
     async for chunk in response_stream:
         yield calculate_partial_score(query, chunk)
@@ -182,9 +182,9 @@ async def streaming_evaluator(query: str, response_stream: AsyncIterator[str]) -
 
 ### Testing Framework
 ```python
-from eval_protocol.testing import RewardFunctionTest
+from eval_protocol.testing import EvaluationFunctionTest
 
-class TestMathAccuracy(RewardFunctionTest):
+class TestMathAccuracy(EvaluationFunctionTest):
     function = math_accuracy
     
     def test_basic_cases(self):
@@ -205,7 +205,7 @@ class TestMathAccuracy(RewardFunctionTest):
 
 ### Migration Support
 ```python
-@reward_function.migrate
+@evaluation_function.migrate
 def migrate_v1_to_v2(old_config: dict) -> dict:
     # Migration logic for configuration changes
     return new_config
@@ -213,6 +213,6 @@ def migrate_v1_to_v2(old_config: dict) -> dict:
 
 ## Next Steps
 
-- **Implementation Guide**: Learn how to [create reward functions](/development/getting-started)
+- **Implementation Guide**: Learn how to [create evaluation functions](/development/getting-started)
 - **Data Types**: Explore [core data types](/protocol/core-data-types)
 - **Deployment**: Understand [evaluation workflows](/protocol/evaluation-workflows)
