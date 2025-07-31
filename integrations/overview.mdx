@@ -1,11 +1,11 @@
 ---
 title: Integrations Overview
-description: Connect Reward Protocol with your existing tools and workflows
+description: Connect Eval Protocol with your existing tools and workflows
 ---
 
 # Integrations Overview
 
-Reward Protocol is designed to integrate seamlessly with your existing ML/AI infrastructure. This page provides an overview of supported integrations and how they work together.
+Eval Protocol is designed to integrate seamlessly with your existing ML/AI infrastructure. This page provides an overview of supported integrations and how they work together.
 
 ## Supported Integrations
 
@@ -86,7 +86,7 @@ Reward Protocol is designed to integrate seamlessly with your existing ML/AI inf
 Use reward functions during model training:
 
 ```python
-from reward_protocol import load_function
+from eval_protocol import load_function
 from transformers import Trainer
 
 # Load your reward function
@@ -118,7 +118,7 @@ class RewardTrainer(Trainer):
 Use reward functions for model evaluation:
 
 ```python
-from reward_protocol import BatchProcessor
+from eval_protocol import BatchProcessor
 import pandas as pd
 
 # Set up batch processor
@@ -149,7 +149,7 @@ def evaluate_model_outputs(dataset_path: str):
 Use reward functions in production serving:
 
 ```python
-from reward_protocol import RewardProtocol
+from eval_protocol import RewardProtocol
 from fastapi import FastAPI
 
 app = FastAPI()
@@ -241,7 +241,7 @@ graph TB
 ### Environment-Specific Configuration
 ```yaml
 # config/development.yaml
-reward_protocol:
+eval_protocol:
   functions:
     - name: math_accuracy
       source: local
@@ -258,7 +258,7 @@ reward_protocol:
     enabled: false
 
 # config/production.yaml
-reward_protocol:
+eval_protocol:
   functions:
     - name: math_accuracy
       source: fireworks
@@ -279,7 +279,7 @@ reward_protocol:
 
 ### Dynamic Configuration
 ```python
-from reward_protocol import ConfigManager
+from eval_protocol import ConfigManager
 
 config = ConfigManager()
 

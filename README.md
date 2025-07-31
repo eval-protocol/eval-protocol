@@ -1,3 +1,3 @@
-# Reward Protocol Home Page
+# Eval Protocol Home Page
 
-This repo contains the documents for Reward Protocol
+This repo contains the documents for Eval Protocol

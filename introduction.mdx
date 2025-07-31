@@ -3,13 +3,13 @@ title: Introduction
 description: 'Author, reproduce, and evaluate reward functions seamlessly on Fireworks, TRL, and your own infrastructure'
 ---
 
-# Reward Protocol
+# Eval Protocol
 
-**Reward Protocol is like a universal adapter for AI evaluation — it allows reward functions to work seamlessly across any platform, infrastructure, or training pipeline.**
+**Eval Protocol is like a universal adapter for AI evaluation — it allows reward functions to work seamlessly across any platform, infrastructure, or training pipeline.**
 
-Just as USB-C provides a universal standard for device connectivity, Reward Protocol establishes a universal standard for AI model evaluation, enabling reward functions to be written once and deployed anywhere.
+Just as USB-C provides a universal standard for device connectivity, Eval Protocol establishes a universal standard for AI model evaluation, enabling reward functions to be written once and deployed anywhere.
 
-## Why Reward Protocol?
+## Why Eval Protocol?
 
 Building effective AI evaluation systems today is needlessly complex and fragmented:
 
@@ -18,13 +18,13 @@ Building effective AI evaluation systems today is needlessly complex and fragmen
 - **Development Friction**: Setting up evaluation pipelines requires extensive boilerplate and platform-specific knowledge
 - **Limited Portability**: Reward functions can't easily move between research, training, and production environments
 
-Reward Protocol solves these problems by providing **a single, standardized way to define reward functions that work everywhere**.
+Eval Protocol solves these problems by providing **a single, standardized way to define reward functions that work everywhere**.
 
-## How Reward Protocol Works
+## How Eval Protocol Works
 
 ```mermaid
 graph TB
-    A[Your Reward Function] --> B[Reward Protocol]
+    A[Your Reward Function] --> B[Eval Protocol]
     B --> C[Universal Evaluation Interface]
     
     C --> D[Fireworks AI]
@@ -40,7 +40,7 @@ graph TB
     style C fill:#60a5fa
 ```
 
-### The Reward Protocol Advantage
+### The Eval Protocol Advantage
 
 **Write Once, Deploy Anywhere**: Define your evaluation logic once using the `@reward_function` decorator, then deploy it across any platform or infrastructure without modification.
 
@@ -83,7 +83,7 @@ graph TB
 
 ## Architecture Overview
 
-Reward Protocol uses a **client-server model** where reward functions act as specialized evaluation servers that can be called by various AI training and evaluation clients.
+Eval Protocol uses a **client-server model** where reward functions act as specialized evaluation servers that can be called by various AI training and evaluation clients.
 
 ```mermaid
 graph LR
@@ -94,7 +94,7 @@ graph LR
         D[CI/CD Pipeline]
     end
     
-    subgraph "Reward Protocol"
+    subgraph "Eval Protocol"
         E[Protocol Layer]
         F[Evaluation Runtime]
     end
@@ -152,7 +152,7 @@ Choose your path based on what you want to accomplish:
     icon="plug"
     href="/quickstarts/integrators"
   >
-    Add Reward Protocol support to your evaluation platform
+    Add Eval Protocol support to your evaluation platform
   </Card>
 </CardGroup>
 
@@ -162,7 +162,7 @@ Choose your path based on what you want to accomplish:
     icon="download"
     href="/installation"
   >
-    Install Reward Protocol and configure your development environment
+    - **Install Eval Protocol and configure your development environment
   </Card>
   <Card
     title="5-Minute Quickstart"
@@ -175,7 +175,7 @@ Choose your path based on what you want to accomplish:
 
 ## Real-World Applications
 
-Reward Protocol powers evaluation across diverse AI use cases:
+Eval Protocol powers evaluation across diverse AI use cases:
 
 <CardGroup cols={2}>
   <Card
@@ -222,7 +222,7 @@ Reward Protocol powers evaluation across diverse AI use cases:
   </Card>
 </CardGroup>
 
-## Learn Reward Protocol
+## Learn Eval Protocol
 
 <CardGroup cols={2}>
   <Card
@@ -270,7 +270,7 @@ Reward Protocol powers evaluation across diverse AI use cases:
     icon="puzzle-piece"
     href="/integrations/overview"
   >
-    See how Reward Protocol connects with Fireworks, TRL, OpenAI, and more
+    See how Eval Protocol connects with Fireworks, TRL, OpenAI, and more
   </Card>
   <Card
     title="Contributing & Development"

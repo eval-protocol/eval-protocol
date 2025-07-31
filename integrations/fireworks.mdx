@@ -5,7 +5,7 @@ description: 'Deploy and scale reward functions on the Fireworks AI platform'
 
 # Fireworks AI Integration
 
-[Fireworks AI](https://fireworks.ai) provides a high-performance platform for deploying and scaling AI models and evaluation functions. Reward Protocol includes native integration with Fireworks AI, enabling seamless deployment of reward functions to production environments.
+[Fireworks AI](https://fireworks.ai) provides a high-performance platform for deploying and scaling AI models and evaluation functions. Eval Protocol includes native integration with Fireworks AI, enabling seamless deployment of reward functions to production environments.
 
 ## Overview
 
@@ -47,8 +47,8 @@ EOF
 Deploy a reward function with minimal configuration:
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 
 @reward_function
 def quality_evaluator(messages, **kwargs) -> EvaluateResult:
@@ -127,7 +127,7 @@ reward-protocol deploy \
 Deploy with specific model provider configurations:
 
 ```python
-from reward_protocol.evaluation import create_evaluation
+from eval_protocol.evaluation import create_evaluation
 
 evaluator = create_evaluation(
     evaluator_id="multi-provider-eval",

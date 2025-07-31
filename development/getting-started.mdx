@@ -1,6 +1,6 @@
 ---
 title: Development Getting Started
-description: Advanced guide for developing with Reward Protocol
+description: Advanced guide for developing with Eval Protocol
 ---
 
 # Development Getting Started
@@ -48,8 +48,8 @@ docker-compose up -d dev
 
 ### Complex Evaluation Logic
 ```python
-from reward_protocol import reward_function
-from reward_protocol.types import EvaluationResult
+from eval_protocol import reward_function
+from eval_protocol.types import EvaluationResult
 import asyncio
 from typing import Dict, Any
 
@@ -106,7 +106,7 @@ async def advanced_evaluator(
 
 ### Multi-Modal Support
 ```python
-from reward_protocol.types import MultiModalInput
+from eval_protocol.types import MultiModalInput
 
 @reward_function
 def multimodal_evaluator(
@@ -142,7 +142,7 @@ def multimodal_evaluator(
 ### Caching Strategies
 ```python
 from functools import lru_cache
-from reward_protocol.cache import RewardCache
+from eval_protocol.cache import RewardCache
 
 class OptimizedEvaluator:
     def __init__(self):
@@ -170,7 +170,7 @@ class OptimizedEvaluator:
 
 ### Batch Processing
 ```python
-from reward_protocol.batch import BatchProcessor
+from eval_protocol.batch import BatchProcessor
 
 @reward_function.batch
 def batch_evaluator(queries: List[str], responses: List[str]) -> List[float]:
@@ -195,7 +195,7 @@ def batch_evaluator(queries: List[str], responses: List[str]) -> List[float]:
 ### Robust Error Handling
 ```python
 import logging
-from reward_protocol.exceptions import RewardProtocolError
+from eval_protocol.exceptions import RewardProtocolError
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +233,7 @@ def robust_evaluator(query: str, response: str) -> float:
 ### Performance Monitoring
 ```python
 import time
-from reward_protocol.monitoring import MetricsCollector
+from eval_protocol.monitoring import MetricsCollector
 
 metrics = MetricsCollector()
 
@@ -271,7 +271,7 @@ def monitored_evaluator(query: str, response: str) -> float:
 ### Comprehensive Testing
 ```python
 import pytest
-from reward_protocol.testing import RewardFunctionTest
+from eval_protocol.testing import RewardFunctionTest
 
 class TestAdvancedEvaluator(RewardFunctionTest):
     function = advanced_evaluator
@@ -405,7 +405,7 @@ spec:
         ports:
         - containerPort: 8000
         env:
-        - name: REWARD_PROTOCOL_LOG_LEVEL
+        - name: EVAL_PROTOCOL_LOG_LEVEL
           value: "INFO"
         resources:
           requests:

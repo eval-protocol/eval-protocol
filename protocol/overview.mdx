@@ -1,11 +1,11 @@
 ---
 title: Protocol Overview
-description: Technical specification of the Reward Protocol
+description: Technical specification of the Eval Protocol
 ---
 
 # Protocol Overview
 
-The Reward Protocol defines a standardized interface for creating, deploying, and evaluating reward functions across different platforms and environments.
+The Eval Protocol defines a standardized interface for creating, deploying, and evaluating reward functions across different platforms and environments.
 
 ## Core Principles
 
@@ -182,7 +182,7 @@ async def streaming_evaluator(query: str, response_stream: AsyncIterator[str]) -
 
 ### Testing Framework
 ```python
-from reward_protocol.testing import RewardFunctionTest
+from eval_protocol.testing import RewardFunctionTest
 
 class TestMathAccuracy(RewardFunctionTest):
     function = math_accuracy

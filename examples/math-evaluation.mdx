@@ -45,8 +45,8 @@ evaluation_params:
 The math reward function extracts and compares numerical answers:
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 import re
 
 @reward_function
@@ -189,7 +189,7 @@ The example can be used with TRL for RLHF training:
 
 ```python
 from examples.trl_integration import convert_dataset_to_jsonl
-from reward_protocol.integrations.trl import TRLAdapter
+from eval_protocol.integrations.trl import TRLAdapter
 
 # Convert dataset
 convert_dataset_to_jsonl("gsm8k", "gsm8k_trl.jsonl")

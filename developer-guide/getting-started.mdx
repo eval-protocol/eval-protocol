@@ -5,7 +5,7 @@ description: 'Learn the fundamentals of reward functions and evaluation workflow
 
 # Getting Started with Reward Functions
 
-This guide introduces the core concepts of Reward Protocol and walks you through creating your first reward function.
+This guide introduces the core concepts of Eval Protocol and walks you through creating your first reward function.
 
 ## What is a Reward Function?
 
@@ -24,8 +24,8 @@ A reward function is a Python function that evaluates the quality of AI model re
 The decorator transforms your function into a deployable evaluator:
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult
 
 @reward_function
 def my_evaluator(messages, **kwargs):
@@ -72,8 +72,8 @@ EvaluateResult(
 ### Step 1: Create Your First Reward Function
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 from typing import List, Dict, Any
 
 @reward_function

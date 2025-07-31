@@ -1,17 +1,17 @@
 ---
 title: 'TRL Integration'
-description: 'Integrate Reward Protocol with TRL (Transformer Reinforcement Learning) for training pipelines'
+description: 'Integrate Eval Protocol with TRL (Transformer Reinforcement Learning) for training pipelines'
 ---
 
 # TRL Integration
 
-[TRL (Transformer Reinforcement Learning)](https://huggingface.co/docs/trl) is a popular library for fine-tuning language models using reinforcement learning. Reward Protocol provides seamless integration with TRL, allowing you to use your reward functions directly in training pipelines.
+[TRL (Transformer Reinforcement Learning)](https://huggingface.co/docs/trl) is a popular library for fine-tuning language models using reinforcement learning. Eval Protocol provides seamless integration with TRL, allowing you to use your reward functions directly in training pipelines.
 
 ## Overview
 
 The TRL integration enables you to:
-- Use Reward Protocol reward functions as reward models in TRL training
-- Automatically convert between TRL and Reward Protocol data formats
+- Use Eval Protocol reward functions as reward models in TRL training
+- Automatically convert between TRL and Eval Protocol data formats
 - Scale reward evaluation across distributed training setups
 - Monitor reward function performance during training
 
@@ -29,9 +29,9 @@ pip install "reward-protocol[trl]"
 
 ```python
 from trl import PPOTrainer, PPOConfig
-from reward_protocol.integrations.trl import RewardProtocolRewardModel
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol.integrations.trl import RewardProtocolRewardModel
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 
 # Define your reward function
 @reward_function
@@ -93,7 +93,7 @@ for epoch, batch in enumerate(ppo_trainer.dataloader):
         length_sampler=LengthSampler(min_value=10, max_value=20),
     )
     
-    # Get rewards from Reward Protocol
+    # Get rewards from Eval Protocol
     rewards = reward_model.get_rewards(query_tensors, response_tensors)
     
     # PPO training step
@@ -106,7 +106,7 @@ for epoch, batch in enumerate(ppo_trainer.dataloader):
 
 ```python
 from trl import GRPOTrainer, GRPOConfig
-from reward_protocol.integrations.trl import create_grpo_reward_function
+from eval_protocol.integrations.trl import create_grpo_reward_function
 
 # Create GRPO-compatible reward function
 @reward_function
@@ -146,7 +146,7 @@ grpo_config = GRPOConfig(
     num_train_epochs=3,
 )
 
-# Initialize GRPO trainer with Reward Protocol integration
+# Initialize GRPO trainer with Eval Protocol integration
 grpo_trainer = GRPOTrainer(
     config=grpo_config,
     model=model,
@@ -166,7 +166,7 @@ grpo_trainer.train()
 Combine multiple reward functions for complex training objectives:
 
 ```python
-from reward_protocol.integrations.trl import MultiRewardModel
+from eval_protocol.integrations.trl import MultiRewardModel
 
 # Define multiple reward functions
 @reward_function
@@ -236,7 +236,7 @@ ppo_trainer = PPOTrainer(
 Handle custom data formats and preprocessing:
 
 ```python
-from reward_protocol.integrations.trl import TRLDataProcessor
+from eval_protocol.integrations.trl import TRLDataProcessor
 
 class CustomDataProcessor(TRLDataProcessor):
     """Custom data processor for domain-specific formats."""
@@ -246,7 +246,7 @@ class CustomDataProcessor(TRLDataProcessor):
         processed_batch = []
         
         for item in batch:
-            # Convert custom format to Reward Protocol format
+            # Convert custom format to Eval Protocol format
             messages = [
                 {"role": "user", "content": item["prompt"]},
                 {"role": "assistant", "content": item["response"]}
@@ -317,7 +317,7 @@ reward_model.setup_distributed(
 ### Monitoring and Logging
 
 ```python
-from reward_protocol.integrations.trl import RewardMonitor
+from eval_protocol.integrations.trl import RewardMonitor
 
 # Set up monitoring
 monitor = RewardMonitor(
@@ -350,9 +350,9 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer
 from trl import PPOTrainer, PPOConfig
 from datasets import load_dataset
 
-from reward_protocol import reward_function
-from reward_protocol.integrations.trl import RewardProtocolRewardModel
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.integrations.trl import RewardProtocolRewardModel
+from eval_protocol.models import EvaluateResult, MetricResult
 
 # Load model and tokenizer
 model_name = "gpt2"

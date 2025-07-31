@@ -1,11 +1,11 @@
 ---
 title: Quick Start for Integrators
-description: Integrate Reward Protocol into your existing workflows
+description: Integrate Eval Protocol into your existing workflows
 ---
 
 # Quick Start for Integrators
 
-This guide will help you integrate Reward Protocol into your existing ML workflows and infrastructure.
+This guide will help you integrate Eval Protocol into your existing ML workflows and infrastructure.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ This guide will help you integrate Reward Protocol into your existing ML workflo
 
 ## Installation
 
-Install Reward Protocol with integration extras:
+Install Eval Protocol with integration extras:
 
 ```bash
 pip install reward-protocol[integrations]
@@ -26,7 +26,7 @@ pip install reward-protocol[integrations]
 ### 1. TRL (Transformer Reinforcement Learning)
 
 ```python
-from reward_protocol import load_function
+from eval_protocol import load_function
 from trl import PPOTrainer
 
 # Load your reward function
@@ -48,7 +48,7 @@ trainer.train()
 ### 2. Braintrust Integration
 
 ```python
-from reward_protocol import reward_function
+from eval_protocol import reward_function
 import braintrust
 
 @reward_function
@@ -68,7 +68,7 @@ braintrust.eval(
 ### 3. Custom Pipeline Integration
 
 ```python
-from reward_protocol import RewardProtocol
+from eval_protocol import RewardProtocol
 
 class MyEvaluationPipeline:
     def __init__(self):
@@ -114,7 +114,7 @@ score = response.json()["score"]
 ### Batch Processing
 
 ```python
-from reward_protocol import BatchProcessor
+from eval_protocol import BatchProcessor
 
 processor = BatchProcessor()
 processor.add_function("math_accuracy")

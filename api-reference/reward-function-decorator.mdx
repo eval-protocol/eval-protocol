@@ -1,17 +1,17 @@
 ---
 title: '@reward_function Decorator'
-description: 'The core decorator for creating reward functions in Reward Protocol'
+description: 'The core decorator for creating reward functions in Eval Protocol'
 ---
 
 # @reward_function Decorator
 
-The `@reward_function` decorator is the primary way to create reward functions in Reward Protocol. It transforms your evaluation logic into a standardized format that can be deployed across different platforms.
+The `@reward_function` decorator is the primary way to create reward functions in Eval Protocol. It transforms your evaluation logic into a standardized format that can be deployed across different platforms.
 
 ## Basic Usage
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 from typing import List, Dict, Any
 
 @reward_function
@@ -93,7 +93,7 @@ def flexible_reward(
 All reward functions must return an `EvaluateResult` object:
 
 ```python
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol.models import EvaluateResult, MetricResult
 
 return EvaluateResult(
     score=0.85,  # Primary score (0.0 to 1.0)
@@ -227,7 +227,7 @@ print(f"Metrics: {result.metrics}")
 
 ## Integration with CLI
 
-Once decorated, your function can be used with Reward Protocol CLI:
+Once decorated, your function can be used with Eval Protocol CLI:
 
 ```bash
 # Preview evaluation

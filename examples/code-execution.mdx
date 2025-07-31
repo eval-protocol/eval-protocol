@@ -21,8 +21,8 @@ Code execution evaluation involves:
 ### Simple Python Code Evaluator
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 import ast
 import subprocess
 import tempfile
@@ -730,7 +730,7 @@ reward-protocol preview \
 
 ```python
 # training_integration.py
-from reward_protocol.integrations.trl import RewardProtocolRewardModel
+from eval_protocol.integrations.trl import RewardProtocolRewardModel
 from code_execution_evaluator import python_code_executor
 
 # Create reward model for training

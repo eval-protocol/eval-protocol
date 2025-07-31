@@ -1,11 +1,11 @@
 ---
 title: API Reference Overview
-description: 'Comprehensive API documentation for Reward Protocol'
+description: 'Comprehensive API documentation for Eval Protocol'
 ---
 
 # API Reference Overview
 
-Welcome to the Reward Protocol API reference. This section provides detailed documentation for all classes, functions, and data models.
+Welcome to the Eval Protocol API reference. This section provides detailed documentation for all classes, functions, and data models.
 
 ## Core Components
 
@@ -45,8 +45,8 @@ Welcome to the Reward Protocol API reference. This section provides detailed doc
 ### Basic Reward Function
 
 ```python
-from reward_protocol import reward_function
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import reward_function
+from eval_protocol.models import EvaluateResult, MetricResult
 
 @reward_function
 def my_reward(messages, **kwargs) -> EvaluateResult:
@@ -61,7 +61,7 @@ def my_reward(messages, **kwargs) -> EvaluateResult:
 ### Key Data Models
 
 ```python
-from reward_protocol.models import (
+from eval_protocol.models import (
     EvaluateResult,     # Main evaluation result
     MetricResult,       # Individual metric result
     Message,           # Chat message structure
@@ -72,7 +72,7 @@ from reward_protocol.models import (
 ### Evaluation Creation
 
 ```python
-from reward_protocol.evaluation import create_evaluation
+from eval_protocol.evaluation import create_evaluation
 
 evaluator = create_evaluation(
     evaluator_id="my-evaluator",
@@ -85,7 +85,7 @@ evaluator = create_evaluation(
 ## Module Structure
 
 ```
-reward_protocol/
+eval_protocol/
 ├── __init__.py           # Main imports
 ├── models.py            # Data models
 ├── evaluation.py        # Evaluation creation
@@ -146,11 +146,11 @@ def multi_metric_reward(messages, **kwargs) -> EvaluateResult:
 
 ## Type Hints
 
-Reward Protocol uses comprehensive type hints:
+Eval Protocol uses comprehensive type hints:
 
 ```python
 from typing import List, Dict, Any, Optional, Union
-from reward_protocol.models import EvaluateResult, Message
+from eval_protocol.models import EvaluateResult, Message
 
 @reward_function
 def typed_reward(

@@ -10,8 +10,8 @@ The `RewardFunction` class provides an advanced interface for creating, managing
 ## Basic Usage
 
 ```python
-from reward_protocol import RewardFunction
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol import RewardFunction
+from eval_protocol.models import EvaluateResult, MetricResult
 
 def my_evaluation_logic(messages, **kwargs):
     response = messages[-1].get("content", "")

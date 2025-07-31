@@ -1,11 +1,11 @@
 ---
 title: 'Data Models'
-description: 'Core data structures used in Reward Protocol'
+description: 'Core data structures used in Eval Protocol'
 ---
 
 # Data Models
 
-Reward Protocol defines standardized data models to ensure consistency across all reward functions and platforms. These models use Pydantic for type validation and serialization.
+Eval Protocol defines standardized data models to ensure consistency across all reward functions and platforms. These models use Pydantic for type validation and serialization.
 
 ## Core Models
 
@@ -14,7 +14,7 @@ Reward Protocol defines standardized data models to ensure consistency across al
 The primary return type for all reward functions.
 
 ```python
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol.models import EvaluateResult, MetricResult
 
 class EvaluateResult:
     score: float           # Primary score (0.0 to 1.0)
@@ -86,7 +86,7 @@ class Message:
 #### Example Usage
 
 ```python
-from reward_protocol.models import Message
+from eval_protocol.models import Message
 
 user_message = Message(
     role="user",
@@ -133,7 +133,7 @@ class Function:
 #### Example Usage
 
 ```python
-from reward_protocol.models import ToolCall, Function
+from eval_protocol.models import ToolCall, Function
 
 tool_call = ToolCall(
     id="call_abc123",
@@ -227,7 +227,7 @@ ground_truth = {
 All models include automatic validation:
 
 ```python
-from reward_protocol.models import EvaluateResult, MetricResult
+from eval_protocol.models import EvaluateResult, MetricResult
 
 # This will raise a validation error
 try:
@@ -329,7 +329,7 @@ For full type safety in your reward functions:
 
 ```python
 from typing import List, Dict, Any, Optional
-from reward_protocol.models import EvaluateResult, MetricResult, Message
+from eval_protocol.models import EvaluateResult, MetricResult, Message
 
 @reward_function
 def typed_reward_function(
