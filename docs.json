@@ -3,9 +3,9 @@
   "theme": "mint",
   "name": "Eval Protocol",
   "colors": {
-    "primary": "#FF6B35",
-    "light": "#FF8A65",
-    "dark": "#E65100"
+    "light": "#E0F2FE",
+    "dark": "#1E293B",
+    "primary": "#3B82F6"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -15,11 +15,7 @@
         "groups": [
           {
             "group": "User Guide",
-            "pages": [
-              "introduction",
-              "installation",
-              "quickstart"
-            ]
+            "pages": ["introduction", "installation", "quickstart"]
           },
           {
             "group": "Quick Starts",
@@ -31,9 +27,7 @@
           },
           {
             "group": "Protocol",
-            "pages": [
-              "protocol/overview"
-            ]
+            "pages": ["protocol/overview"]
           },
           {
             "group": "Development",
@@ -46,9 +40,7 @@
           },
           {
             "group": "Tutorials",
-            "pages": [
-              "quickstart"
-            ]
+            "pages": ["quickstart"]
           },
           {
             "group": "Integrations",
@@ -71,7 +63,7 @@
             "pages": [
               "cli-reference/overview",
               "cli-reference/run",
-              "cli-reference/preview", 
+              "cli-reference/preview",
               "cli-reference/deploy"
             ]
           }
@@ -123,16 +115,6 @@
           "icon": "bug"
         }
       ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "background": {
-    "color": {
-      "light": "#ffffff",
-      "dark": "#0d1117"
     }
   },
   "navbar": {
