@@ -3,119 +3,19 @@
   "theme": "mint",
   "name": "Eval Protocol",
   "colors": {
-    "light": "#E0F2FE",
+    "light": "#3B82F6",
     "dark": "#1E293B",
     "primary": "#3B82F6"
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "tabs": [
+    "pages": [
+      "introduction",
       {
-        "tab": "Documentation",
-        "groups": [
-          {
-            "group": "User Guide",
-            "pages": ["introduction", "installation", "quickstart"]
-          },
-          {
-            "group": "Quick Starts",
-            "pages": [
-              "quickstarts/developers",
-              "quickstarts/users",
-              "quickstarts/integrators"
-            ]
-          },
-          {
-            "group": "Protocol",
-            "pages": ["protocol/overview"]
-          },
-          {
-            "group": "Development",
-            "pages": [
-              "development/getting-started",
-              "developer-guide/getting-started",
-              "developer-guide/evaluation-function-anatomy",
-              "developer-guide/evaluation-workflows"
-            ]
-          },
-          {
-            "group": "Tutorials",
-            "pages": ["quickstart"]
-          },
-          {
-            "group": "Integrations",
-            "pages": [
-              "integrations/overview",
-              "integrations/fireworks",
-              "integrations/trl"
-            ]
-          },
-          {
-            "group": "Community",
-            "pages": [
-              "community/support",
-              "community/contributing",
-              "community/feedback"
-            ]
-          },
-          {
-            "group": "Reference",
-            "pages": [
-              "cli-reference/overview",
-              "cli-reference/run",
-              "cli-reference/preview",
-              "cli-reference/deploy"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "Reference",
-            "pages": [
-              "api-reference/overview",
-              "api-reference/evaluation-function-decorator",
-              "api-reference/evaluation-function-class",
-              "api-reference/data-models"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Examples",
-        "groups": [
-          {
-            "group": "Examples",
-            "pages": [
-              "examples/overview",
-              "examples/math-evaluation",
-              "examples/code-execution"
-            ]
-          }
-        ]
+        "group": "Tutorials",
+        "pages": ["quickstart"]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/fireworks-ai/eval-protocol",
-          "icon": "github"
-        },
-        {
-          "anchor": "PyPI",
-          "href": "https://pypi.org/project/reward-protocol/",
-          "icon": "python"
-        },
-        {
-          "anchor": "Issues",
-          "href": "https://github.com/fireworks-ai/eval-protocol/issues",
-          "icon": "bug"
-        }
-      ]
-    }
+    ]
   },
   "navbar": {
     "links": [
@@ -156,7 +56,7 @@
           },
           {
             "label": "Discord",
-            "href": "https://discord.gg/fireworks"
+            "href": "https://discord.com/channels/1137072072808472616/1400975572405850155"
           }
         ]
       }
