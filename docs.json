@@ -121,18 +121,45 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/fireworks-ai/eval-protocol"
+        "href": "https://github.com/eval-protocol"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Install",
-      "href": "https://pypi.org/project/reward-protocol/"
-    }
+    ]
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/fireworks-ai/eval-protocol"
-    }
+      "github": "https://github.com/eval-protocol"
+    },
+    "links": [
+      {
+        "header": "Authored by",
+        "items": [
+          {
+            "label": "Fireworks",
+            "href": "https://fireworks.ai"
+          }
+        ]
+      },
+      {
+        "header": "Links",
+        "items": [
+          {
+            "label": "GitHub",
+            "href": "https://github.com/eval-protocol"
+          },
+          {
+            "label": "PyPI",
+            "href": "https://pypi.org/project/eval-protocol/"
+          },
+          {
+            "label": "Issues",
+            "href": "https://github.com/eval-protocol/eval-protocol/issues"
+          },
+          {
+            "label": "Discord",
+            "href": "https://discord.gg/fireworks"
+          }
+        ]
+      }
+    ]
   }
 }
