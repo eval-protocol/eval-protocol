@@ -18,9 +18,9 @@
   "navigation": {
     "pages": [
       "introduction",
+      "specification",
       "why",
       "principles",
-      "specification",
       {
         "group": "Tutorials",
         "pages": ["single-turn-evals", "multi-turn-evals"]
