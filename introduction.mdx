@@ -3,15 +3,22 @@ title: Introduction to Eval Protocol (EP)
 sidebarTitle: Introduction
 ---
 
-EP is an open [specification](/specification) and [Python
-SDK](https://github.com/eval-protocol/python-sdk) that standardizes how
-developers author evals for large lanuage models (LLM) applications. It ensures
-that writing evals and storing eval results can be reused across model
-selection, prompt engineering, and production CI/CD, to fine-tuning for
-real-world use cases—from markdown and JSON generation to customer service
-agents.
+import { Workflow } from "/snippets/workflow.jsx"
 
-To illustrate, here is a simple example of an evaluation function that evaluates
+
+EP is an open [specification](/specification) with a [Python
+SDK](https://github.com/eval-protocol/python-sdk) and [pytest
+plugin](https://docs.pytest.org/en/stable/how-to/writing_plugins.html) built to
+standardize how developers author evals for large language model (LLM)
+applications. It ensures that writing evals, storing traces, and saving eval
+results follow a consistent pattern, and can be reused across model selection
+evals, prompt engineering, context engineering, CI/CD, and fine-tuning for
+real-world use cases—from tricky markdown generation and data extraction tasks
+to complex** **customer service agents.
+
+<Workflow />
+
+For example, here is a example of an evaluation function that evaluates
 responses from a [Policy](/specification#policy) based on the number of bullet
 points in the response.
 
@@ -19,11 +26,13 @@ points in the response.
 # IFEval simple example
 ```
 
-For a more advanced example, check out our implementation of [𝜏²-bench](#), a
-benchmark for evaluating conversational agents in a dual control environment.
+For a more advanced example that includes MCP and user simulation, check out our
+implementation of [𝜏²-bench](#), a benchmark for evaluating conversational
+agents in a dual control environment.
 
 ### Next Steps
 
 - [Quick Start](/quickstart)
 - [Specification](/specification)
 - [Why Eval Protocol?](/why)
+- [Principles](/principles)

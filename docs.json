@@ -20,6 +20,7 @@
       "introduction",
       "specification",
       "why",
+      "principles",
       {
         "group": "Tutorials",
         "pages": ["quickstart"]
