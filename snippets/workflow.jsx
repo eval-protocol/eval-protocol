@@ -113,7 +113,7 @@ export const Workflow = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-4">
+    <div className="w-full py-4">
       <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 font-mono text-sm border border-gray-200 dark:border-gray-700 shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">

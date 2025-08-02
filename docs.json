@@ -18,12 +18,12 @@
   "navigation": {
     "pages": [
       "introduction",
-      "specification",
       "why",
       "principles",
+      "specification",
       {
         "group": "Tutorials",
-        "pages": ["quickstart"]
+        "pages": ["single-turn-evals"]
       }
     ]
   },
