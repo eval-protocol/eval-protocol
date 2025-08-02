@@ -10,36 +10,4 @@ as their AI app requirements grow in complexity.
 In the beginning of building an AI application, its convenient to write evals in
 ad-hoc eval scripts like the following:
 
-```python
-import httpx
-from openai import OpenAI
-
-client = OpenAI()
-
-article = "..."
-
-SYSTEM_PROMPT = """
-You are a helpful assistant that summarized articles into bullet points. You
-will be given an article and you will need to summarize it into 5 bullet
-points. 
-
-- ALWAYS make sure to write the summary as 5 bullet points.
-- ALWAYS generate a response in markdown format.
-"""
-
-# evaluate article
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": article}
-    ]
-)
-
-EVAL_PROMPT = """
-  You are a helpful assistant that ensures that the provided response is a list of 5 bullet points.
-"""
-```
-
-This works well for small projects, but as requirements grow, it becomes harder
-to maintain and reuse evals across different projects. Developers often bootstrap their own harness for 
+TODO

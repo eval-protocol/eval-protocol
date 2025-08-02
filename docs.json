@@ -23,7 +23,16 @@
       "specification",
       {
         "group": "Tutorials",
-        "pages": ["single-turn-evals"]
+        "pages": ["single-turn-evals", "multi-turn-evals"]
+      },
+      {
+        "group": "Examples",
+        "pages": [
+          "examples/tau-bench",
+          "examples/frozen-lake",
+          "examples/lunar-lander",
+          "examples/gsm8k"
+        ]
       }
     ]
   },
