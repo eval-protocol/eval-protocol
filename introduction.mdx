@@ -17,13 +17,39 @@ to complex customer service agents.
 
 <Workflow />
 
-For example, here is a example of an evaluation function that evaluates
-responses from a [Policy](/specification#policy) based on the number of bullet
-points in the response.
+For example, here is an evaluation function that checks if model responses contain the required number of highlighted sections (like **bold** or *italic* text):
 
 ```python
-# IFEval simple example
+def markdown_format_evaluate(messages: List[Message], ground_truth: Optional[str]=None, **kwargs) -> EvaluateResult:
+    """Check if response contains required number of highlighted sections."""
+    assistant_response = messages[-1].content
+    
+    if not assistant_response:
+        return EvaluateResult(score=0.0, reason="❌ No assistant response found")
+    
+    required_highlights = int(ground_truth)
+    
+    # Count highlighted sections using regex
+    highlights = re.findall(r"\*[^\n\*]*\*", assistant_response)
+    double_highlights = re.findall(r"\*\*[^\n\*]*\*\*", assistant_response)
+    
+    actual_count = 0
+    for highlight in highlights:
+        if highlight.strip("*").strip():
+            actual_count += 1
+    for highlight in double_highlights:
+        if highlight.removeprefix("**").removesuffix("**").strip():
+            actual_count += 1
+    
+    meets_requirement = actual_count >= required_highlights
+    
+    return EvaluateResult(
+        score=1.0 if meets_requirement else 0.0,
+        reason=f"{'✅' if meets_requirement else '❌'} Found {actual_count} highlights (required: {required_highlights})"
+    )
 ```
+
+For a complete step-by-step tutorial with detailed explanations, dataset examples, and configuration options, see our [Single-turn Evals](/single-turn-evals) guide.
 
 For a more advanced example that includes MCP and user simulation, check out our
 implementation of [𝜏²-bench](#), a benchmark for evaluating conversational

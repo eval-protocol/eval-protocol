@@ -2,5 +2,224 @@
 title: Single-turn evals
 description: 'Create your first single-turn eval'
 ---
+Let's walk through creating an evaluation that checks if model responses contain the required number of highlighted sections (like **bold** or *italic* text). This example demonstrates the core concepts of writing evaluations with Eval Protocol.
 
-To get started, we'll create our first eval.
+## Understanding the Dataset
+
+Before we start coding, let's understand what we're working with. The `markdown_dataset.jsonl` file contains diverse test cases that evaluate a model's ability to follow markdown formatting instructions.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`key`**: Unique identifier for the test case
+- **`prompt`**: The instruction given to the model, which includes:
+  - Clear task description
+  - Specific markdown formatting requirements
+  - Examples of the expected format
+  - Minimum number of highlights required
+- **`num_highlights`**: The ground truth value (number of highlighted sections required)
+
+### Example Dataset Entries
+
+**Creative Writing Tasks:**
+```json
+{
+  "key": 1773,
+  "prompt": "Write a song about the summers of my childhood that I spent in the countryside. Give the song a name, and highlight the name by wrapping it with *. For example: *little me in the countryside*.",
+  "num_highlights": 1
+}
+```
+
+**Business and Professional Content:**
+```json
+{
+  "key": 167,
+  "prompt": "Generate a business proposal to start a sweatshirt company in Bremen. The proposal should contain 5 or more sections. Highlight each section name using the this format:\n*section name*",
+  "num_highlights": 5
+}
+```
+
+**Educational and Informational Content:**
+```json
+{
+  "key": 3453,
+  "prompt": "Summarize the history of Japan. Italicize at least 5 keywords in your response. To indicate a italic word, wrap it with asterisk, like *italic*",
+  "num_highlights": 5
+}
+```
+
+### Dataset Characteristics
+
+**Diversity**: The dataset covers various content types:
+- Creative writing (songs, poems, raps)
+- Business documents (proposals, cover letters)
+- Educational content (summaries, blog posts)
+- Entertainment (riddles, jokes)
+
+**Formatting Instructions**: Each prompt clearly specifies:
+- The markdown syntax to use (`*text*` for italic, `**text**` for bold)
+- Minimum number of highlights required
+- Examples of proper formatting
+- Context for when highlighting should be applied
+
+**Realistic Scenarios**: The prompts simulate real-world use cases where markdown formatting is important for readability and emphasis.
+
+## Step 1: Import Required Dependencies
+
+Now let's start coding. First, we import the necessary modules from the Eval Protocol framework:
+
+```python
+import re
+from typing import Any, Dict, List, Optional
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import evaluation_test, default_single_turn_rollout_processor, evaluate
+```
+
+- `re`: Python's regex module for pattern matching
+- `EvaluateResult`: The result object that contains the evaluation score and reasoning
+- `Message`: Represents a message in the conversation
+- `evaluation_test`: Decorator that configures the evaluation test
+- `evaluate`: Function that runs the evaluation
+
+## Step 2: Create the Dataset Adapter
+
+We need to create an adapter that converts our dataset format to the Eval Protocol's expected format:
+
+```python
+def markdown_dataset_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert entries from markdown dataset to EvaluationRow objects.
+    """    
+    return [
+        EvaluationRow(
+            messages=[Message(role="user", content=row["prompt"])], 
+            ground_truth=str(row["num_highlights"])
+        )
+        for row in data
+    ]
+```
+
+This adapter:
+- Takes the raw dataset as a list of dictionaries
+- Converts each row to an `EvaluationRow` with a user message
+- Sets the ground truth to the required number of highlights
+- Returns the list of evaluation rows
+
+## Step 3: Define the Evaluation Function
+
+The evaluation function is the core logic that analyzes model responses:
+
+```python
+def markdown_format_evaluate(messages: List[Message], ground_truth: Optional[str]=None, **kwargs) -> EvaluateResult:
+    """Check if response contains required number of highlighted sections."""
+    # Extract the assistant's response from the conversation
+    assistant_response = messages[-1].content
+    
+    # Handle empty responses
+    if not assistant_response:
+        return EvaluateResult(score=0.0, reason="❌ No assistant response found")
+    
+    # Convert ground truth to required number of highlights
+    required_highlights = int(ground_truth)
+```
+
+**Key points:**
+- The function receives `messages` (the conversation history) and `ground_truth` (expected result)
+- We extract the last message (assistant's response) using `messages[-1].content`
+- We handle edge cases like empty responses
+- The `ground_truth` contains the required number of highlighted sections
+
+## Step 3: Implement the Analysis Logic
+
+Next, we implement the core logic to count highlighted sections:
+
+```python
+    # Count highlighted sections (**bold** or *italic*)
+    actual_count = 0
+    
+    # Find italic text patterns (*text*)
+    highlights = re.findall(r"\*[^\n\*]*\*", assistant_response)
+    
+    # Find bold text patterns (**text**)
+    double_highlights = re.findall(r"\*\*[^\n\*]*\*\*", assistant_response)
+    
+    # Count valid italic highlights (non-empty content)
+    for highlight in highlights:
+        if highlight.strip("*").strip():
+            actual_count += 1
+    
+    # Count valid bold highlights (non-empty content)
+    for highlight in double_highlights:
+        if highlight.removeprefix("**").removesuffix("**").strip():
+            actual_count += 1
+```
+
+**Regex patterns explained:**
+- `r"\*[^\n\*]*\*"`: Matches italic text between single asterisks
+  - `\*`: Literal asterisk
+  - `[^\n\*]*`: Any characters except newlines and asterisks
+  - `\*`: Closing asterisk
+- `r"\*\*[^\n\*]*\*\*"`: Matches bold text between double asterisks
+- We filter out empty highlights to ensure quality
+
+## Step 4: Generate the Evaluation Result
+
+Finally, we compare the actual count against requirements and return the result:
+
+```python
+    # Determine if the response meets the requirement
+    meets_requirement = actual_count >= required_highlights
+    
+    if meets_requirement:
+        return EvaluateResult(
+            score=1.0,
+            reason=f"✅ Found {actual_count} highlighted sections (required: {required_highlights})"
+        )
+    else:
+        return EvaluateResult(
+            score=0.0,
+            reason=f"❌ Only found {actual_count} highlighted sections (required: {required_highlights})"
+        )
+```
+
+**Result structure:**
+- `score`: 1.0 for success, 0.0 for failure
+- `reason`: Human-readable explanation with emojis for clarity
+
+## Step 5: Configure and Run the Test
+
+We use the `@evaluation_test` decorator to configure the evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
+    dataset_adapter=markdown_dataset_to_evaluation_row,
+    model=["accounts/fireworks/models/llama-v3p1-8b-instruct"],
+    input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    threshold_of_success=1.0,
+    rollout_processor=default_single_turn_rollout_processor,
+    num_runs=1
+)
+def test_markdown_highlighting_evaluation(input_dataset, input_params, model):
+    """Test markdown highlighting validation."""
+    return evaluate(input_dataset, markdown_format_evaluate)
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the JSONL file containing test cases
+- `dataset_adapter`: Function that converts raw dataset to EvaluationRow objects
+- `model`: The model to evaluate (Fireworks Llama model in this case)
+- `input_params`: Model parameters (temperature, max tokens)
+- `threshold_of_success`: Minimum score required to pass (1.0 = perfect score)
+- `rollout_processor`: Function that handles the conversation flow (default_single_turn_rollout_processor for single-turn evaluations)
+- `num_runs`: Number of times to run each test case
+
+This comprehensive dataset ensures that the evaluation tests the model's ability to:
+1. Understand markdown formatting instructions
+2. Apply formatting consistently across different content types
+3. Meet minimum requirements for highlighted sections
+4. Follow specific formatting patterns
+
+This example demonstrates how to create robust, reusable evaluations that can be integrated into CI/CD pipelines, model comparison workflows, and fine-tuning processes.
