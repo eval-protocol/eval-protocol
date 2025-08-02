@@ -2,23 +2,256 @@
 title: Specification
 ---
 
-## Data Models
-
 ### EvaluationRow
+
+The `EvaluationRow` is a unified data structure for a single evaluation unit that contains messages, tools, and evaluation results. This can represent either a single turn evaluation or a complete trajectory evaluation.
+
+```python
+class EvaluationRow(BaseModel):
+    # Core conversation data
+    messages: List[Message]
+    
+    # Tool and function call information
+    tools: Optional[List[Dict[str, Any]]]
+    
+    # Input-related metadata
+    input_metadata: Optional[InputMetadata]
+    
+    # Ground truth reference
+    ground_truth: Optional[str]
+    
+    # Unified evaluation result
+    evaluation_result: Optional[EvaluateResult]
+    
+    # LLM usage statistics
+    usage: Optional[CompletionUsage]
+```
+
+**Key Features:**
+- **Unified Format**: Serves as the canonical format for evaluation data across the system
+- **Dual Support**: Supports both row-wise batch evaluation and trajectory-based RL evaluation
+- **Metadata Integration**: Includes comprehensive input metadata for tracking and reproducibility
+- **Usage Tracking**: Captures token usage statistics from LLM calls during execution
 
 ### EvaluationTest
 
+The `EvaluationTest` represents a test configuration for evaluating models. While not explicitly defined as a separate class in the current implementation, evaluation tests are typically configured through:
+
+- **Dataset Configuration**: JSONL files containing test cases
+- **Model Configuration**: Model parameters and completion settings
+- **Evaluation Criteria**: Success thresholds and metrics
+- **Environment Configuration**: MCP server settings and tool definitions
+
 ### EvaluateResult
 
-## Classes
+The `EvaluateResult` represents the complete result of an evaluator, providing an overall score and component metrics.
+
+```python
+class EvaluateResult(BaseModel):
+    # Core evaluation data
+    score: float  # Overall evaluation score (0.0 to 1.0)
+    is_score_valid: bool  # Whether the overall score is valid
+    reason: Optional[str]  # Optional explanation for the overall score
+    
+    # Component metrics
+    metrics: Dict[str, MetricResult]  # Dictionary of component metrics
+    
+    # RL-specific fields
+    step_outputs: Optional[List[StepOutput]]  # Per-step base rewards for RL
+    
+    # Error handling
+    error: Optional[str]  # Optional error message if evaluation failed
+    
+    # Trajectory information
+    trajectory_info: Optional[Dict[str, Any]]  # Additional trajectory-level information
+    final_control_plane_info: Optional[Dict[str, Any]]  # Final control plane state
+```
+
+**Key Features:**
+- **Unified Model**: Serves both per-turn and per-trajectory evaluation scenarios
+- **Component Metrics**: Detailed breakdown through `MetricResult` objects
+- **RL Support**: Per-step base rewards via `step_outputs` for reinforcement learning
+- **Error Handling**: Graceful error reporting and validation
+- **Trajectory Info**: Additional metadata for trajectory-based evaluations
+
+### Additional Core Types
+
+#### Message
+Represents a chat message with trajectory evaluation support:
+
+```python
+class Message(BaseModel):
+    role: str
+    content: Optional[str] = ""
+    name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
+    function_call: Optional[FunctionCall] = None
+    control_plane_step: Optional[Dict[str, Any]] = None
+```
+
+#### MetricResult
+Result of a single metric evaluation:
+
+```python
+class MetricResult(BaseModel):
+    is_score_valid: bool = True
+    score: float  # Between 0.0 and 1.0
+    reason: str  # Explanation for the score
+```
+
+#### StepOutput
+Defines the base reward and other metrics for a single conceptual step within a rollout:
+
+```python
+class StepOutput(BaseModel):
+    step_index: Union[int, str]  # User-defined index for the step
+    base_reward: float  # Base reward calculated by the user's reward function
+    terminated: bool = False  # Whether the environment signaled termination
+    control_plane_info: Optional[Dict[str, Any]]  # Structured info from environment
+    metrics: Dict[str, Any] = Field(default_factory=dict)  # Optional custom metrics
+    reason: Optional[str]  # Optional explanation for the step's base reward
+```
 
 ### MCP Gym
 
+The `McpGym` class is the base class for MCP-Gym environments implementing the north star vision.
+
+```python
+class McpGym(ABC):
+    """
+    Base class for MCP-Gym environments implementing the north star vision.
+    
+    This class provides the universal adapter pattern for RL environments,
+    bridging training infrastructure, production MCP standards, and high-quality
+    environments through a clean, standardized interface.
+    
+    Key Design Principles:
+    - Data Plane: JSON tool calls/responses via MCP (state transitions/actions)
+    - Control Plane: Rewards/termination signals via MCP resources
+    - Environment Implementation: Single-process MCP server per environment
+    """
+```
+
+**Key Features:**
+- **Universal Adapter Pattern**: Bridges training infrastructure with production MCP standards
+- **Multi-Session Support**: Manages multiple concurrent sessions with stable session IDs
+- **Control Plane Endpoints**: Provides standardized endpoints for rewards, status, and info
+- **Tool Registration**: Automatic discovery and registration of environment tools
+- **Session Management**: Robust session handling with proper cleanup and state management
+
+**Core Methods:**
+- `_register_tools()`: Abstract method for registering environment-specific tools
+- `format_observation()`: Convert environment observations to JSON-serializable format
+- `run()`: Start the MCP server with specified transport
+- `_execute_environment_step()`: Execute a step in the environment
+- `_update_control_plane()`: Update control plane state with rewards and termination info
+
 ### Environment
+
+The `EnvironmentAdapter` class provides the interface for connecting environments to the MCP framework.
+
+```python
+class EnvironmentAdapter:
+    """
+    Environment adapter with default implementations.
+    
+    Users can either use this class directly by providing an env_class,
+    or inherit from it to customize specific methods for their environment.
+    This provides a clean separation between the MCP protocol layer
+    and the environment implementation.
+    """
+```
+
+**Key Features:**
+- **Default Implementations**: Works with most gymnasium-style and complex environments
+- **Flexible Configuration**: Supports custom configuration dictionaries
+- **Seed Support**: Reproducible environments through seed-based initialization
+- **Clean Interface**: Separates MCP protocol layer from environment implementation
+
+**Core Methods:**
+- `create_environment()`: Create and return a new environment instance
+- `create_environment_with_seed()`: Create environment with specific seed for reproducibility
+- `reset_environment()`: Reset environment to initial state
+- `step_environment()`: Execute one step in the environment
+- `close_environment()`: Clean up environment resources
+- `parse_action()`: Parse action string to environment-specific format
+- `format_observation()`: Format observation for MCP transmission
 
 ### Policy
 
-A policy is a model such as `gpt-4o` or `llama-3.1-8b`. In more advanced
-scenarios, a policy can be your own custom fine-tuned model.
+A policy is a model such as `gpt-4o` or `llama-3.1-8b`. In more advanced scenarios, a policy can be your own custom fine-tuned model.
 
+The `LiteLLMPolicy` class provides a unified implementation that works with ANY MCP environment via tool calling:
+
+```python
+class LiteLLMPolicy(LLMBasePolicy):
+    """
+    Unified LiteLLM policy implementation that works with ANY MCP environment via tool calling.
+    
+    Supports OpenAI, Anthropic, Fireworks AI
+    Includes built-in retry logic and caching.
+    NO environment-specific logic - everything comes from MCP tools and dataset prompts.
+    """
+```
+
+**Key Features:**
+- **Provider Agnostic**: Supports OpenAI, Anthropic, Fireworks AI, and other providers
+- **Built-in Caching**: Multiple cache types (memory, Redis, dual, S3, disk)
+- **Retry Logic**: Robust retry strategies with exponential backoff
+- **Tool Calling**: Native support for MCP tool calling
+- **Environment Agnostic**: No environment-specific logic - everything from MCP tools
+
+**Specialized Implementations:**
+- `OpenAIPolicy`: OpenAI-specific policy implementation
+- `AnthropicPolicy`: Anthropic Claude-specific policy implementation  
+- `FireworksPolicy`: Fireworks AI-specific policy implementation
+- `LocalPolicy`: Local model policy implementation
+
+**Core Capabilities:**
+- **Multi-Tool Support**: Handle multiple tool calls per turn
+- **Conversation History**: Maintain context across interactions
+- **Error Handling**: Graceful handling of API failures and retries
+- **Caching**: Response caching for improved performance and cost reduction
+- **Logging**: Comprehensive logging for debugging and analysis
+
+### Additional Core Classes
+
+#### MCPSession
+Represents a single MCP session with an environment:
+
+```python
+@dataclass
+class MCPSession:
+    session_id: str
+    base_url: str
+    seed: Optional[int]
+    model_id: str
+    dataset_row: Optional[DatasetRow] = None
+    terminated: bool = False
+    last_observation: Any = None
+    _exit_stack: Optional[Any] = None
+    _mcp_session: Optional[Any] = None
+```
+
+#### Trajectory
+Represents a complete rollout trajectory:
+
+```python
+@dataclass
+class Trajectory:
+    session: MCPSession
+    observations: List[Any]
+    actions: List[str]
+    rewards: List[float]
+    terminated: bool
+    total_reward: float
+    steps: int
+    duration: float
+    control_plane_steps: List[Dict[str, Any]]
+    control_plane_summary: Dict[str, Any]
+    termination_reason: str
+    conversation_history: List[Dict[str, Any]]
+    usage: Dict[str, int] = field(default_factory=dict)
+```
 
