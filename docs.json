@@ -1,17 +1,25 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "maple",
   "name": "Eval Protocol",
   "colors": {
     "light": "#3B82F6",
     "dark": "#1E293B",
     "primary": "#3B82F6"
   },
-  "favicon": "/favicon.svg",
+  "favicon": {
+    "light": "assets/favicon-light.png",
+    "dark": "assets/favicon-dark.png"
+  },
+  "logo": {
+    "light": "assets/logo-light.png",
+    "dark": "assets/logo-dark.png"
+  },
   "navigation": {
     "pages": [
       "introduction",
       "specification",
+      "why",
       {
         "group": "Tutorials",
         "pages": ["quickstart"]
