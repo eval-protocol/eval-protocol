@@ -8,8 +8,8 @@
     "primary": "#3B82F6"
   },
   "favicon": {
-    "light": "assets/favicon-light.png",
-    "dark": "assets/favicon-dark.png"
+    "light": "/assets/favicon-light.png",
+    "dark": "/assets/favicon-dark.png"
   },
   "logo": {
     "light": "assets/logo-light.png",
