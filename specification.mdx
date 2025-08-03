@@ -33,6 +33,11 @@ class EvaluationRow(BaseModel):
 - **Metadata Integration**: Includes comprehensive input metadata for tracking and reproducibility
 - **Usage Tracking**: Captures token usage statistics from LLM calls during execution
 
+### Dataset
+
+A list of `EvaluationRow`s. When saved to file, it is a JSONL file where each
+line is a JSON-encoded `EvaluationRow`.
+
 ### EvaluationTest
 
 The `EvaluationTest` represents a test configuration for evaluating models. While not explicitly defined as a separate class in the current implementation, evaluation tests are typically configured through:
