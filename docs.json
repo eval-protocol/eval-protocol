@@ -25,7 +25,13 @@
         "group": "Tutorials",
         "pages": [
           "tutorial/single-turn-evals",
-          "tutorial/multi-turn-evals-with-mcp"
+          {
+            "group": "Multi-turn evals",
+            "pages": [
+              "tutorial/multi-turn-evals-user-simulation",
+              "tutorial/multi-turn-evals-per-step-rewards"
+            ]
+          }
         ]
       },
       {
