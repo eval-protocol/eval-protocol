@@ -23,15 +23,18 @@
       "principles",
       {
         "group": "Tutorials",
-        "pages": ["single-turn-evals", "multi-turn-evals"]
+        "pages": [
+          "tutorial/single-turn-evals",
+          "tutorial/multi-turn-evals-with-mcp"
+        ]
       },
       {
         "group": "Examples",
         "pages": [
-          "examples/tau-bench",
-          "examples/frozen-lake",
-          "examples/lunar-lander",
-          "examples/gsm8k"
+          "example/tau-bench",
+          "example/frozen-lake",
+          "example/lunar-lander",
+          "example/gsm8k"
         ]
       }
     ]
