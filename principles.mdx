@@ -32,20 +32,30 @@ EP builds on existing, proven standards rather than creating new ones:
 
 This ensures EP works with your existing tools and workflows.
 
-## 4. **Performance at Scale**
+## 4. **Non-Prescriptive Architecture**
+
+EP does not prescribe how your AI systems work:
+- **Flexible Rollout Processors**: Use default processors for simple LLM calls or LLM + MCP calls, or bring your own custom implementations
+- **Custom Integration**: Write rollout processors in Python or call out to external APIs to produce evaluation inputs
+- **System Agnostic**: Works with any AI architecture, from simple chat completions to complex multi-agent systems
+- **Extensible Design**: Adapt EP to your specific use case rather than adapting your system to EP
+
+This flexibility ensures EP can evaluate any AI system, regardless of its internal architecture or deployment strategy.
+
+## 5. **Performance at Scale**
 
 EP is designed for production workloads:
 - **Parallel Execution**: Efficient parallel processing for large evaluation runs
 - **Optimized for Multi-turn**: Specialized handling for complex agent evaluations
 
-## 5. **Evolutionary Architecture**
+## 6. **Evolutionary Architecture**
 
 EP grows with your AI development journey:
 - **Single-turn to Multi-turn**: Start with simple model comparisons, scale to complex agent evaluations
 - **Static to Dynamic**: Begin with curated datasets, evolve to interactive environments
 - **Evaluation to Training**: Use the same rubrics for benchmarking and RL dataset generation
 
-## 6. **Reinforcement Learning Ready**
+## 7. **Reinforcement Learning Ready**
 
 EP is designed to bridge the gap between evaluation and training:
 - **Per-step Rewards**: Structured feedback for RL training
