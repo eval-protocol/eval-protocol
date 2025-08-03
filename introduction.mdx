@@ -7,19 +7,23 @@ import { Workflow } from "/snippets/workflow.jsx"
 
 EP is an [open specification](/specification), [Python
 SDK](https://github.com/eval-protocol/python-sdk), and [pytest
-plugin](https://docs.pytest.org/en/stable/how-to/writing_plugins.html) built to
-standardize how developers author evals for large language model (LLM)
-applications. It ensures that writing evals, storing traces, and saving eval
-results follow a consistent pattern, and can be reused across various tasks like
-model selection, prompt/context engineering, CI/CD, and fine-tuning for
-real-world use cases—from tricky markdown generation and data extraction tasks
-to complex customer service agents.
+plugin](https://docs.pytest.org/en/stable/how-to/writing_plugins.html) that
+provides a standardized way to write evaluations for large language model (LLM)
+applications. Start with simple single-turn evals for model selection and prompt
+engineering, then scale up to complex multi-turn reinforcement learning (RL) for
+agents using Model Context Protocol (MCP). EP ensures consistent patterns for
+writing evals, storing traces, and saving results—enabling you to build
+sophisticated agent evaluations that work across real-world scenarios, from
+markdown generation tasks to customer service agents with tool calling
+capabilities.
 
 <Workflow />
 
-For example, here is an evaluation function that checks if model responses contain the required number of highlighted sections (like **bold** or *italic* text):
+For example, here is a standard eval function for a single-turn eval that checks
+if model responses contain the required number of highlighted sections (like
+**bold** or *italic* text):
 
-```python
+```python test_markdown_format.py
 def markdown_format_evaluate(messages: List[Message], ground_truth: Optional[str]=None, **kwargs) -> EvaluateResult:
     """Check if response contains required number of highlighted sections."""
     assistant_response = messages[-1].content
@@ -49,7 +53,9 @@ def markdown_format_evaluate(messages: List[Message], ground_truth: Optional[str
     )
 ```
 
-For a complete step-by-step tutorial with detailed explanations, dataset examples, and configuration options, see our [Single-turn Evals](/single-turn-evals) guide.
+For a complete step-by-step tutorial with detailed explanations, dataset
+examples, and configuration options, see our [Single-turn
+Evals](/single-turn-evals) guide.
 
 For a more advanced example that includes MCP and user simulation, check out our
 implementation of [𝜏²-bench](#), a benchmark for evaluating conversational

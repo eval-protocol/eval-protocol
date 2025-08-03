@@ -2,12 +2,63 @@
 title: Why Eval Protocol?
 ---
 
-AI app quality is a complex problem to solve. There are many different inputs
-into creating better AI systems: prompts, model, data, environment, and the
-evals themselves. Eval Protocol was created to help developers scale their evals
-as their AI app requirements grow in complexity.
+AI quality is a hard problem. Building a great AI system isn't just about using a better model—it's about making better decisions across prompts, data, model versions, tool usage, and user workflows. To do that well, you need great *evals*.
 
-In the beginning of building an AI application, its convenient to write evals in
-ad-hoc eval scripts like the following:
+**Eval Protocol (EP)** was created to help developers treat evaluation as a core part of the development loop, not an afterthought. Whether you're benchmarking single-turn tasks or training complex multi-turn agents, EP gives you a consistent way to define, run, and monitor evaluations—at every stage of system development.
 
-TODO
+### Evaluations as Code
+
+At the heart of EP is a simple but powerful idea: **rubrics are just pytest functions**.
+
+Each rubric specifies how to run a model on a task and how to score the result. These functions can be:
+
+- Parameterized over models, datasets, or configurations
+- Composed together to run controlled experiments
+- Used to generate datasets for *supervised fine-tuning* or *reinforcement learning*
+
+Because rubrics are plain Python, developers can leverage the full testing ecosystem—assertions, fixtures, parametrization—while still producing rich, structured evaluation results that can be stored, visualized, and reused across different tasks and workflows.
+
+### One Format, Two Modes
+
+EP supports both static and dynamic evaluation:
+
+1. **Static Evals**  
+   Evaluate models on curated test sets (e.g., prompt-response pairs with expected outputs). Use this to compare models, debug regressions, or gate releases. These evals can be versioned and automatically run in CI.
+
+2. **Dynamic Evals**  
+   Evaluate agents as they interact with tools or environments over multiple steps. Each step logs the observation, action (e.g., a tool call), and feedback from the rubric. These reward traces can be used for reinforcement learning (e.g., PPO or GRPO), or analyzed post-hoc to improve agent design.
+
+The same rubric function can be reused in both modes—turning one-off tests into feedback loops that power real learning.
+
+### Rubrics Are the New Prompts
+
+Just as prompt engineering shapes model behavior before inference, *rubric engineering* shapes behavior after the fact—by defining how to measure success.
+
+EP makes it easy to iterate on rubrics just like prompts. Rubrics can return:
+
+- Scalar rewards (for RL)
+- Structured error information
+- Partial credit scoring (for tasks like math, tool use, etc.)
+- Assertions and failure modes
+
+This makes it straightforward to express domain-specific quality measures while protecting against reward hacking and brittle metrics.
+
+### Reference: RL for Agents
+
+In his [talk on reinforcement learning for agents](https://youtu.be/JIsgyk0Paic), Will Brown emphasizes that future agents won't emerge from prompt chaining alone—they require *feedback loops*. He argues that capabilities like tool use and self-correction only arise when models are trained in environments with structured rewards and rich instrumentation.
+
+EP was designed with that exact workflow in mind: rubrics that double as rewards, environments that log every step, and infrastructure that makes it trivial to go from test case to fine-tuning dataset to full RL training run.
+
+### Build the Feedback Loops You Need
+
+With EP, you get one evaluation framework that supports:
+
+- ✅ Offline benchmarking (for model selection and quality tracking)
+- ✅ Dataset generation (for SFT and RLHF)
+- ✅ Structured instrumentation (for tool-using agents and planners)
+- ✅ Reward shaping and debugging (for custom training workflows)
+- ✅ CI integration (so regressions are caught early)
+
+You define your evals once—as code—and reuse them everywhere. That's how today's brittle AI pipelines become tomorrow's self-improving agents.
+
+EP is for developers who want to turn evaluations into part of their training loop—not just their test suite.

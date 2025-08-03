@@ -2,7 +2,7 @@
 title: Single-turn evals
 description: 'Create your first single-turn eval'
 ---
-Let's walk through creating an evaluation that checks if model responses contain the required number of highlighted sections (like **bold** or *italic* text). This example demonstrates the core concepts of writing evaluations with Eval Protocol.
+Let's walk through creating an evaluation that checks if model responses contain the required number of highlighted sections (like **bold** or *italic* text). This example demonstrates the core concepts of writing evaluations with Eval Protocol (EP).
 
 ## Understanding the Dataset
 
@@ -67,7 +67,7 @@ Each entry in the dataset contains:
 
 ## Step 1: Import Required Dependencies
 
-Now let's start coding. First, we import the necessary modules from the Eval Protocol framework:
+Now let's start coding. First, we import the necessary modules from the EP framework:
 
 ```python
 import re
@@ -85,7 +85,7 @@ from eval_protocol.pytest import evaluation_test, default_single_turn_rollout_pr
 
 ## Step 2: Create the Dataset Adapter
 
-We need to create an adapter that converts our dataset format to the Eval Protocol's expected format:
+We need to create an adapter that converts our dataset format to the EP's expected format:
 
 ```python
 def markdown_dataset_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:

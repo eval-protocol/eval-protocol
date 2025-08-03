@@ -7,8 +7,8 @@ API and MCP.
 
 EP is designed to be easy to use through your IDE as evals are simply pytest
 functions. The decorator helps you parameterize your evals, store metadata,
-standardize your evals across teams. And the data model has good defaults for
-searching through your dataset while flexible enough to support complex
+and standardize your evals across teams. The data model has good defaults for
+searching through your dataset while being flexible enough to support complex
 environments.
 
 ### Built for Reusability and Growth
@@ -21,18 +21,19 @@ compatible and reusable as your needs evolve.
 ### Fast
 
 Evals can take a long time to run, especially if you have multi-turn agents.
-EP's Python SDK is designed to take advantage of concurrency to ensure that you
-spend less time waiting for evals to run.
+EP's Python SDK is designed to efficiently run evals in parallel to ensure that
+you spend less time waiting for evals to run.
 
 ### Supports Multi-turn Agents
 
-EP's Python SDK helps complex multi-turn agent evals by providing a way to
-structured but flexible way to author multi-turn rollouts with per-step rewards.
+EP's Python SDK helps with complex multi-turn agent evals by providing a
+structured but flexible way to author multi-turn rollouts with per-step rewards,
+user simulation, or environment simulation.
 
 ### Saves time throughout your SDLC from local experiments to fine-tuning your own models
 
 Evals are essential for your AI application from day 1 to millions of users.
 They are also the single thread that connects your local experiments to
-eventualy fine-tuning your own production models. We designed EP to be helpful
+eventually fine-tuning your own production models. We designed EP to be helpful
 in the short-term with tooling, and in the long-term with a standard for evals
 so you can build a proper data flywheel.
