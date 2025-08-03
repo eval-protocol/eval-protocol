@@ -1,48 +1,60 @@
-### Use existing standards
+---
+title: Principles
+sidebarTitle: Principles
+---
 
-EP relies on existing data models and standards like OpenAI's Chat Completions
-API and MCP.
+Eval Protocol (EP) is built on these fundamental principles that guide every design decision and feature:
 
-### Great Developer Experience
+## 1. **Evaluations as Code**
 
-EP is designed to be easy to use through your IDE as evals are simply pytest
-functions. The decorator helps you parameterize your evals, store metadata,
-and standardize your evals across teams. The data model has good defaults for
-searching through your dataset while being flexible enough to support complex
-environments.
+EP treats evaluations as first-class code—not configuration files or ad-hoc scripts. Every evaluation is a pytest function that can be:
+- Parameterized and composed
+- Version controlled and tested
+- Integrated into CI/CD pipelines
+- Reused across different models and datasets
 
-### Built for Reusability and Growth
+This approach ensures evaluations are maintainable, debuggable, and evolve with your codebase.
 
-EP is designed so that you can use the same evaluation specification and dataset
-format across your entire AI development lifecycle—from simple single-turn evals
-to building complex, multi-turn RL datasets. This ensures your work remains
-compatible and reusable as your needs evolve.
+## 2. **Developer Experience First**
 
-### Fast
+EP prioritizes developer productivity through:
+- **Simple Integration**: Write evals as pytest functions with familiar decorators
+- **Rich Metadata**: Automatic parameterization, result storage, and tooling
+- **Flexible Data Models**: Good defaults with extensibility for complex scenarios
+- **IDE Support**: Full IntelliSense, debugging, and testing integration
 
-Evals can take a long time to run, especially if you have multi-turn agents.
-EP's Python SDK is designed to efficiently run evals in parallel to ensure that
-you spend less time waiting for evals to run.
+## 3. **Standards-Based Interoperability**
 
-### Supports Multi-turn Agents
+EP builds on existing, proven standards rather than creating new ones:
+- **OpenAI Chat Completions API**: Compatible with industry-standard model interfaces
+- **Model Context Protocol (MCP)**: Leverages established tool-calling standards
+- **pytest**: Integrates with the Python testing ecosystem you already know
 
-EP's Python SDK helps with complex multi-turn agent evals by providing a
-structured but flexible way to author multi-turn rollouts with per-step rewards,
-user simulation, or environment simulation.
+This ensures EP works with your existing tools and workflows.
 
-### Integrate with CI
+## 4. **Performance at Scale**
 
-Easily integrate with CI to improve SDLC and catch regressions early.
+EP is designed for production workloads:
+- **Parallel Execution**: Efficient parallel processing for large evaluation runs
+- **Optimized for Multi-turn**: Specialized handling for complex agent evaluations
 
-### Introduce Developers to RL
+## 5. **Evolutionary Architecture**
 
-Evals are essential for your AI application, from day one to millions of users.
+EP grows with your AI development journey:
+- **Single-turn to Multi-turn**: Start with simple model comparisons, scale to complex agent evaluations
+- **Static to Dynamic**: Begin with curated datasets, evolve to interactive environments
+- **Evaluation to Training**: Use the same rubrics for benchmarking and RL dataset generation
 
-We also believe RL is a superpower for AI applications. AI application
-developers are already writing evals and performing "manual" RL through trial and
-error or prompt engineering. EP should help developers structure evals in a way
-that allows them to eventually use RL to gain an unfair advantage over their
-competitors.
+## 6. **Reinforcement Learning Ready**
 
-In short, be helpful in the short term with tooling for evals, and in the
-long term with a standard for evals so you can build a proper data flywheel.
+EP is designed to bridge the gap between evaluation and training:
+- **Per-step Rewards**: Structured feedback for RL training
+- **Environment Simulation**: Realistic agent testing scenarios
+- **User Simulation**: Automated interaction testing
+- **Data Flywheel**: Turn evaluations into training data
+
+The goal is to help developers build AI systems that improve through feedback loops, not just prompt engineering.
+
+---
+
+**In essence**: EP transforms evaluations from one-off tests into the foundation of your AI development loop—enabling you to build systems that learn and improve over time.
