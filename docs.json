@@ -24,12 +24,18 @@
       {
         "group": "Tutorials",
         "pages": [
-          "tutorial/single-turn-evals",
           {
-            "group": "Multi-turn evals",
+            "group": "Single-turn eval",
             "pages": [
-              "tutorial/multi-turn-evals-user-simulation",
-              "tutorial/multi-turn-evals-per-step-rewards"
+              "tutorial/single-turn-eval-static",
+              "tutorial/single-turn-eval-agentic"
+            ]
+          },
+          {
+            "group": "Multi-turn eval",
+            "pages": [
+              "tutorial/multi-turn-eval-user-simulation",
+              "tutorial/multi-turn-eval-per-step-rewards"
             ]
           }
         ]
