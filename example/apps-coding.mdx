@@ -1,0 +1,446 @@
+---
+title: APPS Coding Evaluation
+description: 'Evaluate competitive programming abilities using APPS dataset with comprehensive test suites'
+sidebarTitle: APPS Coding Evaluation
+---
+
+This example demonstrates how to create comprehensive competitive programming evaluations using the APPS (Automated Programming Progress Standard) dataset from CodeParrot. The evaluation tests AI models' ability to solve complex algorithmic challenges similar to those found in competitive programming contests.
+
+<Note>
+You can find the complete code for this example at [test_apps_coding.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_apps_coding.py).
+</Note>
+
+## Understanding APPS Coding Evaluation
+
+APPS coding evaluation assesses a model's ability to:
+- **Solve complex algorithmic problems**: Handle competitive programming challenges with multiple constraints
+- **Implement sophisticated logic**: Design algorithms for graph theory, dynamic programming, and data structures
+- **Handle multiple test cases**: Pass comprehensive test suites with edge cases and boundary conditions
+- **Work with competitive formats**: Process standard input/output formats used in programming contests
+
+Unlike basic coding tasks that test simple function implementation, APPS evaluation tests **advanced algorithmic thinking and competitive programming skills** - essential for building AI systems capable of complex problem-solving.
+
+## Understanding the APPS Dataset Structure
+
+The APPS dataset from CodeParrot contains 10,000 competitive programming problems sourced from platforms like Codeforces, AtCoder, Kattis, and Codewars, providing realistic algorithmic challenges at three difficulty levels.
+
+### Dataset Format
+
+Each entry in the APPS dataset contains:
+
+- **`problem_id`**: Unique identifier for the problem
+- **`question`**: Detailed problem description with constraints, examples, and input/output format
+- **`solutions`**: Array of reference Python solutions that correctly solve the problem
+- **`input_output`**: JSON containing comprehensive test cases with inputs and expected outputs
+- **`difficulty`**: Classification as "introductory", "interview", or "competition"
+- **`url`**: Source URL of the original problem from competitive programming platforms
+- **`starter_code`**: Optional template code to begin implementation
+
+### Example APPS Dataset Entry
+
+**Competitive Programming Problem:**
+```json
+{
+  "id": 1,
+  "question": "Mikhail walks on a Cartesian plane. He starts at the point $(0, 0)$, and in one move he can go to any of eight adjacent points. For example, if Mikhail is currently at the point $(0, 0)$, he can go to any of the following points in one move: $(1, 0)$; $(1, 1)$; $(0, 1)$; $(-1, 1)$; $(-1, 0)$; $(-1, -1)$; $(0, -1)$; $(1, -1)$.\n\nIf Mikhail goes from the point $(x1, y1)$ to the point $(x2, y2)$ in one move, and $x1 \ne x2$ and $y1 \ne y2$, then such a move is called a diagonal move.\n\nMikhail has $q$ queries. For the $i$-th query Mikhail's target is to go to the point $(n_i, m_i)$ from the point $(0, 0)$ in exactly $k_i$ moves...",
+  "solutions": [
+    "q=int(input())\n\nfor e in range(q):\n    x,y,k=list(map(int,input().split()))\n    x,y=abs(x),abs(y)\n    x,y=max(x,y),min(x,y)\n    # ... complete solution"
+  ],
+  "input_output": {
+    "inputs": [
+      "3
+      2 2 3
+      4 3 7
+      10 1 9"
+    ],
+    "outputs": [
+      "1
+      6
+      -1"
+    ]
+  },
+  "difficulty": "interview",
+  "url": "https://codeforces.com/problemset/problem/1036/B",
+  "starter_code": ""
+}
+```
+
+### Dataset Characteristics
+
+**Problem Complexity**: APPS problems feature advanced algorithmic concepts:
+- **Graph algorithms**: Shortest paths, minimum spanning trees, graph traversal
+- **Dynamic programming**: Optimization problems with overlapping subproblems
+- **Data structures**: Advanced usage of heaps, trees, and custom data structures
+- **Mathematical algorithms**: Number theory, combinatorics, and geometric problems
+- **String algorithms**: Pattern matching, string manipulation, and parsing
+
+**Difficulty Progression**:
+- **Introductory (2,889 problems)**: Basic algorithmic concepts and simple implementations
+- **Interview (3,592 problems)**: Common coding interview problems with moderate complexity
+- **Competition (572 problems)**: Advanced competitive programming challenges
+
+**Test Coverage**: Comprehensive testing ensures robust evaluation:
+- **Multiple test cases**: Average of 21.2 test cases per problem
+- **Edge cases**: Boundary conditions and corner cases included
+- **Performance constraints**: Problems include time and memory limits
+- **Real contest data**: Authentic test cases from actual programming competitions
+
+<Note>
+**Sample Dataset**: The EP python-sdk includes a sample APPS dataset with just 3 problems for testing and demonstration purposes. The full CodeParrot APPS dataset contains 10,000 problems across all difficulty levels.
+</Note>
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework:
+
+```python
+import json
+from typing import Any, Dict, List
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.rewards.apps_coding_reward import evaluate_apps_solution
+```
+
+- `json`: For parsing the complex input/output test case data
+- `typing`: Python's typing module for type hints
+- `EvaluateResult`, `EvaluationRow`, `Message`: Core EP data structures
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
+- `evaluate_apps_solution`: Specialized function for evaluating APPS competitive programming solutions
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the APPS dataset format to the EP's expected format:
+
+```python
+def apps_dataset_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert entries from APPS dataset to EvaluationRow objects.
+    
+    This adapter extracts the problem statement and stores the comprehensive
+    test cases (input/output pairs) as ground truth for evaluation.
+    
+    Args:
+        data: List of APPS dataset entries with problem descriptions and test cases
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    return [
+        EvaluationRow(
+            messages=[Message(role="user", content=row["question"])],
+            ground_truth=row["input_output"]
+        )
+        for row in data
+    ]
+```
+
+This adapter:
+- Uses the complete problem description as the user message
+- Stores the JSON test case data as ground truth for comprehensive evaluation
+- Preserves the complex input/output format required for competitive programming
+- Creates proper Message objects for the evaluation framework
+
+**Key transformations:**
+- **Problem preservation**: Maintains full problem statements with constraints and examples
+- **Test case handling**: Preserves multiple test cases with complex input/output formats
+- **Ground truth format**: Keeps JSON structure for sophisticated evaluation logic
+
+## Step 3: Configure and Run the Evaluation
+
+We use the `@evaluation_test` decorator to configure the APPS evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/apps_sample_dataset.jsonl"],
+    dataset_adapter=apps_dataset_to_evaluation_row,
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    threshold_of_success=0.33,
+    rollout_processor=default_single_turn_rollout_processor,
+    num_runs=1,
+    mode="pointwise",
+)
+def test_apps_code_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """
+    Evaluation function that tests APPS coding problems using evaluate_apps_solution.
+
+    Args:
+        row: EvaluationRow containing the conversation messages and ground_truth as JSON string
+    
+    Returns:
+        EvaluationRow with the evaluation result
+    """
+    # Use evaluate_apps_solution directly
+    result = evaluate_apps_solution(
+        messages=row.messages,
+        ground_truth=row.ground_truth,
+    )
+    
+    # Set the evaluation result on the row
+    row.evaluation_result = result
+    
+    return row
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the APPS dataset JSONL file
+- `model`: The model to evaluate (uses a capable model for complex problems)
+- `rollout_input_params`: Model parameters with higher token limit for complex solutions
+- `threshold_of_success`: 33% success rate threshold (competitive programming is challenging)
+- `mode`: `pointwise` for evaluating individual problems independently
+- `dataset_adapter`: Function that converts APPS format to EvaluationRow objects
+- `rollout_processor`: Uses default single-turn processor
+
+**Evaluation process:**
+1. **Problem presentation**: Present the full competitive programming problem to the model
+2. **Solution generation**: Model generates a complete algorithmic solution
+3. **Code extraction**: Extract Python code from the model's response
+4. **Comprehensive testing**: Run solution against all test cases in the problem
+5. **Pass rate calculation**: Calculate percentage of test cases passed
+
+## Core Functions Explained
+
+### `evaluate_apps_solution` Function
+
+The `evaluate_apps_solution` function is a specialized evaluation function designed for competitive programming problems that handles complex test case execution and scoring.
+
+**Key Features:**
+- **Code extraction**: Identifies and extracts Python code from model responses
+- **Test case parsing**: Processes JSON test case data with multiple input/output pairs
+- **Secure execution**: Runs code safely with timeouts and resource limitations
+- **Comprehensive scoring**: Calculates pass rates across all test cases
+- **Error handling**: Provides detailed feedback on compilation and runtime errors
+- **Competitive format support**: Handles standard input/output format used in contests
+
+**Function Signature:**
+```python
+def evaluate_apps_solution(
+    messages: List[Message], 
+    ground_truth: Optional[str], 
+    **kwargs
+) -> EvaluateResult:
+```
+
+**Parameters:**
+- `messages`: List of conversation messages (problem statement from user, solution from assistant)
+- `ground_truth`: JSON string containing test cases with inputs and expected outputs
+- `**kwargs`: Additional parameters including execution timeout settings
+
+**Return Value:**
+- `EvaluateResult` with pass rate score (0.0 to 1.0) and detailed metrics
+
+### Implementation Details
+
+The `evaluate_apps_solution` function implements a comprehensive evaluation pipeline with robust security and error handling:
+
+**1. Code Extraction Process:**
+```python
+# Extract Python code from model response
+code_solution = _extract_python_code(raw_solution_content)
+
+# Handles various response formats:
+# - Markdown code blocks: ```python ... ```
+# - Inline code snippets  
+# - Mixed text and code responses
+# - Removes verbose explanations and comments
+```
+
+**2. Ground Truth Processing:**
+```python
+# Parse JSON test case data
+if isinstance(ground_truth, str):
+    in_outs = json.loads(ground_truth)  # Parse JSON string
+elif isinstance(ground_truth, dict):
+    in_outs = ground_truth  # Already parsed by JSONL loader
+
+# Validate required structure
+assert "inputs" in in_outs and "outputs" in in_outs
+```
+
+**3. Secure Test Execution:**
+The evaluation uses sandboxed execution with comprehensive security measures:
+
+```python
+# Force standard input execution path and prepare secure environment
+in_outs_for_check = in_outs.copy()
+if "fn_name" in in_outs_for_check:
+    del in_outs_for_check["fn_name"]  # Use stdin/stdout testing
+
+# For each test case in the problem:
+for i, (test_input, expected_output) in enumerate(zip(inputs, outputs)):
+    # Prepare secure execution environment
+    wrapped_code = f"""
+import sys
+sys.setrecursionlimit(6*10**5)
+{standard_imports}  # Common competitive programming imports
+
+{user_generated_code}
+"""
+    
+    # Execute in isolated subprocess with resource limits
+    process = subprocess.run(
+        [sys.executable, "-c", wrapped_code],
+        input=test_input,
+        capture_output=True,
+        timeout=timeout,
+        text=True
+    )
+    
+    # Compare outputs and record result
+    if process.returncode == 0:
+        actual_output = process.stdout.strip()
+        results.append(actual_output == expected_output.strip())
+    else:
+        results.append(False)  # Runtime error
+```
+
+**Security Features:**
+- **Sandboxed execution**: Code runs in isolated subprocess with resource limits
+- **Standard I/O redirection**: Test inputs via stdin, outputs captured from stdout  
+- **Security restrictions**: File system access, network operations, and dangerous imports disabled
+- **Resource monitoring**: Memory usage, CPU time, and execution duration tracked
+- **Timeout enforcement**: Long-running or infinite loops automatically terminated
+
+**4. Scoring and Error Analysis:**
+```python
+# Calculate pass rate from results
+actual_results = results_list  # List of True/False for each test case
+num_tests = len(actual_results)
+passed_count = sum(1 for res in actual_results if res is True)
+score = float(passed_count) / num_tests
+
+# Process execution metadata for detailed error reporting
+if exec_metadata_list:
+    if len(exec_metadata_list) == 1 and exec_metadata_list[0].get("error"):
+        # Global compilation error
+        reason_msg += f" Execution Error: {exec_metadata_list[0]['error']}"
+    elif score == 0.0 and exec_metadata_list[0].get("error_message") == "Wrong Answer":
+        # Detailed failure analysis with specific test case details
+        first_fail_meta = exec_metadata_list[0]
+        reason_msg += (
+            f". First fail details: Inputs: {first_fail_meta.get('inputs', 'N/A')}, "
+            f"Expected: {first_fail_meta.get('expected', 'N/A')}, "
+            f"Got: {first_fail_meta.get('output', 'N/A')}"
+        )
+```
+
+**Error Handling Hierarchy:**
+1. **Code extraction failure**: Score 0.0 - No valid Python code found
+2. **Compilation errors**: Score 0.0 - Syntax errors prevent execution
+3. **Runtime errors**: Per-test-case failure - Exceptions during execution  
+4. **Timeout errors**: Per-test-case failure - Exceeded time limits
+5. **Wrong output**: Per-test-case failure - Incorrect results but valid execution
+6. **Perfect execution**: Score 1.0 - All test cases pass with correct outputs
+
+**Result Types:**
+- **True**: Test case passed with correct output
+- **False**: Test case failed (wrong output)
+- **-1**: Runtime error or timeout
+- **-2**: Compilation error
+
+**Example Evaluation Flow:**
+```python
+# Problem: Mikhail's diagonal moves (from example above)
+# Model generates solution
+result = evaluate_apps_solution(
+    messages=[Message(role="user", content=problem_description)],
+    ground_truth='{"inputs": ["3\\n2 2 3\\n4 3 7\\n10 1 9\\n"], "outputs": ["1\\n6\\n-1\\n"]}'
+)
+
+# Result might be:
+# EvaluateResult(
+#     score=1.0,  # All test cases passed
+#     reason="Passed 1/1 test cases",
+#     metrics={
+#         "pass_rate": MetricResult(score=1.0, reason="1/1"),
+#         "execution_metadata": MetricResult(...)
+#     }
+# )
+```
+
+## Evaluation Scenarios and Results
+
+The APPS coding evaluation handles various competitive programming scenarios:
+
+### Perfect Solution (Score: 1.0)
+**Scenario**: Model correctly solves all test cases
+```python
+# Problem: Mikhail's diagonal moves
+# Model provides optimal solution using coordinate geometry
+q = int(input())
+for _ in range(q):
+    x, y, k = list(map(int, input().split()))
+    x, y = abs(x), abs(y)
+    # ... correct algorithm implementation
+    # Handles all coordinate movement constraints
+
+# Result: ✅ Passed 3/3 test cases (100% success rate)
+```
+
+### Partial Solution (Score: 0.67)
+**Scenario**: Model solves most test cases but fails on edge cases
+```python
+# Problem: Mikhail's diagonal moves  
+# Model has correct main logic but misses boundary condition
+q = int(input())
+for _ in range(q):
+    x, y, k = list(map(int, input().split()))
+    # ... mostly correct implementation
+    # Fails on impossible movement case
+
+# Result: ⚠️ Passed 2/3 test cases (67% success rate)
+```
+
+### Algorithmic Error (Score: 0.0)
+**Scenario**: Model uses incorrect algorithm approach
+```python
+# Problem: Mikhail's diagonal moves
+# Model uses incorrect movement calculation
+q = int(input())
+for _ in range(q):
+    x, y, k = list(map(int, input().split()))
+    # Incorrect approach - doesn't consider diagonal optimization
+    print(k)  # Always outputs k regardless of constraints
+
+# Result: ❌ Passed 0/3 test cases - Wrong algorithmic approach
+```
+
+### Timeout Error (Score: 0.0)
+**Scenario**: Model solution exceeds time limits
+```python
+# Problem: Mikhail's diagonal moves
+# Model uses inefficient brute force instead of mathematical approach
+q = int(input())
+for _ in range(q):
+    x, y, k = list(map(int, input().split()))
+    # Simulates all possible paths - exponential complexity
+    # Times out on larger coordinate values
+
+# Result: ❌ Execution timeout - Algorithm too slow for constraints
+```
+
+### Compilation Error (Score: 0.0)
+**Scenario**: Model generates syntactically incorrect code
+```python
+# Problem: Mikhail's diagonal moves
+# Model has syntax errors
+q = int(input())
+for _ in range(q)  # Missing colon
+    x, y, k = list(map(int, input().split()))
+    # ... rest of solution
+
+# Result: ❌ Compilation error: SyntaxError - Invalid Python syntax
+```
+
+## Conclusion
+
+This APPS coding evaluation demonstrates how to assess AI models' competitive programming capabilities using comprehensive algorithmic challenges. The evaluation ensures models can understand complex problem statements, design efficient algorithms, and implement solutions that pass rigorous test suites.
+
+This evaluation is particularly valuable for:
+- **Algorithmic reasoning assessment**: Testing advanced problem-solving capabilities
+- **Competitive programming preparation**: Validating solutions against contest-quality problems
+- **Algorithm implementation**: Ensuring correct and efficient code generation
+
+The APPS evaluation focuses on **algorithmic correctness and efficiency** rather than simple function implementation, making it essential for building AI systems capable of sophisticated problem-solving. It provides comprehensive testing with real competitive programming challenges and detailed performance metrics. 
