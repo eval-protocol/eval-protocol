@@ -18,11 +18,6 @@ What's uniquely challenging and useful about the 𝜏²-benchmark is the use of 
 - **Simulated User**: An AI-powered user that generates realistic customer requests, responses, and conversational behavior
 - **Environment**: A simulated business system (airline, retail, telecom) that the agent interacts with through tool calls
 
-This creates a more realistic evaluation scenario where agents must handle:
-- Dynamic conversations with unpredictable user behavior
-- Real-time environment changes through tool interactions
-- Complex multi-turn interactions where the agent must balance conversation and task execution
-
 ## Understanding the Airline Dataset
 
 𝜏²-bench includes multiple business domains, each with distinct characteristics. **This example focuses specifically on the airline domain**, which provides the richest scenarios for demonstrating simulated user interactions. Other domains include retail, mock, and telecom.
@@ -210,7 +205,7 @@ The `@evaluation_test` decorator configures the evaluation with 𝜏²-bench-spe
 ```
 
 **Configuration Highlights:**
-- **`rollout_processor=default_mcp_gym_rollout_processor`**: Uses MCP Gym processor for multi-turn conversations with simulated users
+- **`rollout_processor=default_mcp_gym_rollout_processor`**: Uses a default MCP Gym processor for multi-turn conversations with simulated users, reusable for any evaluation benchmark that uses the same MCP Gym architecture
 - **`server_script_path="examples/tau2_mcp/server.py"`**: Points to the MCP server that hosts the airline environment
 - **`threshold_of_success=0.4`**: Threshold of 40% must be achieved for this test to pass
 - **`max_concurrent_rollouts=32`**: High concurrency for efficient evaluation of multiple scenarios
