@@ -26,7 +26,12 @@ from eval_protocol.models import EvaluateResult, EvaluationRow
 from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
 
 @evaluation_test(
-    input_dataset=["dataset.jsonl"],
+    input_messages=[
+        [
+            Message(role="system", content="You are a helpful assistant. Use bold text to highlight important information."),
+            Message(role="user", content="Explain why **evaluations** matter for building AI agents. Make it dramatic!"),
+        ],
+    ],
     model=["accounts/fireworks/models/llama-v3p1-8b-instruct"],
     rollout_processor=default_single_turn_rollout_processor,
     mode="pointwise",
