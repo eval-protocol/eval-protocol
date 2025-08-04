@@ -1,0 +1,608 @@
+---
+title: Function Calling Evaluation
+description: 'Evaluate function calling accuracy with exact tool match comparison'
+sidebarTitle: Function Calling Evaluation
+---
+
+This example demonstrates how to create comprehensive function calling evaluations using the Eval Protocol (EP) framework. The evaluation uses the `exact_tool_match_reward` function to assess whether models correctly call the right functions with the correct arguments in the expected format.
+
+<Note>
+You can find the complete code for this example at [test_pytest_function_calling.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_function_calling.py).
+</Note>
+
+## Understanding Function Calling Evaluation
+
+Function calling evaluation assesses a model's ability to:
+- **Identify when to use tools**: Determine if a user query requires function execution
+- **Select the correct function**: Choose the appropriate tool from available options
+- **Provide accurate arguments**: Pass the right parameters with correct values
+- **Follow proper formatting**: Use the expected tool call structure
+
+Unlike text-based evaluations that focus on content generation, function calling evaluations test a model's **tool selection and parameterization capabilities** - critical skills for AI agents that interact with external systems.
+
+## Understanding the Dataset Structure
+
+The function calling dataset contains diverse test cases that evaluate different aspects of tool usage, from simple weather queries to complex nested object creation.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`messages`**: Conversation history with user queries and assistant responses
+- **`tools`**: Available function definitions with schemas
+- **`ground_truth`**: Expected tool calls in JSON format
+- **`evaluation_result`**: Pre-computed evaluation scores for validation
+- **`input_metadata`**: Additional context including task type and difficulty
+
+### Example Dataset Entries
+
+**Perfect Match - Weather Query:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "What's the weather in London?"},
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather information for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "The city name"},
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "Temperature unit"
+            }
+          },
+          "required": ["location", "unit"]
+        }
+      }
+    }
+  ],
+  "ground_truth": "{\"tool_calls\": [{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"arguments\": \"{\\\"location\\\": \\\"London\\\", \\\"unit\\\": \\\"celsius\\\"}\"}}]}",
+  "input_metadata": {
+    "row_id": "weather_london_perfect",
+    "dataset_info": {"task_type": "function_calling", "difficulty": "easy"}
+  }
+}
+```
+
+**Argument Mismatch - Wrong Unit:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "What's the weather in London?"},
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"location\": \"London\", \"unit\": \"fahrenheit\"}"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather information for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "The city name"},
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "Temperature unit"
+            }
+          },
+          "required": ["location", "unit"]
+        }
+      }
+    }
+  ],
+  "ground_truth": "{\"tool_calls\": [{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"arguments\": \"{\\\"location\\\": \\\"London\\\", \\\"unit\\\": \\\"celsius\\\"}\"}}]}",
+  "input_metadata": {
+    "row_id": "weather_london_unit_mismatch",
+    "dataset_info": {"task_type": "function_calling", "difficulty": "easy"}
+  }
+}
+```
+
+**Function Name Mismatch:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "What's the weather in London?"},
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "function": {
+            "name": "fetch_weather",
+            "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather information for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {"type": "string", "description": "The city name"},
+            "unit": {
+              "type": "string",
+              "enum": ["celsius", "fahrenheit"],
+              "description": "Temperature unit"
+            }
+          },
+          "required": ["location", "unit"]
+        }
+      }
+    }
+  ],
+  "ground_truth": "{\"tool_calls\": [{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"arguments\": \"{\\\"location\\\": \\\"London\\\", \\\"unit\\\": \\\"celsius\\\"}\"}}]}",
+  "input_metadata": {
+    "row_id": "weather_london_name_mismatch",
+    "dataset_info": {"task_type": "function_calling", "difficulty": "easy"}
+  }
+}
+```
+
+**No Tool Call Expected:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "Tell me a joke."},
+    {"role": "assistant", "content": "Why did the chicken cross the road?"}
+  ],
+  "tools": [],
+  "ground_truth": "{\"tool_calls\": []}",
+  "input_metadata": {
+    "row_id": "joke_no_calls",
+    "dataset_info": {"task_type": "function_calling", "difficulty": "easy"}
+  }
+}
+```
+
+**Complex Nested Object Creation:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "Create a user for John Doe"},
+    {
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "type": "function",
+          "function": {
+            "name": "create_user",
+            "arguments": "{\"user\": {\"firstName\": \"John\", \"lastName\": \"Doe\", \"age\": 30}}"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "create_user",
+        "description": "Create a new user",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "firstName": {"type": "string"},
+                "lastName": {"type": "string"},
+                "age": {"type": "number"}
+              },
+              "required": ["firstName", "lastName", "age"]
+            }
+          },
+          "required": ["user"]
+        }
+      }
+    }
+  ],
+  "ground_truth": "{\"tool_calls\": [{\"type\": \"function\", \"function\": {\"name\": \"create_user\", \"arguments\": \"{\\\"user\\\": {\\\"firstName\\\": \\\"John\\\", \\\"lastName\\\": \\\"Doe\\\", \\\"age\\\": 30}}\"}}]}",
+  "input_metadata": {
+    "row_id": "create_user_nested",
+    "dataset_info": {"task_type": "function_calling", "difficulty": "hard"}
+  }
+}
+```
+
+### Dataset Characteristics
+
+**Test Scenarios**: The dataset covers various function calling challenges:
+- **Perfect matches**: Correct function name and arguments
+- **Argument mismatches**: Wrong parameter values (e.g., wrong temperature unit)
+- **Function name errors**: Calling non-existent or wrong functions
+- **Extra calls**: Making unnecessary tool calls
+- **Missing calls**: Failing to call required functions
+- **No-call scenarios**: Queries that don't require function execution
+- **Complex objects**: Nested parameter structures
+- **Invalid JSON**: Malformed argument strings
+
+**Tool Types**: Various function categories:
+- **Weather services**: Location-based queries with units
+- **User management**: CRUD operations with complex objects
+- **Data retrieval**: Search and find operations
+- **Utility functions**: Simple parameterized operations
+
+**Difficulty Levels**: Progressive complexity:
+- **Easy**: Simple single-parameter calls
+- **Medium**: Multi-parameter calls with validation
+- **Hard**: Nested object structures and complex schemas
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework:
+
+```python
+import json
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.rewards.function_calling import exact_tool_match_reward
+```
+
+- `json`: Python's JSON module for parsing ground truth data
+- `typing`: Python's typing module for type hints (Any, Dict, List)
+- `EvaluationRow`: The data structure containing conversation messages and metadata
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
+- `exact_tool_match_reward`: Built-in function calling evaluation function
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the function calling dataset format to the EP's expected format:
+
+```python
+def function_calling_to_evaluation_row(rows: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert function calling dataset entries to EvaluationRow objects.
+    
+    This adapter extracts the conversation messages, available tools, and ground truth
+    from the function calling dataset format and creates EvaluationRow objects that
+    the EP framework can process.
+    
+    Args:
+        rows: List of function calling dataset entries
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    dataset: List[EvaluationRow] = []
+    for row in rows:
+        dataset.append(
+            EvaluationRow(
+                messages=row["messages"][:1],  # Only the user message
+                tools=row["tools"],            # Available function definitions
+                ground_truth=row["ground_truth"]  # Expected tool calls
+            )
+        )
+    return dataset
+```
+
+This adapter:
+- Takes the raw function calling dataset as a list of dictionaries
+- Extracts the user message (first message in the conversation)
+- Includes the available tools/function definitions
+- Sets the ground truth to the expected tool calls
+- Returns the list of evaluation rows
+
+**Key transformations:**
+- **Message extraction**: Uses only the user message since the assistant's response will be generated during evaluation
+- **Tool preservation**: Maintains the function schemas for context
+- **Ground truth**: Preserves the expected tool calls for comparison
+
+## Step 3: Configure and Run the Evaluation
+
+We use the `@evaluation_test` decorator to configure the evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/function_calling.jsonl"],
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    mode="pointwise",
+    dataset_adapter=function_calling_to_evaluation_row,
+    rollout_processor=default_single_turn_rollout_processor,
+)
+async def test_pytest_function_calling(row: EvaluationRow) -> EvaluationRow:
+    """Run pointwise evaluation on sample dataset using pytest interface."""
+    ground_truth = json.loads(row.ground_truth)
+    result = exact_tool_match_reward(row.messages, ground_truth)
+    row.evaluation_result = result
+    print(result)
+    return row
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the function calling dataset JSONL file
+- `model`: The model to evaluate (Fireworks Kimi model in this case)
+- `mode`: `pointwise` for evaluating individual rows since each row can be evaluated independently
+- `dataset_adapter`: Function that converts function calling format to EvaluationRow objects
+- `rollout_processor`: Uses default single-turn processor for function calling evaluations
+
+**Evaluation process:**
+1. **Parse ground truth**: Convert the JSON string to a dictionary for comparison
+2. **Extract tool calls**: The `exact_tool_match_reward` function analyzes the assistant's response
+3. **Compare exactly**: Check if function names, arguments, and order match perfectly
+4. **Return results**: Provide binary score (1.0 for perfect match, 0.0 for any mismatch)
+
+## Core Functions Explained
+
+### `exact_tool_match_reward` Function
+
+The `exact_tool_match_reward` function is a built-in evaluation function that performs exact matching between generated and expected tool calls. It's located in `eval_protocol.rewards.function_calling`.
+
+**Key Features:**
+- **Exact matching**: Requires perfect alignment of function names, arguments, and order
+- **Multiple formats**: Handles both structured tool calls and XML-formatted calls
+- **JSON parsing**: Automatically deserializes and normalizes tool call arguments
+- **Robust comparison**: Uses sorted JSON serialization for consistent comparison
+- **Error handling**: Gracefully handles malformed inputs and edge cases
+
+**Function Signature:**
+```python
+def exact_tool_match_reward(
+    messages: Union[List[Message], List[Dict[str, Any]]],
+    ground_truth: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> EvaluateResult:
+```
+
+**Parameters:**
+- `messages`: List of conversation messages (extracts tool calls from the last assistant message)
+- `ground_truth`: Expected tool calls dictionary for comparison
+- `**kwargs`: Additional parameters (not used in this implementation)
+
+**Return Value:**
+- `EvaluateResult` with score (1.0 for exact match, 0.0 for any mismatch) and detailed reasoning
+
+**Example Usage:**
+```python
+result = exact_tool_match_reward(
+    messages=messages,
+    ground_truth={
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "arguments": '{"location": "London", "unit": "celsius"}'
+                }
+            }
+        ]
+    }
+)
+print(f"Score: {result.score}")  # 1.0 if exact match, 0.0 otherwise
+print(f"Reason: {result.reason}")  # Detailed explanation of the evaluation
+```
+
+### `eval_tool_call` Function
+
+The core evaluation logic is implemented in the `eval_tool_call` function, which handles the detailed comparison of tool calls.
+
+**Function Signature:**
+```python
+def eval_tool_call(generation: dict, ground_truth: dict) -> bool:
+```
+
+**Implementation Details:**
+1. **Extract expected calls**: Parse ground truth tool calls from the expected format
+2. **Process generated calls**: Handle both structured tool calls and XML-formatted calls
+3. **Normalize formats**: Convert all calls to a consistent internal format
+4. **Compare exactly**: Use JSON serialization with sorted keys for deterministic comparison
+
+**Supported Formats:**
+- **Structured tool calls**: Standard OpenAI format with `tool_calls` array
+- **XML-formatted calls**: `<tool_call>...</tool_call>` tags in content
+- **Mixed formats**: Combinations of different call types
+
+### `compare_tool_calls` Function
+
+The final comparison is performed by the `compare_tool_calls` function, which ensures exact matching.
+
+**Function Signature:**
+```python
+def compare_tool_calls(generated_tool_calls: list, gt_tool_calls: list) -> bool:
+```
+
+**Comparison Logic:**
+1. **Length check**: Number of tool calls must match exactly
+2. **JSON serialization**: Convert each tool call to sorted JSON string
+3. **Exact matching**: Compare serialized strings for perfect equality
+4. **Order matters**: Tool calls must be in the same sequence
+
+**Example Comparison:**
+```python
+# Generated calls
+generated = [
+    {"name": "get_weather", "arguments": '{"location": "London", "unit": "celsius"}'}
+]
+
+# Expected calls
+expected = [
+    {"name": "get_weather", "arguments": '{"location": "London", "unit": "celsius"}'}
+]
+
+# Result: True (exact match)
+```
+
+## Evaluation Scenarios and Results
+
+The function calling evaluation handles various scenarios with different outcomes:
+
+### Perfect Match (Score: 1.0)
+**Scenario**: Model calls the exact function with correct arguments
+```json
+{
+  "generated": {"name": "get_weather", "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"},
+  "expected": {"name": "get_weather", "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"}
+}
+```
+**Result**: ✅ Perfect match - all function names, arguments, and order are correct
+
+### Argument Mismatch (Score: 0.0)
+**Scenario**: Model calls correct function but with wrong arguments
+```json
+{
+  "generated": {"name": "get_weather", "arguments": "{\"location\": \"London\", \"unit\": \"fahrenheit\"}"},
+  "expected": {"name": "get_weather", "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"}
+}
+```
+**Result**: ❌ Argument mismatch - wrong temperature unit specified
+
+### Function Name Error (Score: 0.0)
+**Scenario**: Model calls wrong function name
+```json
+{
+  "generated": {"name": "fetch_weather", "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"},
+  "expected": {"name": "get_weather", "arguments": "{\"location\": \"London\", \"unit\": \"celsius\"}"}
+}
+```
+**Result**: ❌ Function name error - called non-existent function
+
+### Extra Tool Call (Score: 0.0)
+**Scenario**: Model makes unnecessary additional calls
+```json
+{
+  "generated": [
+    {"name": "get_weather", "arguments": "{\"location\": \"London\"}"},
+    {"name": "extra_call", "arguments": "{}"}
+  ],
+  "expected": [
+    {"name": "get_weather", "arguments": "{\"location\": \"London\"}"}
+  ]
+}
+```
+**Result**: ❌ Extra tool call - made unnecessary additional function call
+
+### Missing Tool Call (Score: 0.0)
+**Scenario**: Model fails to call required function
+```json
+{
+  "generated": [],
+  "expected": [
+    {"name": "get_weather", "arguments": "{\"location\": \"London\"}"}
+  ]
+}
+```
+**Result**: ❌ Missing tool call - failed to call required function
+
+### No Call Expected (Score: 1.0)
+**Scenario**: Query doesn't require function execution
+```json
+{
+  "generated": [],
+  "expected": []
+}
+```
+**Result**: ✅ No call expected - correctly avoided unnecessary function calls
+
+## Advanced Features
+
+### XML-Formatted Tool Calls
+
+The evaluation supports XML-formatted tool calls embedded in content:
+
+```python
+# Assistant response with XML formatting
+content = '<tool_call>{"type": "function", "function": {"name": "get_weather", "arguments": "{\\"location\\": \\"Berlin\\", \\"unit\\": \\"celsius\\"}"}}</tool_call>'
+
+# The evaluation automatically parses and compares these calls
+```
+
+### Complex Nested Objects
+
+The evaluation handles complex parameter structures:
+
+```python
+# Nested user object creation
+{
+  "name": "create_user",
+  "arguments": '{"user": {"firstName": "John", "lastName": "Doe", "age": 30}}'
+}
+```
+
+### Multiple Tool Calls
+
+The evaluation supports scenarios with multiple sequential tool calls:
+
+```python
+# Multiple weather queries
+[
+  {"name": "get_weather", "arguments": '{"location": "London"}'},
+  {"name": "get_weather", "arguments": '{"location": "Paris"}'}
+]
+```
+
+## Best Practices for Function Calling Evaluation
+
+### Dataset Design
+- **Diverse scenarios**: Include various failure modes and edge cases
+- **Progressive difficulty**: Start with simple calls and progress to complex objects
+- **Real-world examples**: Use realistic function schemas and use cases
+- **Clear ground truth**: Ensure expected tool calls are unambiguous
+
+### Evaluation Configuration
+- **Appropriate models**: Use models with strong function calling capabilities
+- **Consistent parameters**: Use deterministic settings (temperature=0.0) for reproducible results
+- **Adequate context**: Provide clear function descriptions and examples
+- **Error handling**: Gracefully handle parsing errors and edge cases
+
+### Result Interpretation
+- **Binary scoring**: Understand that this is a strict exact-match evaluation
+- **Detailed analysis**: Use the reasoning field to understand specific failures
+- **Pattern recognition**: Look for systematic errors in function selection or argument formatting
+- **Model comparison**: Compare different models' function calling accuracy
+
+## Conclusion
+
+This function calling evaluation example demonstrates how to create robust assessments of AI models' tool usage capabilities. The `exact_tool_match_reward` function provides a strict but comprehensive evaluation that ensures models can:
+
+1. **Identify when tools are needed**: Distinguish between queries requiring function calls and those that don't
+2. **Select appropriate functions**: Choose the correct tool from available options
+3. **Provide accurate parameters**: Pass the right arguments with correct values
+4. **Follow proper formatting**: Use the expected tool call structure consistently
+
+This evaluation is particularly valuable for:
+- **Agent development**: Ensuring AI agents can reliably interact with external systems
+- **API integration**: Validating models' ability to use structured APIs correctly
+- **Tool selection**: Testing models' understanding of when and how to use different tools
+- **Parameter accuracy**: Verifying that models provide correct input values
+
+The function calling evaluation complements other evaluation types by focusing on **execution accuracy** rather than content generation, making it essential for building reliable AI systems that can interact with external tools and APIs.
