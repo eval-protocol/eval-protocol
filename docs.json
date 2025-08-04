@@ -44,6 +44,14 @@
           "example/lunar-lander",
           "example/gsm8k"
         ]
+      },
+      {
+        "group": "Integrations",
+        "pages": [
+          "integrations/index",
+          "integrations/langfuse-adapter",
+          "integrations/huggingface-adapter"
+        ]
       }
     ]
   },
