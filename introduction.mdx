@@ -22,6 +22,9 @@ For example, here is a simple test function that checks if a model's response
 contains **bold** text formatting:
 
 ```python test_bold_format.py
+from eval_protocol.models import EvaluateResult, EvaluationRow
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+
 @evaluation_test(
     input_dataset=["dataset.jsonl"],
     model=["accounts/fireworks/models/llama-v3p1-8b-instruct"],
@@ -49,7 +52,7 @@ def test_bold_format(row: EvaluationRow) -> EvaluationRow:
 
 For a complete step-by-step tutorial of a slightly more complex example with
 detailed explanations, dataset examples, and configuration options, see our
-[Single-turn Evals](/tutorial/single-turn-eval-static) guide.
+[Single-turn eval](/tutorial/single-turn-eval-static) tutorial.
 
 
 ### Next Steps
@@ -57,5 +60,5 @@ detailed explanations, dataset examples, and configuration options, see our
  - [Specification](/specification)
  - [Why Eval Protocol?](/why)
  - [Principles](/principles)
- - [Single-turn Eval](/tutorial/single-turn-eval-static)
- - [Multi-turn Eval](/tutorial/multi-turn-eval-user-simulation)
+ - [Single-turn eval](/tutorial/single-turn-eval-static)
+ - [Multi-turn eval](/tutorial/multi-turn-eval-user-simulation)
