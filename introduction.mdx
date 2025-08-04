@@ -18,14 +18,17 @@ capabilities.
 
 <Workflow />
 
-You can try it out today!
+## Getting Started
 
-```
+Ready to dive in? Install EP with a single command and start evaluating your models:
+
+```shell
 pip install eval-protocol
 ```
 
-For example, here is a simple test function that checks if a model's response
-contains **bold** text formatting:
+## Quick Example
+
+Here's a simple test function that checks if a model's response contains **bold** text formatting:
 
 ```python test_bold_format.py
 from eval_protocol.models import EvaluateResult, EvaluationRow
@@ -61,6 +64,8 @@ def test_bold_format(row: EvaluationRow) -> EvaluationRow:
     return row
 ```
 
+## Learn More
+
 For a complete step-by-step tutorial of a slightly more complex example with
 detailed explanations, dataset examples, and configuration options, see our
 [Single-turn eval](/tutorial/single-turn-eval-static) tutorial.
@@ -68,7 +73,6 @@ detailed explanations, dataset examples, and configuration options, see our
 For a more advanced example that includes MCP and user simulation, check out our
 implementation of [𝜏²-bench](/tutorial/multi-turn-eval-user-simulation), a benchmark for evaluating conversational
 agents in a dual control environment.
-
 
 ### Next Steps
 
