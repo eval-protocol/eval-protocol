@@ -114,15 +114,19 @@ def check_think_answer_format(text: str) -> bool:
     """Check if text follows <think>...</think><answer>...</answer> format."""
     if not text:
         return False
-    pattern = r"<think>[\s\S]*?</think>[\s\S]*?<answer>[\s\S]*?</answer>"
-    return bool(re.search(pattern, text))
+    pattern = r"^<think>[\s\S]*?</think>\s*<answer>[\s\S]*?</answer>$"
+    return bool(re.match(pattern, text.strip()))
 ```
 
 **Regex pattern explained:**
-- `<think>[\s\S]*?</think>`: Matches thinking section with any content
-- `<answer>[\s\S]*?</answer>`: Matches answer section with any content
-- `[\s\S]*?`: Non-greedy match of any characters (including newlines)
-- The pattern ensures both thinking and answer sections are present
+- `^`: Asserts position at the start of the string.
+- `<think>[\s\S]*?</think>`: Matches the thinking section, including any characters and newlines.
+- `\s*`: Matches any whitespace characters between the think and answer tags.
+- `<answer>[\s\S]*?</answer>`: Matches the answer section.
+- `$`: Asserts position at the end of the string.
+- `text.strip()`: Removes leading/trailing whitespace before matching.
+
+This ensures the response contains *only* the `<think>` and `<answer>` sections.
 
 ## Step 4: Create the Evaluation Function
 
@@ -156,13 +160,13 @@ def evaluate(
     format_correct = check_think_answer_format(assistant_response)
     format_score = 1.0 if format_correct else 0.0
 
-    # For math evaluation, accuracy takes priority
-    # If accuracy is 0, overall score is 0
-    # If accuracy is 1, then format can contribute to the score
+    # The combined score is a weighted average of accuracy and format
+    weights = {"accuracy": 0.8, "format": 0.2}
+    combined_score = (accuracy_result.score * weights["accuracy"]) + (format_score * weights["format"])
+
+    # If accuracy is 0, the overall score is 0, regardless of format.
     if accuracy_result.score == 0.0:
         combined_score = 0.0
-    else:
-        combined_score = accuracy_result.score  # Only accuracy matters for math evaluation
 
     # Create detailed metrics for analysis
     metrics = {
@@ -188,7 +192,8 @@ def evaluate(
 **Key evaluation aspects:**
 - **Numerical Accuracy**: Uses the built-in `math_reward` function to check if the final answer matches the ground truth
 - **Format Compliance**: Ensures responses follow the structured thinking format
-- **Priority System**: Numerical accuracy takes precedence over format compliance
+- **Weighted Scoring**: The final score is a weighted average of accuracy (80%) and format (20%).
+- **Accuracy Priority**: If the numerical accuracy is 0, the combined score is 0, ensuring that correctness is paramount.
 - **Detailed Metrics**: Provides separate scores for accuracy and format for detailed analysis
 
 ## Step 5: Configure and Run the Test
@@ -252,19 +257,19 @@ Janet makes $18 every day at the farmers' market.
 The evaluation provides comprehensive feedback:
 
 **Successful Response:**
-- **Score**: 1.0
+- **Score**: 1.0 (80% from accuracy, 20% from format)
 - **Reason**: "Combined score: 1.00 (accuracy: 1.00, format: 1.00)"
 - **Metrics**: Both accuracy and format scores are 1.0
 
-**Incorrect Answer:**
-- **Score**: 0.0
+**Correct Answer, Incorrect Format:**
+- **Score**: 0.8 (80% from accuracy, 0% from format)
+- **Reason**: "Combined score: 0.80 (accuracy: 1.00, format: 0.00)"
+- **Metrics**: Accuracy score 1.0, format score 0.0
+
+**Incorrect Answer, Correct Format:**
+- **Score**: 0.0 (Accuracy is 0, so combined score is 0)
 - **Reason**: "Combined score: 0.00 (accuracy: 0.00, format: 1.00)"
 - **Metrics**: Accuracy score 0.0, format score 1.0
-
-**Incorrect Format:**
-- **Score**: 0.0 (if accuracy is also 0.0)
-- **Reason**: "Combined score: 0.00 (accuracy: 0.00, format: 0.00)"
-- **Metrics**: Both accuracy and format scores are 0.0
 
 This comprehensive evaluation ensures that models can:
 1. Understand complex mathematical word problems
