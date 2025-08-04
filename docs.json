@@ -27,7 +27,7 @@
         "pages": [
           "tutorial/single-turn-eval-static",
           {
-            "group": "Multi-turn eval",
+            "group": "Multi-Turn Eval",
             "pages": [
               "tutorial/multi-turn-eval-user-simulation",
               "tutorial/multi-turn-eval-per-step-rewards"
@@ -38,8 +38,6 @@
       {
         "group": "Examples",
         "pages": [
-          "example/tau-bench",
-          "example/frozen-lake",
           "example/lunar-lander",
           "example/gsm8k"
         ]
