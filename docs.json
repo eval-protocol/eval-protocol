@@ -38,6 +38,7 @@
       {
         "group": "Examples",
         "pages": [
+          "example/function-calling",
           "example/lunar-lander",
           "example/gsm8k"
         ]
