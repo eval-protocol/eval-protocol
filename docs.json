@@ -25,13 +25,7 @@
       {
         "group": "Tutorials",
         "pages": [
-          {
-            "group": "Single-turn eval",
-            "pages": [
-              "tutorial/single-turn-eval-static",
-              "tutorial/single-turn-eval-agentic"
-            ]
-          },
+          "tutorial/single-turn-eval-static",
           {
             "group": "Multi-turn eval",
             "pages": [
