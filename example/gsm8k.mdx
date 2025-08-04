@@ -67,27 +67,30 @@ First, we import the necessary modules from the EP framework:
 
 ```python
 import re
-from typing import Any, Dict, List, Optional, Union
-
-from eval_protocol import EvaluateResult, MetricResult, reward_function
-from eval_protocol.models import Message
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluateResult, EvaluationRow, MetricResult
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
 from eval_protocol.rewards.math import math_reward
+from examples.math_example.main import check_think_answer_format
+from tests.pytest.helper.gsm8k_to_evaluation_row import gsm8k_to_evaluation_row
 ```
 
 - `re`: Python's regex module for pattern matching
+- `typing`: Python's typing module for type hints (Any, Dict, List)
 - `EvaluateResult`: The result object containing evaluation score and reasoning
+- `EvaluationRow`: The data structure containing conversation messages and ground truth
 - `MetricResult`: Individual metric results for detailed analysis
-- `reward_function`: Decorator for evaluation functions
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
 - `math_reward`: Built-in math evaluation function
+- `check_think_answer_format`: Function to validate structured thinking format
+- `gsm8k_to_evaluation_row`: Adapter function to convert GSM8K dataset format
 
 ## Step 2: Create the Dataset Adapter
 
 We need to convert the GSM8K dataset format to the EP's expected format:
 
 ```python
-from typing import Any, Dict, List
-from eval_protocol.models import EvaluationRow, Message
-
 def gsm8k_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
     """Convert GSM8K dataset entries to EvaluationRow objects."""
     return [
@@ -131,12 +134,6 @@ This ensures the response contains both `<think>` and `<answer>` sections in the
 We use the `@evaluation_test` decorator to configure the evaluation. The evaluation function combines numerical accuracy with format validation.
 
 ```python
-from eval_protocol.models import EvaluateResult, EvaluationRow, MetricResult
-from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
-from eval_protocol.rewards.math import math_reward
-from examples.math_example.main import check_think_answer_format
-from tests.pytest.helper.gsm8k_to_evaluation_row import gsm8k_to_evaluation_row
-
 @evaluation_test(
     input_dataset=["development/gsm8k_sample.jsonl"],
     dataset_adapter=gsm8k_to_evaluation_row,
