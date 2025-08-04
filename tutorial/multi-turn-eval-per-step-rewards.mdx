@@ -1,7 +1,251 @@
 ---
-title: Multi-turn eval (per-step rewards)
-sidebarTitle: Per-step rewards
+title: Multi-Turn Eval with Per-Step Rewards (Frozen Lake)
+sidebarTitle: Per-Step Rewards (Frozen Lake)
 ---
+This tutorial demonstrates how to create multi-turn reinforcement learning evaluations with per-step rewards using the classic Frozen Lake environment. Unlike conversational agent evaluations, this example showcases a traditional RL environment where agents receive rewards at each step of an episode, enabling evaluation of decision-making throughout the entire trajectory rather than just final outcomes.
 
-TODO: run through simplified version of frozen-lake to explain all the
-components of eval-protocol for a multi-turn eval with per-step rewards.
+<Note>
+You can find the complete code for this example at [test_frozen_lake.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_frozen_lake.py).
+</Note>
+
+## Understanding the Frozen Lake Environment
+
+Frozen Lake is a classic RL environment where an agent navigates a 4x4 grid from start to goal without falling into holes.
+
+- **Action Space**: `Discrete(4)` - Move left (0), down (1), right (2), up (3)
+- **Observation Space**: `Discrete(16)` - Grid positions 0-15
+- **Grid Layout**: 4x4 grid with `S` (Start), `F` (Frozen/safe), `H` (Hole/lose), `G` (Goal/win)
+
+```
+SFFF
+FHFH  
+FFFH
+HFFG
+```
+
+**Rewards**: +1 for reaching goal, 0 otherwise
+
+This sparse reward structure makes it perfect for per-step reward evaluation - the rewards come directly from the environment intrinsically at each step (more on this below), allowing the framework to evaluate decision-making throughout the entire trajectory even when most steps provide zero reward.
+
+## Understanding the Dataset Structure
+
+The Frozen Lake dataset is much simpler than conversational agent datasets - it focuses purely on setting up the RL environment and providing clear instructions for agent interaction.
+
+### Dataset Format
+
+Each entry contains three main components for configuring the RL episode:
+
+- **`id`**: Unique identifier for the evaluation run
+- **`system_prompt`**: Detailed instructions explaining the game rules and interaction method  
+- **`user_prompt_template`**: Template for presenting the current game state to the agent, `{observation}` gets replaced with current grid state
+- **`environment_context`**: Configuration parameters for the Frozen Lake environment
+
+### Example Dataset Entry
+
+```json
+{
+  "id": "run_001",
+  "system_prompt": "You are playing FrozenLake, a grid-based navigation game displayed as a 4x4 text grid. The grid contains: S (Start), F (Frozen safe), H (Hole - deadly), G (Goal). You start at position S and must reach G while avoiding H tiles. In this version, the surface is not slippery so your moves are deterministic. IMPORTANT: When you are at the starting position, you appear as 'S'. When you move to other positions, the hightlighted position will change on the grid. If you step on H, the episode ends with failure. Use the lake_move tool with actions LEFT, DOWN, RIGHT, UP to navigate the grid.",
+  "user_prompt_template": "Current game state grid:\n{observation}\n\nYou are navigating the 4x4 grid above. Navigate safely to reach the goal 'G' while avoiding holes 'H'. Choose your next move from: LEFT, DOWN, RIGHT, or UP.",
+  "environment_context": {
+    "game": "FrozenLake", 
+    "map_name": "4x4",
+    "seed": 42
+  }
+}
+```
+
+## Test Harness Architecture (RL Gym + Environment Integration)
+
+Now we can explain the adapter pattern mentioned earlier - the eval-protocol framework provides a clean bridge between standard Gymnasium environments and the MCP evaluation system through two key components: `FrozenLakeMcp` and `FrozenLakeAdapter`.
+
+### MCP Server: FrozenLakeMcp
+
+The `FrozenLakeMcp` class inherits from `McpGym` and creates an MCP server that agents can interact with:
+
+```python
+class FrozenLakeMcp(McpGym):
+    """FrozenLake MCP-Gym environment implementing the north star vision."""
+
+    def __init__(self, seed: Optional[int] = None):
+        adapter = FrozenLakeAdapter()
+        super().__init__("FrozenLake-v1", adapter, seed)
+
+    def _register_tools(self):
+        @self.mcp.tool(
+            name="lake_move",
+            description="Move on the frozen lake. Actions: LEFT, DOWN, RIGHT, UP."
+        )
+        def lake_move(action: str, ctx: Context) -> Dict[str, Any]:
+            # Validate and parse action
+            action = action.strip().upper()
+            action_int = self.adapter.parse_action(action)
+            
+            # Execute environment step
+            session_id = self._get_session_id(ctx)
+            observation_data = self._execute_session_environment_step(session_id, action_int)
+            observation_data["action"] = action
+            
+            return observation_data
+```
+
+**Key Features:**
+- **Single Tool Interface**: Agents interact through the `lake_move` tool with simple string actions
+- **Session Management**: Each evaluation gets isolated environment sessions
+- **Action Validation**: Converts string actions (LEFT, DOWN, RIGHT, UP) to environment integers
+- **Data Plane**: Returns only observation data; control plane (rewards, termination) managed server-side
+
+### Environment Adapter: FrozenLakeAdapter
+
+The `FrozenLakeAdapter` handles the actual Gymnasium environment operations:
+
+```python
+class FrozenLakeAdapter(EnvironmentAdapter):
+    """FrozenLake adapter for MCP-Gym framework."""
+
+    ACTION_NAMES = ["LEFT", "DOWN", "RIGHT", "UP"]
+
+    def create_environment(self, config: Optional[Dict[str, Any]] = None) -> FrozenLakeEnv:
+        config = config or {}
+        seed = config.get("seed")
+        
+        if seed is not None:
+            desc = generate_random_map(size=4, p=0.8, seed=seed)
+        else:
+            desc = generate_random_map(size=4, p=0.8)
+            
+        return FrozenLakeEnv(desc=desc, is_slippery=False, render_mode="ansi")
+
+    def parse_action(self, action_str: str) -> int:
+        action_str = action_str.strip().upper()
+        if action_str not in self.ACTION_NAMES:
+            raise ValueError(f"Invalid action '{action_str}'. Valid actions: {self.ACTION_NAMES}")
+        return self.ACTION_NAMES.index(action_str)
+```
+
+### Bridging Standard Gym with MCP
+
+This architecture bridges two different paradigms:
+
+**Standard Gymnasium**: 
+- Integer action spaces (0, 1, 2, 3)
+- Numeric observations (position 0-15)
+- Direct step/reset methods
+- Per-step rewards and termination flags
+
+**MCP Protocol**:
+- String-based tool calls ("LEFT", "DOWN", etc.)
+- JSON-formatted observations with grid rendering
+- Session-based interactions
+- Server-managed control plane (rewards handled separately)
+
+### Session Isolation and Multi-Evaluation
+
+The framework provides robust session management:
+
+```python
+# Each evaluation gets isolated state
+session_id = self._get_session_id(ctx)
+session_data = self._get_or_create_session(ctx)
+
+# Execute step with session isolation
+observation_data = self._execute_session_environment_step(session_id, action_int)
+```
+
+## Pytest Implementation
+
+The Frozen Lake evaluation integrates with the eval-protocol pytest framework through a streamlined test function that leverages the MCP Gym infrastructure and per-step rewards we've discussed.
+
+### Step 1: Dataset Adapter
+
+The `frozen_lake_to_evaluation_row` function converts the simple Frozen Lake dataset entries into the framework's `EvaluationRow` format:
+
+```python
+def frozen_lake_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Convert entries from frozen lake dataset to EvaluationRow objects."""
+    rows = []
+    
+    for row in data:
+        eval_row = EvaluationRow(
+            messages=[Message(role="system", content=row["system_prompt"])],
+            input_metadata=InputMetadata(
+                row_id=row["id"],
+                dataset_info={
+                    "environment_context": row["environment_context"],
+                    "user_prompt_template": row["user_prompt_template"],
+                }
+            )
+        )
+        rows.append(eval_row)
+    
+    return rows
+```
+
+This adapter is much simpler than conversational agent adapters—it just sets up the system prompt with game instructions and preserves the environment configuration in metadata.
+
+### Step 2: Test Configuration  
+
+The `@evaluation_test` decorator configures the RL evaluation with Frozen Lake-specific parameters:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/frozen_lake_dataset.jsonl"],
+    dataset_adapter=frozen_lake_to_evaluation_row,
+    model=["fireworks_ai/accounts/fireworks/models/kimi-k2-instruct"],
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    rollout_processor=default_mcp_gym_rollout_processor,
+    threshold_of_success=0.66,
+    num_runs=1,
+    mode="pointwise",
+    server_script_path="examples/frozen_lake_mcp/server.py",
+)
+```
+
+Note the `default_mcp_gym_rollout_processor` is the same processor used in the τ²-bench evaluation, demonstrating how eval-protocol provides reusable components that work seamlessly across different evaluation types—from conversational agents to RL environments.
+
+### Step 3: Trajectory Evaluation Function
+
+The test function demonstrates the power of per-step reward evaluation:
+
+```python
+def test_frozen_lake_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """Test frozen lake evaluation using the pytest framework."""
+    
+    # Get the total reward from the entire trajectory
+    score = row.get_total_reward()
+
+    if score == 1.0:
+        reason = "Agent reached the goal"
+    else:
+        reason = "Agent did not reach the goal"
+
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason=reason,
+    )
+    
+    return row
+```
+
+- **Binary Success Evaluation**: Unlike complex conversational evaluations, this is simple: either the agent reached the goal (score=1.0) or it didn't (score=0.0)
+- **Intrinsic Environment Rewards**: The evaluation function doesn't need to implement complex scoring, it just uses the environment's intrinsic reward structure that was captured during the MCP Gym rollout
+- **Trajectory-Level Assessment**: The framework automatically handles the multi-turn interaction, reward aggregation, and trajectory completion, so the evaluation function only needs to interpret the final aggregated score
+
+### Integration with MCP Gym Framework
+
+This demonstrates the complete integration flow:
+
+1. **Dataset Entry**: Specifies environment configuration and agent instructions
+2. **MCP Server Launch**: Framework starts the FrozenLakeMcp server automatically  
+3. **Multi-Turn Rollout**: Agent interacts with environment through `lake_move` tool calls
+4. **Per-Step Reward Capture**: Framework records 0.0 or +1.0 at each step
+5. **Trajectory Aggregation**: Framework sums all per-step rewards into `total_reward`
+6. **Simple Evaluation**: Test function interprets the aggregated score
+
+## Conclusion
+
+This showcases how eval-protocol transforms complex multi-turn RL environments into simple, reusable evaluation functions while maintaining the rich per-step reward information needed for training data generation. But more than that, this Frozen Lake tutorial illustrates a fundamental principle of Eval Protocol: [building essential feedback loops](https://evalprotocol.io/why#build-the-feedback-loops-you-need) for modern AI development. While initial evaluations might be as straightforward as the `test_markdown_highlighting_evaluation` introduced earlier, this multi-turn example with per-step rewards showcases the framework's full capabilities. Specifically, it demonstrates how Eval Protocol generates detailed rollout data enriched with reward signals, which can directly inform reinforcement learning and fine-tuning processes.
+
+Per-step rewards recorded throughout each Frozen Lake episode are not merely for assessment; they form structured training data. The protocol aggregates these step-by-step rewards (assigning 0.0 for each frozen tile encountered and +1.0 for successfully reaching the goal) into trajectory-level scores. This nuanced scoring provides sophisticated training signals: reward sequences can be directly leveraged by training algorithms like PPO or GRPO, or any learning method that benefits from structured, sequential feedback.
+
+Eval Protocol thus transforms an evaluation suite from a passive testing mechanism into an active engine for dynamic data generation, facilitating every stage of the LLM software development lifecycle—from model selection and prompt refinement to ongoing evaluation, debugging, and continuous improvement. Its vision is straightforward: define evaluation criteria once in code and reuse them universally—for benchmarking, CI/CD processes, dataset creation, and iterative training. The Frozen Lake tutorial exemplifies how a unified evaluation framework can bridge traditional reinforcement learning environments with contemporary LLM-driven agents, laying the groundwork for continuously improving AI systems.

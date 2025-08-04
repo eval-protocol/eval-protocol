@@ -1,7 +1,252 @@
 ---
-title: Multi-turn eval (User Simulation)
-sidebarTitle: User Simulation
+title: Multi-Turn Eval with User Simulation (𝜏²-bench)
+sidebarTitle: Simulated User (𝜏²-bench)
 ---
+Let's walk through how to create a comprehensive agent evaluation using the 𝜏²-bench airline domain from Sierra AI for testing AI agents on realistic customer service tasks with simulated users.
 
-TODO: run through simplified version of tau-bench to explain all the components of
-eval-protocol for a multi-turn eval with MCP.
+<Note>
+You can find the complete code for this example at [test_tau_bench_airline.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_tau_bench_airline.py).
+</Note>
+
+## Understanding 𝜏²-bench
+
+What's uniquely challenging and useful about the 𝜏²-benchmark is the use of a simulated user alongside the agent being evaluated. This setup has a few key components:
+
+- **Agent**: The AI system being evaluated, which must follow domain-specific policies and use available MCP tools to interact with the environment
+- **Simulated User**: An AI-powered user that generates realistic customer requests, responses, and conversational behavior
+- **Environment**: A simulated business system (airline, retail, telecom) that the agent interacts with through tool calls
+
+## Understanding the Airline Dataset
+
+𝜏²-bench includes multiple business domains, each with distinct characteristics. **This example focuses specifically on the airline domain**, which provides the richest scenarios for demonstrating simulated user interactions. Other domains include retail, mock, and telecom.
+
+### Dataset Format
+
+Each entry in the airline dataset contains:
+
+- **`id`**: Unique identifier for the task scenario
+- **`user_prompt_template`**: Template for presenting information to the simulated user
+- **`environment_context`**: Domain specification and environmental settings
+- **`user_simulation`**: Complete definition of the simulated user's behavior, knowledge, and personality
+- **`evaluation_criteria`**: Specific actions, communications, and assertions the agent must fulfill
+
+### Example Dataset Entry
+
+**Baggage Allowance Inquiry Scenario:**
+```json
+{
+  "id": "airline_task_3",
+  "user_prompt_template": "{observation}",
+  "environment_context": {
+    "domain": "airline"
+  },
+  "user_simulation": {
+    "enabled": true,
+    "llm": "gpt-4.1",
+    "system_prompt": "Instructions:\n\tDomain: airline\nReason for call:\n\tYou want to figure out the total number of suitcases the reservation allows you to take on your upcoming flight.\n\n\tYou have a lot of things you need to bring with you on this trip. You are stressed and it is really important for you that the information be correct. \n\n\tYou're pretty sure that you're a Gold member.\nKnown info:\n\tYou are Anya Garcia.\n\n\tYour user id is: anya_garcia_5901.\n\n\tYour confirmation number is JMO1MG.\nUnknown info:\n\tYou do not know the cabin for the upcoming flight.\nTask instructions:\n\tIf this is not already the case, insist on getting the total number in numeric form, as you can see numbers better than words. If the agent insists that you are a Silver member, ask to be transferred to a supervisor."
+  },
+  "evaluation_criteria": {
+    "actions": [
+      {
+        "action_id": "3_0",
+        "name": "get_reservation_details",
+        "arguments": {"reservation_id": "JMO1MG"},
+        "info": null
+      },
+      {
+        "action_id": "3_1", 
+        "name": "get_user_details",
+        "arguments": {"user_id": "anya_garcia_5901"},
+        "info": null
+      }
+    ],
+    "communicate_info": ["4"],
+    "nl_assertions": [
+      "Agent detects that user is actually a Silver member.",
+      "Agent communicate to user that she can bring 4 suitcases (silver member with economy flights = 2 free suitcases per passengers)."
+    ]
+  }
+}
+```
+
+### Evaluation Criteria
+
+The airline domain uses four distinct evaluation criteria to comprehensively assess agent performance:
+
+1. **Tool Action Verification**: Checks if the agent calls the specific tool actions listed in the `"actions"` array with the correct parameters
+
+2. **Communication Validation**: Verifies that the agent communicated to the simulated user strictly what is specified in `"communicate_info"` (e.g., the number "4" for suitcase allowance)
+
+3. **Natural Language Assertions**: Uses LLM-as-a-judge to evaluate the `"nl_assertions"` - complex behavioral requirements like "Agent detects that user is actually a Silver member" and proper policy application
+
+4. **Database State Verification**: Creates a hash over the database to ensure it remains in the correct state after all interactions, validating that no unintended changes occurred during the conversation
+
+Only if all four of these criteria are met that the agent "passed" this scenario and gets a score of 1.0. Otherwise, they get a score of 0.0.
+
+
+## Test Harness Architecture (MCP Gym + Environment)
+
+The 𝜏²-bench airline evaluation uses the MCP Gym framework to create realistic business simulations. The implementation consists of two main components: the `AirlineDomainMcp` server that handles MCP tool calls, and the `AirlineEnvironment` that manages the actual airline business logic.
+
+### Airline Domain MCP Server
+
+The `AirlineDomainMcp` class inherits from `McpGym` and configures the airline domain:
+
+```python
+class AirlineDomainMcp(McpGym):
+    def __init__(self, seed: Optional[int] = None):
+        default_config = {"domain": "airline", "max_turns": 20}
+        self.adapter = EnvironmentAdapter(env_class=AirlineEnvironment, default_config=default_config)
+        super().__init__("airline", self.adapter, seed)
+```
+
+The server registers airline-specific MCP tools that agents can use to interact with the simulated airline system, e.g. `get_reservation_details` or `get_user_details`. We expose the same tools that the original 𝜏²-benchmark uses.
+
+**Example Tool Definition:**
+```python
+@self.mcp.tool(name="get_reservation_details", description="Get the details of a reservation.")
+def get_reservation_details(
+    reservation_id: Annotated[str, Field(description="The reservation ID, such as '8JX2WO'")], 
+    ctx: Context
+) -> Dict[str, Any]:
+    """Get reservation details"""
+    session_id = self._get_session_id(ctx)
+    return self._execute_session_environment_step(
+        session_id,
+        {
+            "action": "get_reservation_details",
+            "parameters": {"reservation_id": reservation_id},
+        },
+    )
+```
+
+### Airline Business Environment
+
+The `AirlineEnvironment` class manages the actual airline business logic and database operations. It loads a flight database and provides methods for booking, cancellation, user management, and other airline operations:
+
+```python
+class AirlineEnvironment:
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self.db = FlightDB.load(AIRLINE_DB_PATH)
+        self.airline_tools = AirlineTools(self.db)
+
+    def step(self, action: Dict[str, Any]) -> Tuple[Dict[str, Any], float, bool, bool, Dict[str, Any]]:
+        action_name = action.get("action", "")
+        parameters = action.get("parameters", {})
+        result = self._execute_airline_action(action_name, parameters)
+        
+        # No per-step rewards - evaluation happens at conversation completion
+        return result, 0.0, False, False, {}
+```
+
+The environment maintains a persistent flight database that gets reset for each evaluation scenario, ensuring consistent starting conditions while allowing agents to make realistic changes (bookings, cancellations, etc.) during conversations.
+
+## Pytest Implementation
+
+Finally, we also integrate the 𝜏²-bench airline evaluation with the eval-protocol pytest framework through a test function that orchestrates the simulated user, MCP environment, and multi-dimensional evaluation criteria.
+
+### Step 1: Dataset Adapter
+
+The `tau_bench_airline_to_evaluation_row` function converts raw 𝜏²-bench dataset entries into the eval-protocol's `EvaluationRow` format:
+
+```python
+def tau_bench_airline_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Convert entries from airline dataset to EvaluationRow objects."""
+    rows = []
+    
+    # Load domain-specific system prompt
+    domain = data[0]["environment_context"]["domain"]
+    prompt_file = test_dir / f"system_prompts/{domain}_agent_system_prompt.md"
+    with open(prompt_file, "r") as f:
+        system_prompt = f.read().strip()
+    
+    for row in data:
+        eval_row = EvaluationRow(
+            messages=[Message(role="system", content=system_prompt)],
+            input_metadata=InputMetadata(
+                row_id=row["id"],
+                dataset_info={
+                    "environment_context": row["environment_context"],
+                    "user_simulation": row["user_simulation"],
+                    "evaluation_criteria": row["evaluation_criteria"],
+                    "user_prompt_template": row["user_prompt_template"],
+                }
+            ),
+        )
+        rows.append(eval_row)
+    
+    return rows
+```
+
+**Key Features:**
+- **System Prompt Loading**: Reads domain-specific agent instructions from external files
+- **Metadata Preservation**: Stores all 𝜏²-bench-specific data in `input_metadata.dataset_info`
+- **Initial System Message**: Sets up the conversation with the agent's role and instructions
+
+### Step 2: Test Configuration
+
+The `@evaluation_test` decorator configures the evaluation with 𝜏²-bench-specific parameters:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/airline_dataset.jsonl"],
+    dataset_adapter=tau_bench_airline_to_evaluation_row,
+    model=["fireworks_ai/accounts/fireworks/models/kimi-k2-instruct"],
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    rollout_processor=default_mcp_gym_rollout_processor,
+    threshold_of_success=0.4,
+    num_runs=1,
+    mode="pointwise",
+    max_concurrent_rollouts=32,
+    server_script_path="examples/tau2_mcp/server.py",
+)
+```
+
+**Configuration Highlights:**
+- **`rollout_processor=default_mcp_gym_rollout_processor`**: Uses a default MCP Gym processor for multi-turn conversations with simulated users, reusable for any evaluation benchmark that uses the same MCP Gym architecture
+- **`server_script_path="examples/tau2_mcp/server.py"`**: Points to the MCP server that hosts the airline environment
+- **`threshold_of_success=0.4`**: Threshold of 40% must be achieved for this test to pass
+- **`max_concurrent_rollouts=32`**: High concurrency for efficient evaluation of multiple scenarios
+
+### Step 3: Multi-Dimensional Evaluation Function
+
+The test function implements the four-criterion evaluation system described earlier:
+
+```python
+# Run all evaluators
+env_reward_info = EnvironmentEvaluator.calculate_reward(
+    environment_constructor=registry.get_env_constructor("airline"),
+    task=task,
+    full_trajectory=trajectory_objects,
+)
+action_reward_info = ActionEvaluator.calculate_reward(task=task, full_trajectory=trajectory_objects)
+communicate_reward_info = CommunicateEvaluator.calculate_reward(task=task, full_trajectory=trajectory_objects)
+nl_reward_info = NLAssertionsEvaluator.calculate_reward(task=task, full_trajectory=trajectory_objects)
+
+# Combine results - all must pass for success
+reward = 1.0
+reward *= env_reward_info.reward      # Database state verification
+reward *= action_reward_info.reward   # Tool action verification  
+reward *= nl_reward_info.reward       # LLM-as-a-judge assertions
+reward *= communicate_reward_info.reward  # Communication validation
+```
+
+Expected Evaluation Results:
+
+**Complete Success (Score: 1.0):**
+```
+✅ All checks passed
+```
+
+**Partial Failure Examples:**
+```
+❌ Failed actions: ['get_user_details({"user_id": "wrong_id"})']
+❌ Failed NL assertions: ['Agent detects that user is actually a Silver member']
+```
+
+```
+❌ Environment/DB check failed
+❌ Failed communication: ['4']
+```
+
+This pytest implementation demonstrates how to create comprehensive, multi-dimensional agent evaluations that test not just correctness, but also communication skills, tool usage, and system integrity - all essential for production-ready customer service agents.

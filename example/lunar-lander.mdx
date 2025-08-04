@@ -1,0 +1,222 @@
+---
+title: Image Multi-Turn Eval with Per-Step Rewards (Lunar Lander)
+sidebarTitle: Lunar Lander Evaluation
+---
+
+<Note>
+If you haven't read through [Multi-turn eval (per-step rewards)](/tutorial/multi-turn-eval-per-step-rewards) yet, we recommend checking that out first as this tutorial builds on those foundational concepts.
+</Note>
+
+This tutorial demonstrates how to create **multimodal** multi-turn reinforcement learning evaluations with visual observations and per-step rewards using the classic Lunar Lander environment. Unlike text-based RL environments like Frozen Lake, this example showcases how agents can process **both visual input (rendered game frames) and numerical state data** while receiving detailed per-step reward signals for landing performance, fuel efficiency, and trajectory optimization.
+
+<Note>
+You can find the complete code for this example at [test_lunar_lander.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_lunar_lander.py).
+</Note>
+
+## Understanding the Lunar Lander Environment
+
+Lunar Lander is a classic physics-based RL environment where an agent controls a spacecraft landing on the moon, requiring both visual understanding and precise control.
+
+- **Action Space**: `Discrete(4)` - NOTHING (0), FIRE_LEFT (1), FIRE_MAIN (2), FIRE_RIGHT (3)
+- **Observation Space**: `Box(8)` - [x, y, velocity_x, velocity_y, angle, angular_velocity, leg1_contact, leg2_contact]
+- **Visual Component**: 400x600 RGB rendered frames showing the lander, moon surface, and landing flags
+
+![Lunar Lander Environment](https://gymnasium.farama.org/_images/lunar_lander.gif)
+
+**Complex Reward Structure**: Unlike Frozen Lake's sparse binary rewards, Lunar Lander provides detailed per-step feedback:
+- Distance to landing pad (closer = better)
+- Velocity penalties (slower = better) 
+- Angle penalties (more horizontal = better)
+- +10 points per leg touching ground
+- Fuel consumption penalties (-0.03 for side engines, -0.3 for main engine)
+- Final outcome: +100 for successful landing, -100 for crash
+
+**Success Criteria**: Episodes scoring ≥200 points are considered successful landings.
+
+## Understanding the Dataset Structure
+
+The Lunar Lander dataset demonstrates **multimodal prompting** - agents must analyze both numerical state and visual information to make decisions.
+
+### Example Dataset Entry
+
+```json
+{
+  "id": "multi_env_test_001",
+  "system_prompt": "You are controlling a lunar lander spacecraft. Use the lander_action tool with actions: NOTHING, FIRE_LEFT, FIRE_MAIN, FIRE_RIGHT. Your goal is to land safely on the moon between the two flags without crashing.",
+  "user_prompt_template": "Current state: {observation}. First, describe what is in the image attached and analyze the current state. You MUST explain your reasoning in picking the next best action (NOTHING, FIRE_LEFT, FIRE_MAIN, FIRE_RIGHT) and call lander_action tool with it to land the spacecraft.",
+  "environment_context": {
+    "game": "LunarLander",
+    "continuous": false,
+    "gravity": -10.0,
+    "enable_wind": false,
+    "seed": 42
+  }
+}
+```
+
+**Key Features:**
+- **Visual Analysis Required**: "describe what is in the image attached"
+- **State Analysis**: Both numerical state data and visual information
+- **Tool Integration**: Structured interaction through `lander_action` tool
+
+## Test Harness Architecture
+
+The architecture is similar to Frozen Lake's in the sense that we again extend `McpGym` and create an `EnvironmentAdapter`, but there are some key differences.
+
+### MCP Server: LunarLanderMcp
+
+The `LunarLanderMcp` class extends `McpGym` with **visual rendering capabilities** in `format_observation`:
+
+```python
+class LunarLanderMcp(McpGym):
+    """LunarLander production server with visual rendering support."""
+
+    def __init__(self, seed: Optional[int] = None):
+        self.adapter = LunarLanderAdapter()
+        super().__init__("LunarLander-v3", self.adapter, seed)
+
+    def _register_tools(self):
+        @self.mcp.tool(
+            name="lander_action",
+            description="Control the lunar lander with discrete actions. "
+            "Valid actions: NOTHING, FIRE_LEFT, FIRE_MAIN, FIRE_RIGHT."
+        )
+        def lander_action(action: str, ctx: Context) -> Dict[str, Any]:
+            # Parse and validate action
+            action_int = self.adapter.parse_action(action)
+            
+            # Execute step with session management
+            session_id = self._get_session_id(ctx)
+            observation_data = self._execute_session_environment_step(session_id, action_int)
+            
+            return observation_data
+
+    def format_observation(self, obs: Any, env: Any) -> Dict[str, Any]:
+        """Format observation with both numerical data AND visual frame."""
+        # Structured numerical data
+        formatted = self.adapter.format_observation(obs)
+        
+        # Add rendered visual frame
+        rendered_frame = self.adapter.render_frame(env)
+        if rendered_frame:
+            formatted["image_url"] = {
+                "url": rendered_frame  # Base64 encoded PNG
+            }
+        return formatted
+```
+
+### Environment Adapter: LunarLanderAdapter
+
+The `LunarLanderAdapter` acts as an adapter to the Gymnasium library's implementation of the LunarLander game, which includes both the **physics simulation and visual rendering**:
+
+```python
+class LunarLanderAdapter(EnvironmentAdapter):
+    """LunarLander adapter with multimodal observation support."""
+    
+    def __init__(self):
+        self.action_map = {
+            "NOTHING": 0, "FIRE_LEFT": 1, 
+            "FIRE_MAIN": 2, "FIRE_RIGHT": 3
+        }
+
+    def format_observation(self, obs: np.ndarray) -> Dict[str, Any]:
+        """Convert 8D observation vector to structured data."""
+        return {
+            "position": {"x": float(obs[0]), "y": float(obs[1])},
+            "velocity": {"x": float(obs[2]), "y": float(obs[3])},
+            "orientation": {"angle": float(obs[4]), "angular_velocity": float(obs[5])},
+            "legs": {"left_contact": bool(obs[6]), "right_contact": bool(obs[7])},
+        }
+
+    def render_frame(self, env: LunarLander) -> Optional[str]:
+        """Render visual frame as base64 encoded image."""
+        rgb_array = env.render()
+        if rgb_array is None:
+            return None
+            
+        # Convert to PIL Image and encode as base64
+        image = Image.fromarray(rgb_array.astype(np.uint8))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        
+        return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode('utf-8')}"
+```
+
+## Pytest Implementation
+
+### Step 1: Dataset Adapter
+
+```python
+def lunar_lander_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Convert lunar lander entries to EvaluationRow objects."""
+    rows = []
+    
+    for row in data:
+        eval_row = EvaluationRow(
+            messages=[Message(role="system", content=row["system_prompt"])],
+            input_metadata=InputMetadata(
+                row_id=row["id"],
+                dataset_info={
+                    "environment_context": row["environment_context"],
+                    "user_prompt_template": row["user_prompt_template"],
+                }
+            )
+        )
+        rows.append(eval_row)
+    
+    return rows
+```
+
+### Step 2: Test Configuration
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/lunar_lander_dataset.jsonl"],
+    dataset_adapter=lunar_lander_to_evaluation_row,
+    model=["gpt-4.1"],  # Vision-capable model required
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    rollout_processor=default_mcp_gym_rollout_processor,
+    threshold_of_success=0.0,
+    num_runs=1,
+    mode="pointwise",
+    server_script_path="examples/lunar_lander_mcp/server.py",
+    steps=15,
+)
+```
+
+**Key Configuration Notes:**
+- **Vision Model Required**: `gpt-4.1` or other vision-capable models
+- **Same Rollout Processor**: Reuses `default_mcp_gym_rollout_processor` from Frozen Lake, demonstrating framework generalization across text and visual environments
+- **Episode Management**: `steps=15` is not enough for the Lunar Lander game to complete, it likely would take hundreds of steps.
+
+### Step 3: Trajectory Evaluation
+
+As defined by the game, a success is if a score of 200 or over is achieved, which is then converted to 1 or 0 to signify a pass or fail in our Pytest setup.
+
+```python
+def test_lunar_lander_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """Evaluate lunar lander performance using physics-based scoring."""
+    
+    # Get cumulative reward from entire visual trajectory
+    score = row.get_total_reward()
+
+    # Apply Lunar Lander success criterion
+    evaluation_score = 1.0 if score >= 200 else 0.0
+    reason = (f"✅ Successful landing with reward {score:.2f}" if score >= 200 
+              else f"❌ Failed landing with reward {score:.2f}")
+
+    row.evaluation_result = EvaluateResult(
+        score=evaluation_score,
+        reason=reason,
+    )
+    
+    return row
+```
+
+## Conclusion
+
+This Lunar Lander tutorial showcases eval-protocol's **multimodal evaluation capabilities**, demonstrating how the framework seamlessly handles complex visual RL environments while maintaining the same architectural patterns established with text-based evaluations. The key innovation is the **dual-stream observation system**: agents receive both structured numerical data and visual frames, enabling sophisticated multimodal reasoning about physics, control, and spatial relationships.
+
+The per-step reward structure in Lunar Lander is particularly valuable for training data generation. Unlike Frozen Lake's sparse rewards, every frame provides rich feedback about landing performance, fuel efficiency, and trajectory optimization. This creates **dense multimodal training signals** that can inform visual RL algorithms, multimodal fine-tuning approaches, and hybrid training systems that combine visual understanding with control policy learning. In the future, we hope to extend this work to frontier LLM use-cases like browser-use agents.
+
+Most importantly, this example demonstrates eval-protocol's **modality-agnostic design**. The same `default_mcp_gym_rollout_processor`, pytest patterns, and evaluation infrastructure work seamlessly across text-based grid worlds and complex visual physics simulations. This unified approach enables practitioners to build comprehensive evaluation suites spanning the full spectrum of AI capabilities—from language understanding to visual reasoning to real-time control—all within a single, consistent framework.
