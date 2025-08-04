@@ -18,30 +18,44 @@ capabilities.
 
 <Workflow />
 
-For example, here is a standard test function for a single-turn eval that checks
-if model responses contain the required number of highlighted sections (like
-**bold** or *italic* text):
+For example, here is a simple test function that checks if a model's response
+contains **bold** text formatting:
 
-```python test_markdown_format.py
+```python test_bold_format.py
+from eval_protocol.models import EvaluateResult, EvaluationRow
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+
 @evaluation_test(
-    input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
-    dataset_adapter=markdown_dataset_to_evaluation_row,
+    input_dataset=["dataset.jsonl"],
     model=["accounts/fireworks/models/llama-v3p1-8b-instruct"],
-    input_params=[{"temperature": 0.0, "max_tokens": 4096}],  
-    threshold_of_success=1.0,
     rollout_processor=default_single_turn_rollout_processor,
-    num_runs=1
+    mode="pointwise",
 )
-def test_markdown_highlighting_evaluation(input_dataset, input_params, model):
-    return evaluate(input_dataset, markdown_format_evaluate) 
+def test_bold_format(row: EvaluationRow) -> EvaluationRow:
+    """
+    Simple evaluation that checks if the model's response contains bold text.
+    """
+    
+    assistant_response = row.messages[-1].content
+    
+    # Check if response contains **bold** text
+    has_bold = "**" in assistant_response
+    
+    if has_bold:
+        result = EvaluateResult(score=1.0, reason="✅ Response contains bold text")
+    else:
+        result = EvaluateResult(score=0.0, reason="❌ No bold text found")
+    
+    row.evaluation_result = result
+    return row
 ```
 
-For a complete step-by-step tutorial with detailed explanations, dataset
-examples, and configuration options, see our [Single-turn
-Evals](/tutorial/single-turn-eval-static) guide.
+For a complete step-by-step tutorial of a slightly more complex example with
+detailed explanations, dataset examples, and configuration options, see our
+[Single-turn eval](/tutorial/single-turn-eval-static) tutorial.
 
 For a more advanced example that includes MCP and user simulation, check out our
-implementation of [𝜏²-bench](/example/tau-bench), a benchmark for evaluating conversational
+implementation of [𝜏²-bench](/tutorial/multi-turn-eval-user-simulation), a benchmark for evaluating conversational
 agents in a dual control environment.
 
 
@@ -50,5 +64,5 @@ agents in a dual control environment.
  - [Specification](/specification)
  - [Why Eval Protocol?](/why)
  - [Principles](/principles)
- - [Single-turn Eval](/tutorial/single-turn-eval-static)
- - [Multi-turn Eval](/tutorial/multi-turn-eval-user-simulation)
+ - [Single-turn eval](/tutorial/single-turn-eval-static)
+ - [Multi-turn eval](/tutorial/multi-turn-eval-user-simulation)
