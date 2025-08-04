@@ -1,0 +1,275 @@
+---
+title: GSM8K Math Evaluation
+description: 'Evaluate mathematical reasoning with GSM8K dataset using structured thinking format'
+sidebarTitle: Math Evaluation
+---
+
+This example demonstrates how to create a comprehensive math evaluation using the GSM8K dataset. The evaluation combines numerical accuracy checking with format validation, requiring models to follow a structured thinking format with `<think>...</think><answer>...</answer>` tags.
+
+<Note>
+You can find the complete code for this example at [test_pytest_math_example.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_math_example.py) and the evaluation logic at [math_example/main.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/math_example/main.py).
+</Note>
+
+## Understanding the GSM8K Dataset
+
+The GSM8K (Grade School Math 8K) dataset contains grade school math word problems that test mathematical reasoning and problem-solving abilities. Each problem requires multi-step reasoning to arrive at the correct numerical answer.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`id`**: Unique identifier for the test case
+- **`user_query`**: The math word problem to solve
+- **`ground_truth_for_eval`**: The expected solution with step-by-step reasoning and final answer
+
+### Example Dataset Entries
+
+**Basic Arithmetic Problem:**
+```json
+{
+  "id": "gsm8k_test_0",
+  "user_query": "Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?",
+  "ground_truth_for_eval": "Janet sells 16 - 3 - 4 = <<16-3-4=9>>9 duck eggs a day.\nShe makes 9 * 2 = $<<9*2=18>>18 every day at the farmer's market.\n#### 18"
+}
+```
+
+**Percentage and Profit Problem:**
+```json
+{
+  "id": "gsm8k_test_2",
+  "user_query": "Josh decides to try flipping a house. He buys a house for $80,000 and then puts in $50,000 in repairs. This increased the value of the house by 150%. How much profit did he make?",
+  "ground_truth_for_eval": "The cost of the house and repairs came out to 80,000+50,000=$<<80000+50000=130000>>130,000\nHe increased the value of the house by 80,000*1.5=<<80000*1.5=120000>>120,000\nSo the new value of the house is 120,000+80,000=$<<120000+80000=200000>>200,000\nSo he made a profit of 200,000-130,000=$<<200000-130000=70000>>70,000\n#### 70000"
+}
+```
+
+### Dataset Characteristics
+
+**Problem Types**: The dataset covers various mathematical concepts:
+- Basic arithmetic (addition, subtraction, multiplication, division)
+- Percentages and ratios
+- Multi-step word problems
+- Real-world applications (business, cooking, sports)
+
+**Solution Format**: Ground truth solutions include:
+- Step-by-step reasoning with intermediate calculations
+- Computed values in `<<calculation=result>>` format
+- Final answer marked with `#### answer`
+
+**Complexity**: Problems require:
+- Understanding of mathematical concepts
+- Multi-step reasoning
+- Accurate numerical computation
+- Clear presentation of work
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework:
+
+```python
+import re
+from typing import Any, Dict, List, Optional, Union
+
+from eval_protocol import EvaluateResult, MetricResult, reward_function
+from eval_protocol.models import Message
+from eval_protocol.rewards.math import math_reward
+```
+
+- `re`: Python's regex module for pattern matching
+- `EvaluateResult`: The result object containing evaluation score and reasoning
+- `MetricResult`: Individual metric results for detailed analysis
+- `reward_function`: Decorator for evaluation functions
+- `math_reward`: Built-in math evaluation function
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the GSM8K dataset format to the EP's expected format:
+
+```python
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluationRow, Message
+
+def gsm8k_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Convert GSM8K dataset entries to EvaluationRow objects."""
+    return [
+        EvaluationRow(
+            messages=[Message(role="user", content=row["user_query"])], 
+            ground_truth=row["ground_truth_for_eval"]
+        )
+        for row in data
+    ]
+```
+
+This adapter:
+- Takes the raw GSM8K dataset as a list of dictionaries
+- Converts each row to an `EvaluationRow` with a user message containing the math problem
+- Sets the ground truth to the expected solution with step-by-step reasoning
+- Returns the list of evaluation rows
+
+## Step 3: Define Format Validation
+
+We create a function to check if the model's response follows the required structured thinking format:
+
+```python
+def check_think_answer_format(text: str) -> bool:
+    """Check if text follows <think>...</think><answer>...</answer> format."""
+    if not text:
+        return False
+    pattern = r"<think>[\s\S]*?</think>[\s\S]*?<answer>[\s\S]*?</answer>"
+    return bool(re.search(pattern, text))
+```
+
+**Regex pattern explained:**
+- `<think>[\s\S]*?</think>`: Matches thinking section with any content
+- `<answer>[\s\S]*?</answer>`: Matches answer section with any content
+- `[\s\S]*?`: Non-greedy match of any characters (including newlines)
+- The pattern ensures both thinking and answer sections are present
+
+## Step 4: Create the Evaluation Function
+
+The evaluation function combines numerical accuracy with format validation:
+
+```python
+@reward_function
+def evaluate(
+    messages: Union[List[Message], List[Dict[str, Any]]],
+    ground_truth: Optional[str] = None,
+    **kwargs,
+) -> EvaluateResult:
+    """
+    Evaluate math problem solving considering both accuracy and format.
+    
+    This function demonstrates how to combine multiple evaluation criteria:
+    - Numerical accuracy using built-in math evaluation
+    - Format compliance checking for <think>...</think><answer>...</answer> structure
+    """
+    # Get the assistant's response
+    assistant_message = messages[-1]
+    if isinstance(assistant_message, dict):
+        assistant_response = assistant_message.get("content", "")
+    else:
+        assistant_response = assistant_message.content or ""
+
+    # Evaluate numerical accuracy using built-in function
+    accuracy_result = math_reward(messages=messages, ground_truth=ground_truth, **kwargs)
+
+    # Evaluate format compliance
+    format_correct = check_think_answer_format(assistant_response)
+    format_score = 1.0 if format_correct else 0.0
+
+    # For math evaluation, accuracy takes priority
+    # If accuracy is 0, overall score is 0
+    # If accuracy is 1, then format can contribute to the score
+    if accuracy_result.score == 0.0:
+        combined_score = 0.0
+    else:
+        combined_score = accuracy_result.score  # Only accuracy matters for math evaluation
+
+    # Create detailed metrics for analysis
+    metrics = {
+        "accuracy_reward": MetricResult(
+            score=accuracy_result.score,
+            reason=f"Numerical accuracy: {accuracy_result.reason}",
+            is_score_valid=True,
+        ),
+        "format_reward": MetricResult(
+            score=format_score,
+            reason=f"Format compliance: {'correct' if format_correct else 'incorrect'} <think>...</think><answer>...</answer> structure",
+            is_score_valid=True,
+        ),
+    }
+
+    return EvaluateResult(
+        score=combined_score,
+        reason=f"Combined score: {combined_score:.2f} (accuracy: {accuracy_result.score:.2f}, format: {format_score:.2f})",
+        metrics=metrics,
+    )
+```
+
+**Key evaluation aspects:**
+- **Numerical Accuracy**: Uses the built-in `math_reward` function to check if the final answer matches the ground truth
+- **Format Compliance**: Ensures responses follow the structured thinking format
+- **Priority System**: Numerical accuracy takes precedence over format compliance
+- **Detailed Metrics**: Provides separate scores for accuracy and format for detailed analysis
+
+## Step 5: Configure and Run the Test
+
+We use the `@evaluation_test` decorator to configure the evaluation:
+
+```python
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluate, evaluation_test
+from examples.math_example.main import evaluate as math_evaluate
+from tests.pytest.helper.gsm8k_to_evaluation_row import gsm8k_to_evaluation_row
+
+@evaluation_test(
+    input_dataset=["development/gsm8k_sample.jsonl"],
+    dataset_adapter=gsm8k_to_evaluation_row,
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    input_params=[{"temperature": 0.0}],
+    max_dataset_rows=5,
+    threshold_of_success=0.0,
+    rollout_processor=default_single_turn_rollout_processor,
+)
+def test_math_dataset(input_dataset, input_params, model):
+    """Run math evaluation on sample dataset using pytest interface."""
+    return evaluate(input_dataset, math_evaluate)
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the GSM8K sample dataset
+- `dataset_adapter`: Function that converts GSM8K format to EvaluationRow objects
+- `model`: The model to evaluate (Fireworks Kimi model in this case)
+- `input_params`: Model parameters (temperature set to 0.0 for deterministic results)
+- `max_dataset_rows`: Limit to 5 test cases for quick evaluation
+- `threshold_of_success`: Set to 0.0 to see all results (can be adjusted based on requirements)
+- `rollout_processor`: Uses default single-turn processor for math problems
+
+## Expected Model Response Format
+
+For optimal evaluation, models should respond in this structured format:
+
+```
+<think>
+Let me solve this step by step:
+1. Janet's ducks lay 16 eggs per day
+2. She eats 3 for breakfast
+3. She uses 4 for muffins
+4. So she sells: 16 - 3 - 4 = 9 eggs
+5. At $2 per egg, she makes: 9 * 2 = $18
+</think>
+<answer>
+Janet makes $18 every day at the farmers' market.
+</answer>
+```
+
+**Format requirements:**
+- `<think>` section: Detailed step-by-step reasoning
+- `<answer>` section: Clear final answer
+- Both sections must be present for format compliance
+- Numerical accuracy is evaluated from the final answer
+
+## Evaluation Results
+
+The evaluation provides comprehensive feedback:
+
+**Successful Response:**
+- **Score**: 1.0
+- **Reason**: "Combined score: 1.00 (accuracy: 1.00, format: 1.00)"
+- **Metrics**: Both accuracy and format scores are 1.0
+
+**Incorrect Answer:**
+- **Score**: 0.0
+- **Reason**: "Combined score: 0.00 (accuracy: 0.00, format: 1.00)"
+- **Metrics**: Accuracy score 0.0, format score 1.0
+
+**Incorrect Format:**
+- **Score**: 0.0 (if accuracy is also 0.0)
+- **Reason**: "Combined score: 0.00 (accuracy: 0.00, format: 0.00)"
+- **Metrics**: Both accuracy and format scores are 0.0
+
+This comprehensive evaluation ensures that models can:
+1. Understand complex mathematical word problems
+2. Perform accurate numerical calculations
+3. Present solutions in a structured, readable format
+4. Provide step-by-step reasoning for transparency
+
+The GSM8K evaluation demonstrates how to create robust, multi-criteria assessments that can be used for model comparison, fine-tuning validation, and deployment readiness testing.
