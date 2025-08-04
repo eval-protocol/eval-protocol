@@ -1,0 +1,393 @@
+---
+title: JSON Schema Evaluation
+description: 'Evaluate JSON content against expected schemas using structural similarity and LLM judgment'
+sidebarTitle: JSON Schema Evaluation
+---
+
+This example demonstrates how to create comprehensive JSON schema evaluations
+using the Eval Protocol (EP) framework. The evaluation uses the
+[`json_schema_reward`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/rewards/json_schema.py)
+function to assess whether models generate JSON content that matches expected
+schemas, with options for both structural validation and LLM-based judgment.
+
+<Note>
+You can find the complete code for this example at [test_pytest_json_schema.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_json_schema.py).
+</Note>
+
+## Understanding JSON Schema Evaluation
+
+JSON schema evaluation assesses a model's ability to:
+- **Generate valid JSON**: Produce syntactically correct JSON content
+- **Match expected structure**: Create JSON objects that conform to specified schemas
+- **Handle complex nested structures**: Work with objects, arrays, and mixed data types
+- **Extract JSON from responses**: Parse JSON content from markdown code blocks or plain text
+- **Validate type consistency**: Ensure data types match schema specifications
+
+Unlike text-based evaluations that focus on content generation, JSON schema evaluations test a model's **structured data generation capabilities** - essential skills for AI systems that need to produce machine-readable, structured outputs.
+
+## Understanding the Dataset Structure
+
+The JSON schema dataset contains diverse test cases that evaluate different aspects of JSON generation, from simple object creation to complex nested structures with various data types.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`messages`**: Conversation history with user requests and assistant responses
+- **`ground_truth`**: Optional expected response (not used in schema validation)
+- **`evaluation_result`**: Pre-computed evaluation scores for validation
+- **`input_metadata`**: Additional context including expected schema and test case descriptions
+
+### Example Dataset Entries
+
+**Perfect Schema Match:**
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give me user information in the following JSON format:\n```json\n{\n  \"user\": {\n    \"name\": \"string\",\n    \"age\": \"number\",\n    \"isActive\": \"boolean\"\n  },\n  \"products\": [\n    {\n      \"id\": \"string\",\n      \"price\": \"number\"\n    }\n  ]\n}\n```"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the user information:\n```json\n{\n  \"user\": {\n    \"name\": \"John Doe\",\n    \"age\": 30,\n    \"isActive\": true\n  },\n  \"products\": [\n    {\n      \"id\": \"prod-1\",\n      \"price\": 29.99\n    }\n  ]\n}\n```"
+    }
+  ],
+  "ground_truth": null,
+  "input_metadata": {
+    "dataset_info": {
+      "test_case": "exact_match",
+      "description": "JSON content that exactly matches the expected schema",
+      "expected_schema": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "age": {"type": "number"},
+              "isActive": {"type": "boolean"}
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "string"},
+                "price": {"type": "number"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Partial Schema Match with Missing Properties:**
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give me user information in the following JSON format:\n```json\n{\n  \"user\": {\n    \"name\": \"string\",\n    \"age\": \"number\",\n    \"isActive\": \"boolean\",\n    \"address\": {\n      \"street\": \"string\",\n      \"city\": \"string\"\n    }\n  }\n}\n```"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the user information:\n```json\n{\n  \"user\": {\n    \"name\": \"John Doe\",\n    \"age\": 30,\n    \"email\": \"john@example.com\"\n  }\n}\n```"
+    }
+  ],
+  "ground_truth": null,
+  "input_metadata": {
+    "dataset_info": {
+      "test_case": "partial_match",
+      "description": "JSON content with missing and extra properties compared to expected schema",
+      "expected_schema": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "age": {"type": "number"},
+              "isActive": {"type": "boolean"},
+              "address": {
+                "type": "object",
+                "properties": {
+                  "street": {"type": "string"},
+                  "city": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Type Mismatch Errors:**
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give me user information in the following JSON format:\n```json\n{\n  \"name\": \"string\",\n  \"age\": \"number\",\n  \"tags\": [\"string\"]\n}\n```"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the user information:\n```json\n{\n  \"name\": \"John Doe\",\n  \"age\": \"30\",\n  \"tags\": {\n    \"tag1\": \"value1\"\n  }\n}\n```"
+    }
+  ],
+  "ground_truth": null,
+  "input_metadata": {
+    "dataset_info": {
+      "test_case": "mismatched_types",
+      "description": "JSON content with type mismatches (string instead of number, object instead of array)",
+      "expected_schema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "age": {"type": "number"},
+          "tags": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework:
+
+```python
+import json
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.rewards.json_schema import json_schema_reward
+```
+
+- `json`: Python's JSON module for JSON parsing and validation
+- `typing`: Python's typing module for type hints (Any, Dict, List)
+- `EvaluationRow`: Data structure containing conversation messages and ground truth
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
+- `json_schema_reward`: Function to evaluate JSON content against expected schemas
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the JSON schema dataset format to the EP's expected format:
+
+```python
+def json_schema_to_evaluation_row(rows: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert a json schema row to an evaluation row.
+    
+    This adapter extracts the conversation messages and metadata from the dataset,
+    creating EvaluationRow objects that can be processed by the evaluation framework.
+    
+    Args:
+        rows: List of JSON schema dataset entries with messages and metadata
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    dataset: List[EvaluationRow] = []
+    for row in rows:
+        dataset.append(
+            EvaluationRow(
+                messages=row["messages"][:1],  # Use only the first message (user prompt)
+                ground_truth=row["ground_truth"],
+                input_metadata=row["input_metadata"],
+            )
+        )
+    return dataset
+```
+
+The adapter function:
+- **Extracts conversation messages**: Takes the user prompt from the dataset
+- **Preserves metadata**: Maintains the expected schema and test case information
+- **Handles ground truth**: Passes through any ground truth data (though not used in schema validation)
+- **Creates evaluation rows**: Converts dataset entries to the EP's standard format
+
+## Step 3: Configure the Evaluation Test
+
+We use the `@evaluation_test` decorator to configure our JSON schema evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/json_schema.jsonl"],
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    mode="pointwise",
+    rollout_processor=default_single_turn_rollout_processor,
+    dataset_adapter=json_schema_to_evaluation_row,
+)
+async def test_pytest_function_calling(row: EvaluationRow) -> EvaluationRow:
+    """Run pointwise evaluation on sample dataset using pytest interface."""
+    expected_schema = row.input_metadata.dataset_info["expected_schema"]
+    result = json_schema_reward(row.messages, expected_schema=expected_schema)
+    row.evaluation_result = result
+    print(row.evaluation_result)
+    return row
+```
+
+The evaluation configuration:
+- **`input_dataset`**: Path to the JSON schema dataset file
+- **`model`**: Target model to evaluate (Fireworks Kimi model in this example)
+- **`mode`**: Set to "pointwise" for individual sample evaluation
+- **`rollout_processor`**: Uses default single-turn processor for conversation handling
+- **`dataset_adapter`**: References our custom adapter function
+
+## Step 4: Implement the Evaluation Logic
+
+The core evaluation logic extracts the expected schema and applies the JSON schema reward function:
+
+```python
+async def test_pytest_function_calling(row: EvaluationRow) -> EvaluationRow:
+    """Run pointwise evaluation on sample dataset using pytest interface."""
+    # Extract the expected schema from the dataset metadata
+    expected_schema = row.input_metadata.dataset_info["expected_schema"]
+    
+    # Apply the JSON schema reward function
+    result = json_schema_reward(row.messages, expected_schema=expected_schema)
+    
+    # Store the evaluation result
+    row.evaluation_result = result
+    print(row.evaluation_result)
+    return row
+```
+
+The evaluation process:
+1. **Extracts expected schema**: Gets the target JSON structure from metadata
+2. **Applies schema validation**: Uses `json_schema_reward` to compare generated JSON against expected schema
+3. **Stores results**: Saves the evaluation score and metrics in the row
+4. **Returns processed row**: Provides the evaluated row for further analysis
+
+## Understanding the JSON Schema Reward Function
+
+The [`json_schema_reward`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/rewards/json_schema.py) function provides comprehensive JSON validation capabilities:
+
+### Core Features
+
+**Schema Extraction and Normalization:**
+- Extracts JSON content from assistant responses (supports markdown code blocks)
+- Normalizes schemas for consistent comparison
+- Handles both object and string schema representations
+
+**Structural Similarity Calculation:**
+- Uses Jaccard similarity to compare schema structures
+- Evaluates property matches, type consistency, and nested object alignment
+- Provides detailed scoring with property-level analysis
+
+**Error Handling:**
+- Validates JSON syntax before schema comparison
+- Handles malformed JSON with appropriate error scoring
+- Provides clear error messages for debugging
+
+
+
+## Test Cases and Evaluation Scenarios
+
+The JSON schema evaluation covers various scenarios:
+
+### ✅ Perfect Matches
+| Scenario | Description |
+|:---------|:------------|
+| **Exact schema compliance** | JSON that perfectly matches expected structure |
+| **Type consistency** | All data types match schema specifications |
+| **Nested object handling** | Complex nested structures with proper validation |
+
+### ⚠️ Partial Matches
+| Scenario | Description |
+|:---------|:------------|
+| **Missing properties** | JSON with some expected fields omitted |
+| **Extra properties** | JSON with additional fields not in schema |
+| **Type mismatches** | Correct structure but wrong data types |
+
+### ❌ Error Cases
+| Scenario | Description |
+|:---------|:------------|
+| **Invalid JSON syntax** | Malformed JSON that cannot be parsed |
+| **Missing JSON content** | Responses without extractable JSON |
+| **Empty structures** | Edge cases with empty objects or arrays |
+
+### 🔄 Complex Scenarios
+| Scenario | Description |
+|:---------|:------------|
+| **Array validation** | JSON arrays with consistent item structures |
+| **Mixed data types** | Objects with various primitive and complex types |
+| **Nested arrays** | Multi-level nested structures with arrays of objects |
+
+
+
+## Expected Output
+
+The evaluation produces detailed results including:
+
+**Perfect Match Example:**
+```
+EvaluationResult(
+    score=1.0,
+    reason="Perfect schema match",
+    metrics={
+        "schema_similarity": MetricResult(
+            score=1.0,
+            reason="Schema similarity: 1.00",
+            is_score_valid=True
+        )
+    }
+)
+```
+
+**Partial Match Example:**
+```
+EvaluationResult(
+    score=0.5,
+    reason="Partial schema match with missing and extra properties",
+    metrics={
+        "schema_similarity": MetricResult(
+            score=0.5,
+            reason="Schema similarity: 0.50",
+            is_score_valid=False
+        )
+    }
+)
+```
+
+**Error Case Example:**
+```
+EvaluationResult(
+    score=0.0,
+    reason="Invalid JSON content",
+    metrics={
+        "error": MetricResult(
+            score=0.0,
+            reason="Invalid JSON content: Here's the user information:\n```json\n{\n  \"name\": \"John Doe\",\n  \"age\": \n}\n```",
+            is_score_valid=False
+        )
+    }
+)
+```
+
+## Conclusion
+
+This JSON schema evaluation demonstrates how to assess AI models' structured data generation capabilities using schema validation and similarity scoring. The evaluation ensures models can generate valid JSON content that conforms to expected schemas, handle complex nested structures, and maintain type consistency.
+
+This evaluation is particularly valuable for:
+- **API integration testing**: Validating JSON responses from AI models that interact with external APIs
+- **Data pipeline validation**: Ensuring structured data generation meets schema requirements
+- **Model capability assessment**: Evaluating language models' ability to produce machine-readable outputs
+
+The JSON schema evaluation focuses on **structural correctness** and **type compliance** rather than semantic content, making it essential for building reliable AI systems that can generate consistent, well-formed JSON data. It provides objective scoring with detailed property-level analysis, comprehensive error handling, and scalable automated validation.
+
+This comprehensive JSON schema evaluation framework provides robust assessment
+of model capabilities in structured data generation, essential for applications
+requiring reliable JSON output from AI systems.

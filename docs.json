@@ -39,6 +39,7 @@
         "group": "Examples",
         "pages": [
           "example/function-calling",
+          "example/json-schema",
           "example/basic-coding",
           "example/apps-coding",
           "example/lunar-lander",
