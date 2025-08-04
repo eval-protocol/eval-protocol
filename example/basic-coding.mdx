@@ -1,0 +1,402 @@
+---
+title: Basic Coding Evaluation
+description: 'Evaluate code correctness by executing Python functions and comparing outputs'
+sidebarTitle: Basic Coding Evaluation
+---
+
+This example demonstrates how to create comprehensive basic coding evaluations using the Eval Protocol (EP) framework. The evaluation uses code execution functions to test whether models can write correct Python functions that produce expected outputs when executed with specific inputs.
+
+<Note>
+You can find the complete code for this example at [test_basic_coding.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_basic_coding.py).
+</Note>
+
+## Understanding Basic Coding Evaluation
+
+Basic coding evaluation assesses a model's ability to:
+- **Write syntactically correct code**: Generate valid Python syntax without errors
+- **Implement correct logic**: Create functions that perform the specified operations
+- **Handle different inputs**: Process various input values correctly (positive, negative, zero, edge cases)
+- **Produce exact outputs**: Return results that match expected values precisely
+
+Unlike text-based evaluations that focus on natural language generation, coding evaluations test a model's **programming capabilities and logical reasoning** - essential skills for AI systems that need to write functional code.
+
+## Understanding the Dataset Structure
+
+The basic coding dataset contains simple programming tasks that evaluate fundamental coding skills, from arithmetic operations to data structure manipulation.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`prompt`**: The coding task description specifying what function to write
+- **`input`**: Test input value to pass to the function
+- **`expected_output`**: The correct output the function should return
+
+### Example Dataset Entries
+
+**Simple Addition Function:**
+```json
+{
+  "prompt": "Write a Python function `add_one` that takes an integer and returns the integer incremented by 1.",
+  "input": "5",
+  "expected_output": "6"
+}
+```
+
+**Multiplication Function:**
+```json
+{
+  "prompt": "Write a Python function `multiply_by_two` that takes an integer and returns the integer multiplied by 2.",
+  "input": "3",
+  "expected_output": "6"
+}
+```
+
+**List Operations:**
+```json
+{
+  "prompt": "Write a Python function `get_length` that takes a list and returns its length.",
+  "input": "[1, 2, 3]",
+  "expected_output": "3"
+}
+```
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework:
+
+```python
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.rewards.code_execution import extract_code_blocks, execute_python_code
+```
+
+- `typing`: Python's typing module for type hints (Any, Dict, List)
+- `EvaluateResult`: Result object containing evaluation score and reasoning
+- `EvaluationRow`: Data structure containing conversation messages and ground truth
+- `Message`: Individual message in the conversation
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
+- `extract_code_blocks`: Function to extract Python code from markdown code blocks
+- `execute_python_code`: Function to safely execute Python code and capture output
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the basic coding dataset format to the EP's expected format:
+
+```python
+def coding_dataset_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert entries from coding dataset to EvaluationRow objects.
+    
+    This adapter combines the coding prompt with the test input to create
+    a complete user message, and stores the expected output as ground truth
+    for comparison during evaluation.
+    
+    Args:
+        data: List of coding dataset entries with prompt, input, and expected_output
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    return [
+        EvaluationRow(
+            messages=[Message(role="user", content=f"{row['prompt']} Input: {row['input']}")], 
+            ground_truth=row["expected_output"]
+        )
+        for row in data
+    ]
+```
+
+This adapter:
+- Combines the coding prompt with the test input into a single user message
+- Stores the expected output as ground truth for comparison
+- Creates Message objects with the proper role and content structure
+- Returns a list of EvaluationRow objects that the framework can process
+
+**Key transformations:**
+- **Message construction**: Combines prompt and input into clear instructions
+- **Ground truth preservation**: Maintains expected output for exact comparison
+- **Role assignment**: Sets proper user role for the coding request
+
+## Step 3: Configure and Run the Evaluation
+
+We use the `@evaluation_test` decorator to configure the evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/basic_coding_dataset.jsonl"],
+    dataset_adapter=coding_dataset_to_evaluation_row,
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
+    threshold_of_success=0.8,
+    rollout_processor=default_single_turn_rollout_processor,
+    num_runs=1,
+    mode="pointwise",
+)
+async def test_coding_code_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """
+    Evaluation function that tests code correctness by executing it locally.
+    
+    This function:
+    1. Extracts Python code from the assistant's response
+    2. Executes the code locally with timeout=10
+    3. Compares the output to ground_truth
+    4. Returns a score of 1.0 if output matches, 0.0 otherwise
+    
+    Args:
+        row: EvaluationRow containing the conversation messages and expected_output in ground_truth
+        
+    Returns:
+        EvaluationRow with the evaluation result
+    """
+    # Check if we have an assistant response
+    if len(row.messages) < 2 or row.messages[-1].role != "assistant":
+        row.evaluation_result = EvaluateResult(score=0.0, reason="No assistant response found")
+        return row
+    
+    assistant_content = row.messages[-1].content or ""
+    expected_output = (row.ground_truth or "").strip()
+    
+    # Extract Python code blocks
+    code_blocks = extract_code_blocks(assistant_content, language="python")
+    if not code_blocks:
+        row.evaluation_result = EvaluateResult(score=0.0, reason="No Python code block found")
+        return row
+    
+    code = code_blocks[0]["code"]
+    
+    # Execute the code locally
+    execution_result = execute_python_code(code, timeout=10)
+    
+    if not execution_result.get("success", False):
+        error_msg = execution_result.get("error", "Code execution failed")
+        row.evaluation_result = EvaluateResult(score=0.0, reason=f"Execution error: {error_msg}")
+        return row
+    
+    # Compare output with expected
+    actual_output = (execution_result.get("output", "") or "").strip()
+    
+    if actual_output == expected_output:
+        row.evaluation_result = EvaluateResult(
+            score=1.0, 
+            reason=f"✅ Output matches: '{actual_output}'"
+        )
+    else:
+        row.evaluation_result = EvaluateResult(
+            score=0.0, 
+            reason=f"❌ Expected: '{expected_output}', Got: '{actual_output}'"
+        )
+    
+    return row
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the basic coding dataset JSONL file
+- `model`: The model to evaluate (Fireworks Kimi model in this case)
+- `rollout_input_params`: Model parameters including temperature=0.0 for deterministic results
+- `threshold_of_success`: 80% success rate threshold for the evaluation
+- `mode`: `pointwise` for evaluating individual rows independently
+- `dataset_adapter`: Function that converts coding format to EvaluationRow objects
+- `rollout_processor`: Uses default single-turn processor for coding evaluations
+
+**Evaluation process:**
+1. **Validate response**: Ensure we have a valid assistant response containing code
+2. **Extract code**: Use `extract_code_blocks` to find Python code in markdown blocks
+3. **Execute safely**: Run the code in a secure environment with timeout protection
+4. **Compare output**: Perform exact string comparison between actual and expected results
+5. **Return score**: Provide binary score (1.0 for exact match, 0.0 for any difference)
+
+## Core Functions Explained
+
+### `extract_code_blocks` Function
+
+The `extract_code_blocks` function identifies and extracts Python code from the model's response, typically from markdown code blocks.
+
+**Key Features:**
+- **Markdown parsing**: Identifies ```python code blocks in responses
+- **Language filtering**: Can filter for specific programming languages
+- **Content cleaning**: Removes verbose explanatory text that might interfere with execution
+- **Multiple blocks**: Can extract multiple code blocks if present
+
+**Function Signature:**
+```python
+def extract_code_blocks(text: str, language: Optional[str] = None) -> List[Dict[str, str]]:
+```
+
+**Parameters:**
+- `text`: The assistant's response containing code
+- `language`: Optional language filter (e.g., "python")
+
+**Return Value:**
+- List of dictionaries with "code" and "language" keys
+
+**Example Usage:**
+```python
+response = """
+Here's the solution:
+
+\`\`\`python
+def add_one(x):
+    return x + 1
+\`\`\`
+
+This function takes an integer and returns it incremented by 1.
+"""
+
+code_blocks = extract_code_blocks(response, language="python")
+print(code_blocks[0]["code"])  # "def add_one(x):\n    return x + 1"
+```
+
+### `execute_python_code` Function
+
+The `execute_python_code` function safely executes Python code in a controlled environment with security restrictions and resource limits.
+
+**Key Features:**
+- **Secure execution**: Runs code in a subprocess with memory and time limits
+- **Safety guards**: Disables dangerous operations like file system access
+- **Timeout protection**: Prevents infinite loops and long-running code
+- **Error handling**: Captures and reports execution errors clearly
+- **Output capture**: Returns both stdout and stderr from execution
+
+**Function Signature:**
+```python
+def execute_python_code(code: str, timeout: int = 5) -> Dict[str, Any]:
+```
+
+**Parameters:**
+- `code`: Python code to execute
+- `timeout`: Maximum execution time in seconds
+
+**Return Value:**
+- Dictionary with execution results including success status, output, and errors
+
+**Example Usage:**
+```python
+code = """
+def add_one(x):
+    return x + 1
+
+result = add_one(5)
+print(result)
+"""
+
+result = execute_python_code(code, timeout=10)
+if result["success"]:
+    print(f"Output: {result['output']}")  # "Output: 6"
+else:
+    print(f"Error: {result['error']}")
+```
+
+### Security and Safety Features
+
+The code execution environment includes several safety measures:
+
+**Resource Limits:**
+- **Memory limits**: Restricts memory usage to prevent excessive consumption
+- **CPU limits**: Prevents long-running computations
+- **Timeout enforcement**: Kills processes that exceed time limits
+
+**Disabled Operations:**
+- **File system access**: Prevents reading/writing files
+- **Network operations**: Blocks network requests
+- **System calls**: Disables potentially dangerous system operations
+- **Process spawning**: Prevents creating new processes
+
+**Error Handling:**
+- **Exception capture**: Catches and reports Python exceptions
+- **Timeout detection**: Identifies and reports timeout errors
+- **Resource exhaustion**: Handles memory and CPU limit violations
+
+## Evaluation Scenarios and Results
+
+The basic coding evaluation handles various scenarios with different outcomes:
+
+### Perfect Implementation (Score: 1.0)
+**Scenario**: Model writes correct function that produces expected output
+```python
+# User prompt: "Write a Python function `add_one` that takes an integer and returns the integer incremented by 1. Input: 5"
+# Model response:
+def add_one(x):
+    return x + 1
+
+result = add_one(5)
+print(result)
+```
+**Result**: ✅ Output matches: '6' - Function correctly implements the required logic
+
+### Syntax Error (Score: 0.0)
+**Scenario**: Model writes code with syntax errors
+```python
+# User prompt: "Write a Python function `add_one` that takes an integer and returns the integer incremented by 1. Input: 5"
+# Model response:
+def add_one(x)  # Missing colon
+    return x + 1
+
+result = add_one(5)
+print(result)
+```
+**Result**: ❌ Execution error: SyntaxError - Invalid Python syntax prevents execution
+
+### Logic Error (Score: 0.0)
+**Scenario**: Model writes syntactically correct but logically incorrect code
+```python
+# User prompt: "Write a Python function `add_one` that takes an integer and returns the integer incremented by 1. Input: 5"
+# Model response:
+def add_one(x):
+    return x + 2  # Wrong logic: adds 2 instead of 1
+
+result = add_one(5)
+print(result)
+```
+**Result**: ❌ Expected: '6', Got: '7' - Logic error produces wrong output
+
+### Missing Function Call (Score: 0.0)
+**Scenario**: Model defines function but doesn't call it with the input
+```python
+# User prompt: "Write a Python function `add_one` that takes an integer and returns the integer incremented by 1. Input: 5"
+# Model response:
+def add_one(x):
+    return x + 1
+# Missing: result = add_one(5)
+# Missing: print(result)
+```
+**Result**: ❌ Expected: '6', Got: '' - No output produced
+
+### Runtime Error (Score: 0.0)
+**Scenario**: Model writes code that fails during execution
+```python
+# User prompt: "Write a Python function `get_length` that takes a list and returns its length. Input: [1, 2, 3]"
+# Model response:
+def get_length(lst):
+    return lst.length()  # Wrong method: should use len()
+
+result = get_length([1, 2, 3])
+print(result)
+```
+**Result**: ❌ Execution error: AttributeError - Runtime error during function call
+
+### Edge Case Handling (Score: 1.0)
+**Scenario**: Model correctly handles edge cases like empty lists or zero values
+```python
+# User prompt: "Write a Python function `get_length` that takes a list and returns its length. Input: []"
+# Model response:
+def get_length(lst):
+    return len(lst)
+
+result = get_length([])
+print(result)
+```
+**Result**: ✅ Output matches: '0' - Correctly handles empty list edge case
+
+## Conclusion
+
+This basic coding evaluation demonstrates how to assess AI models' programming capabilities using code execution and output comparison. The evaluation ensures models can write syntactically correct code, implement proper logic, handle various inputs, and produce exact expected outputs.
+
+This evaluation is particularly valuable for:
+- **AI model assessment**: Evaluating language models' programming capabilities
+- **Code generation tools**: Validating the correctness of automatically generated code
+- **Algorithm testing**: Ensuring implementations produce correct results
+
+The basic coding evaluation focuses on **functional correctness** rather than code style or efficiency, making it essential for building reliable AI systems that can write working code. It provides objective scoring with secure execution, immediate feedback, and scalable automated testing.
