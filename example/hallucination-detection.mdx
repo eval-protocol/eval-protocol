@@ -1,0 +1,293 @@
+---
+title: Hallucination Detection Evaluation
+description: 'Detect factual inaccuracies using LLM-as-judge to compare responses against ground truth knowledge'
+sidebarTitle: Hallucination Detection
+---
+
+This example demonstrates how to create comprehensive hallucination detection evaluations using the Eval Protocol (EP) framework. The evaluation uses an LLM-as-judge approach to assess whether AI model responses contain factual inaccuracies by comparing them against provided ground truth knowledge.
+
+<Note>
+You can find the complete code for this example at [test_hallucination.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_hallucination.py).
+</Note>
+
+## Understanding Hallucination Detection Evaluation
+
+Hallucination detection evaluation assesses whether AI models provide **factually accurate responses** that align with verified knowledge, rather than generating plausible-sounding but incorrect information. Unlike traditional accuracy metrics that focus on exact matches, this evaluation tests **factual consistency and truthfulness** - critical for building trustworthy AI systems.
+
+## The HaluEval Dataset
+
+This evaluation uses the **HaluEval QA dataset**, a comprehensive benchmark containing 10,000 question-answering samples specifically designed to test hallucination detection. The dataset is built on HotpotQA with Wikipedia knowledge and includes both correct answers and ChatGPT-generated plausible hallucinations.
+
+### Dataset Structure
+
+Each entry contains:
+
+- **`knowledge`**: Wikipedia context providing factual background information
+- **`question`**: Multi-hop reasoning question from HotpotQA requiring knowledge synthesis
+- **`right_answer`**: Verified ground-truth answer from HotpotQA
+- **`hallucinated_answer`**: ChatGPT-generated plausible but factually incorrect response
+
+### Example Entry
+
+```json
+{
+  "knowledge": "Her self-titled debut studio album was released on 2 June 2017.\"New Rules\" is a song by English singer Dua Lipa from her eponymous debut studio album (2017).",
+  "question": "Dua Lipa, an English singer, songwriter and model, the album spawned the number-one single \"New Rules\" is a song by English singer Dua Lipa from her eponymous debut studio album, released in what year?",
+  "right_answer": "2017",
+  "hallucinated_answer": "The album was released in 2018."
+}
+```
+
+<Note>
+**Sample Dataset**: The EP python-sdk includes a sample of **3 representative rows** from the HaluEval QA dataset for testing and demonstration purposes. The full HaluEval QA dataset contains 10,000 knowledge-question pairs with both correct and hallucinated answers, designed to test models' ability to distinguish factual accuracy from plausible misinformation.
+</Note>
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules from the EP framework and set up the LLM judge:
+
+```python
+import json
+from typing import Any, Dict, List
+
+from fireworks import LLM
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message, MetricResult
+from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+
+# Initialize the LLM judge for evaluation
+judge_llm = LLM(model="accounts/fireworks/models/kimi-k2-instruct", deployment_type="serverless")
+```
+
+- `json`: For parsing LLM judge responses and handling structured data
+- `typing`: Python's typing module for type hints
+- `fireworks.LLM`: The LLM client for creating the judge model
+- `EvaluateResult`, `EvaluationRow`, `Message`, `MetricResult`: Core EP data structures
+- `default_single_turn_rollout_processor`: Default processor for single-turn conversations
+- `evaluation_test`: Decorator for configuring evaluation tests
+- `judge_llm`: Pre-configured LLM instance that serves as the factual accuracy judge
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the hallucination dataset format to the EP's expected format:
+
+```python
+def hallucination_dataset_adapter(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert HaluEval dataset to EvaluationRow objects.
+    
+    This adapter combines the knowledge context with the question to create
+    a complete user message, and stores the correct answer as ground truth
+    for the LLM judge to use during evaluation.
+    
+    Args:
+        data: List of hallucination dataset entries with knowledge, question, and right_answer
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    return [
+        EvaluationRow(
+            messages=[Message(role="user", content=f"Knowledge: {item['knowledge']}\n\nQuestion: {item['question']}")],
+            ground_truth=item["right_answer"]
+        )
+        for item in data
+    ]
+```
+
+## Step 3: Configure and Run the Evaluation
+
+We use the `@evaluation_test` decorator to configure the hallucination detection evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/halueval_sample_dataset.jsonl"],
+    dataset_adapter=hallucination_dataset_adapter,
+    model=["accounts/fireworks/models/kimi-k2-instruct"],
+    rollout_input_params=[{"temperature": 0.0, "max_tokens": 512}],
+    rollout_processor=default_single_turn_rollout_processor,
+    threshold_of_success=1.0,
+    num_runs=1,
+    mode="pointwise",
+)
+def test_hallucination_detection(row: EvaluationRow) -> EvaluationRow:
+    """
+    Test for response correctness using LLM-as-judge.
+    
+    This function:
+    1. Extracts the assistant's response to the knowledge-question pair
+    2. Uses an LLM judge to compare the response against the correct answer
+    3. Returns a binary score based on factual accuracy
+    
+    Args:
+        row: EvaluationRow containing the conversation messages and correct answer in ground_truth
+        
+    Returns:
+        EvaluationRow with the evaluation result
+    """
+    messages = row.messages
+    assistant_response = messages[-1].content
+
+    if not assistant_response:
+        return EvaluateResult(score=0.0, reason="❌ No assistant response found")
+
+    correct_answer = row.ground_truth
+    
+    # LLM judge system prompt for factual accuracy assessment
+    system_prompt = """
+    TASK
+    - You will be given an assistant's response and the correct answer.
+    - Your job is to evaluate whether the assistant's response is factually consistent with the correct answer.
+    - Grade whether the assistant got it right or wrong.
+
+    FORMAT
+    - Your response should be a JSON object with the following fields:
+    - `reasoning`: a short explanation for your classification
+    - `is_correct`: `true` if the assistant's response matches the correct answer, `false` otherwise
+
+    Example response structure:
+    {
+        "reasoning": "<reasoning trace>",
+        "is_correct": <true or false>
+    }
+    """
+
+    user_prompt = f"""
+    assistant_response:
+    {assistant_response}
+
+    correct_answer:
+    {correct_answer}
+    """
+
+    try:
+        # Query the LLM judge for factual accuracy assessment
+        response = judge_llm.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+        
+        result_data = json.loads(response.choices[0].message.content)
+        is_correct = result_data.get("is_correct", False)
+        reasoning = result_data.get("reasoning", "Could not parse reasoning")
+        
+    except Exception as e:
+        # Fallback if LLM judge fails
+        is_correct = False
+        reasoning = f"Evaluation failed: {str(e)}"
+    
+    score = 1.0 if is_correct else 0.0
+    
+    if is_correct:
+        assessment = "✅ Response is correct"
+    else:
+        assessment = "❌ Response is incorrect"
+    
+    reason = f"{assessment}\nReasoning: {reasoning}"
+
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason=reason,
+        metrics={
+            "llm_judge": MetricResult(
+                score=score,
+                reason=reasoning,
+                is_score_valid=True
+            )
+        }
+    )
+    
+    return row
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to the HaluEval sample dataset JSONL file
+- `model`: The model to evaluate for factual accuracy
+- `rollout_input_params`: Model parameters with moderate token limit for concise responses
+- `threshold_of_success`: 100% accuracy threshold (hallucinations should be completely avoided)
+- `mode`: `pointwise` for evaluating individual knowledge-question pairs
+- `dataset_adapter`: Function that converts HaluEval format to EvaluationRow objects
+- `rollout_processor`: Uses default single-turn processor
+
+**Evaluation process:**
+1. **Response extraction**: Get the assistant's answer to the knowledge-question pair
+2. **Judge preparation**: Set up LLM judge with clear evaluation criteria
+3. **Factual comparison**: Use judge to compare assistant response against correct answer
+4. **Structured evaluation**: Judge provides reasoning and binary correctness assessment
+5. **Score assignment**: Convert judge decision to numerical score (1.0 or 0.0)
+
+## Core Functions Explained
+
+### LLM-as-Judge System
+
+The hallucination detection uses a sophisticated LLM judge to assess factual accuracy:
+
+**Judge System Prompt Design:**
+- **Clear task definition**: Explicitly states the factual consistency evaluation goal
+- **Structured output**: Requires JSON format with reasoning and binary decision
+- **Objective criteria**: Focuses on factual accuracy rather than style or completeness
+- **Consistent format**: Standardizes judge responses for reliable parsing
+
+**Judge Evaluation Process:**
+```python
+# The judge receives both responses for direct comparison
+system_prompt = """
+TASK
+- You will be given an assistant's response and the correct answer.
+- Your job is to evaluate whether the assistant's response is factually consistent with the correct answer.
+- Grade whether the assistant got it right or wrong.
+
+FORMAT
+- Your response should be a JSON object with the following fields:
+- `reasoning`: a short explanation for your classification  
+- `is_correct`: `true` if the assistant's response matches the correct answer, `false` otherwise
+"""
+```
+
+**Advantages of LLM-as-Judge:**
+- **Semantic understanding**: Can recognize factually equivalent statements with different wording
+- **Context awareness**: Understands nuanced relationships between concepts
+- **Flexible matching**: Handles partial answers and different levels of detail appropriately
+- **Reasoning transparency**: Provides explanations for evaluation decisions
+
+## Evaluation Scenarios and Results
+
+The hallucination detection evaluation handles various factual accuracy scenarios:
+
+### Factually Correct Response (Score: 1.0)
+**Scenario**: Model provides accurate information consistent with the knowledge
+```python
+# Knowledge: "The speed of light in vacuum is approximately 299,792,458 meters per second..."
+# Question: "What is the speed of light in vacuum?"
+# Model response: "The speed of light in vacuum is approximately 299,792,458 m/s."
+# Correct answer: "The speed of light in vacuum is approximately 299,792,458 meters per second."
+
+# Judge reasoning: "The assistant's response is factually accurate. While it uses 'm/s' instead of 'meters per second', both represent the same unit and the numerical value is correct."
+# Result: ✅ Response is correct
+```
+
+### Factual Inaccuracy (Score: 0.0)
+**Scenario**: Model provides incorrect information
+```python
+# Knowledge: "The Berlin Wall was constructed in 1961..."
+# Question: "When was the Berlin Wall built?"
+# Model response: "The Berlin Wall was built in 1959."
+# Correct answer: "The Berlin Wall was built in 1961."
+
+# Judge reasoning: "The assistant provided an incorrect date. The Berlin Wall was built in 1961, not 1959."
+# Result: ❌ Response is incorrect
+```
+
+## Conclusion
+
+This hallucination detection evaluation demonstrates how to assess AI models' factual accuracy using LLM-as-judge methodology. The evaluation ensures models can provide truthful, accurate responses based on provided knowledge without introducing false information.
+
+This evaluation is particularly valuable for:
+- **Factual accuracy assessment**: Testing models' ability to stay grounded in provided knowledge
+- **Trustworthiness validation**: Ensuring AI systems provide reliable, accurate information
+- **Knowledge-based applications**: Validating models for use in educational or informational contexts
+
+The hallucination detection evaluation focuses on **factual consistency and truthfulness** rather than stylistic preferences, making it essential for building reliable AI systems that users can trust for accurate information. It provides objective assessment through LLM judges with detailed reasoning and handles diverse knowledge domains comprehensively. 

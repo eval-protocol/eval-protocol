@@ -41,6 +41,7 @@
           "example/function-calling",
           "example/basic-coding",
           "example/apps-coding",
+          "example/hallucination-detection",
           "example/lunar-lander",
           "example/gsm8k"
         ]
