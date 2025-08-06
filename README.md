@@ -11,7 +11,7 @@ language model (LLM) applications.
 
 Here is a quick demo of our log viewer in action.
 
-[log-viewer.webm](./assets/log-viewer.webm)
+[log-viewer.webm](https://github.com/user-attachments/assets/cb9a3ce8-455b-4896-9a07-ba81d1301724)
 
 ## License
 
