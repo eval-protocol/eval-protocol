@@ -32,7 +32,8 @@
               "tutorial/multi-turn-eval-user-simulation",
               "tutorial/multi-turn-eval-per-step-rewards"
             ]
-          }
+          },
+          "tutorial/reviewing-evals-ui"
         ]
       },
       {
