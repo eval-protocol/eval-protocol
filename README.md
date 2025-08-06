@@ -11,7 +11,7 @@ language model (LLM) applications.
 
 Here is a quick demo of our log viewer in action.
 
-[log-viewer.webm](https://storage.googleapis.com/fireworks-public/eval-protocol/videos/log-viewer.webm)
+[log-viewer.webm](./assets/log-viewer.webm)
 
 ## License
 
