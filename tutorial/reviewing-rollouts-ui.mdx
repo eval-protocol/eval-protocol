@@ -1,0 +1,35 @@
+---
+title: Reviewing rollouts (UI)
+mode: wide
+---
+
+You often need to manually review outputs from the model to assess quality. To
+make this easier, EP provides a UI that's easy to set up and use.
+
+To start the UI, simply run the following command:
+
+```bash
+eval-protocol logs
+```
+
+This will start the UI at http://localhost:8000. Once you navigate to the UI,
+you will see a list of previous test runs which you can click on to see the rollout.
+
+Whenever you run an `@evaluation_test`, the UI will automatically show `running`
+tests and you can see the rollouts happen live in a convenient chat interface.
+Once it's complete, you can view evaluation results to the right of the chat
+interface.
+
+
+Check out this demo of an agent connected to a Discord MCP server to see the UI
+in action while running a test in VSCode.
+
+<video
+  autoPlay
+  muted
+  loop
+  controls
+  playsInline
+  className="w-full aspect-video rounded-xl"
+  src="https://storage.googleapis.com/fireworks-public/eval-protocol/videos/log-viewer.webm"
+></video>
