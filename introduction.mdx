@@ -27,12 +27,24 @@ Ready to dive in? Install EP with a single command and start evaluating your mod
 pip install eval-protocol
 ```
 
+> **Tracking Issue:** Versioneer Setup Requirements. Make sure to setup `versioneer` in your `setup.cfg` like so:
+>
+> ```cfg setup.cfg
+> [versioneer]
+> VCS = git
+> style = pep440
+> versionfile_source = evalprotocol/_version.py
+> versionfile_build = evalprotocol/_version.py
+> tag_prefix = v
+> parentdir_prefix = evalprotocol-
+> ```
+
 ## Quick Example
 
 Here's a simple test function that checks if a model's response contains **bold** text formatting:
 
 ```python test_bold_format.py
-from eval_protocol.models import EvaluateResult, EvaluationRow
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
 from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
 
 @evaluation_test(
@@ -64,6 +76,42 @@ def test_bold_format(row: EvaluationRow) -> EvaluationRow:
     row.evaluation_result = result
     return row
 ```
+
+Run the test:
+
+```shell
+pytest test_bold_format.py
+```
+
+The test will run and output the results to the console:
+
+```shell
+(eval-protocol) ➜  evalprotocol git:(main) ✗ pytest test_bold_format.py
+===================================================== test session starts ======================================================
+platform darwin -- Python 3.12.11, pytest-8.4.1, pluggy-1.6.0
+rootdir: /Users/YOUR_PATH/evalprotocol
+configfile: pyproject.toml
+plugins: anyio-4.9.0, hydra-core-1.3.2
+collected 1 item                                                                                                               
+
+test_bold_format.py .                                                                                                    [100%]
+
+======================================================= warnings summary =======================================================
+../../python-sdk/.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../../python-sdk/.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+  /Users/YOUR_PATH/python-sdk/.venv/lib/python3.12/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+test_bold_format.py::test_bold_format[accounts/fireworks/models/gpt-oss-120b-input_messages0]
+  /Users/YOUR_PATH/python-sdk/eval_protocol/pytest/utils.py:26: DeprecationWarning: There is no current event loop
+    loop = asyncio.get_event_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================================ 1 passed, 3 warnings in 7.98s =================================================
+```
+
+
+
 
 ## Learn More
 
