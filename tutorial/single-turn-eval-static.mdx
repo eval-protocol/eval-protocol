@@ -115,7 +115,9 @@ This adapter:
 
 ## Step 3: Define the Evaluation Function
 
-The evaluation function is the core logic that analyzes model responses. In the current implementation, this is done inline within the test function:
+The evaluation function is the core logic that analyzes model responses. To
+implement this, EP provides a decorator `@evaluation_test` that configures the
+evaluation with the following parameters:
 
 ```python
 @evaluation_test(
