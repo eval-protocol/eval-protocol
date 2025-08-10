@@ -42,6 +42,15 @@
           "example/gsm8k"
         ]
       }
+      ,
+      {
+        "group": "Open-Resource Benchmarks",
+        "pages": [
+          "example/aime2025",
+          "example/gpqa",
+          "example/healthbench"
+        ]
+      }
     ]
   },
   "navbar": {
