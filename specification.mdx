@@ -4,39 +4,61 @@ title: Specification
 
 ### EvaluationRow
 
-The `EvaluationRow` is a unified data structure for a single evaluation unit that contains messages, tools, and evaluation results. This can represent either a single turn evaluation or a complete trajectory evaluation.
+The `EvaluationRow` is the canonical JSON-serializable unit of data used for both single-turn and trajectory evaluations. It contains the conversation, tool context, evaluation results, and metadata needed for reproducibility and analysis.
 
 ```python
 class EvaluationRow(BaseModel):
-    # Core conversation data
+    # Core conversation (trajectory) data
     messages: List[Message]
-    
+
     # Tool and function call information
-    tools: Optional[List[Dict[str, Any]]]
-    
+    tools: Optional[List[Dict[str, Any]]] = None
+
     # Input-related metadata
-    input_metadata: Optional[InputMetadata]
-    
-    # Ground truth reference
-    ground_truth: Optional[str]
-    
+    input_metadata: InputMetadata = Field(default_factory=InputMetadata)
+
+    # Rollout and orchestration status
+    rollout_status: RolloutStatus = Field(default_factory=RolloutStatus)
+
+    # Correlation identifiers
+    invocation_id: Optional[str] = Field(default_factory=generate_id)
+    cohort_id: Optional[str] = Field(default_factory=generate_id)
+    rollout_id: Optional[str] = Field(default_factory=generate_id)
+    run_id: Optional[str] = None
+
+    # Ground truth reference (optional)
+    ground_truth: Optional[str] = None
+
     # Unified evaluation result
-    evaluation_result: Optional[EvaluateResult]
-    
-    # LLM usage statistics
-    usage: Optional[CompletionUsage]
+    evaluation_result: Optional[EvaluateResult] = None
+
+    # LLM usage statistics (OpenAI-compatible)
+    usage: Optional[CompletionUsage] = None
+
+    # Timestamps and evaluation metadata
+    created_at: datetime = Field(default_factory=datetime.now)
+    eval_metadata: Optional[EvalMetadata] = None
+
+    # Process info for watchdogs
+    pid: Optional[int] = None
 ```
 
 **Key Features:**
-- **Unified Format**: Serves as the canonical format for evaluation data across the system
-- **Dual Support**: Supports both row-wise batch evaluation and trajectory-based RL evaluation
-- **Metadata Integration**: Includes comprehensive input metadata for tracking and reproducibility
-- **Usage Tracking**: Captures token usage statistics from LLM calls during execution
+- **Unified Format**: Canonical row format for both pointwise and trajectory evaluations
+- **Explicit Status**: `rollout_status` captures running/finished/error/stopped
+- **Reproducibility**: `input_metadata`, seeds, and identifiers support traceability
+- **Usage Tracking**: Captures token usage statistics from LLM calls
 
 ### Dataset
 
 A list of `EvaluationRow`s. When saved to file, it is a JSONL file where each
 line is a JSON-encoded `EvaluationRow`.
+
+#### JSONL example
+
+```json
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Add 2 and 3."},{"role":"assistant","content":"5"}],"tools":null,"input_metadata":{"row_id":"row_123","completion_params":{"model":"gpt-4o","temperature":0.0,"max_tokens":256},"dataset_info":{"seed":42,"system_prompt":"You are a helpful assistant.","environment_context":{}}},"rollout_status":{"status":"finished","error_message":null},"invocation_id":"ivk_abcd","cohort_id":"coh_efgh","rollout_id":"rll_ijkl","run_id":null,"ground_truth":"5","evaluation_result":{"score":1.0,"is_score_valid":true,"reason":"Exact match","metrics":{"exact_match":{"is_score_valid":true,"score":1.0,"reason":"assistant output matches ground truth"}},"step_outputs":null,"error":null,"trajectory_info":null,"final_control_plane_info":null},"usage":{"prompt_tokens":10,"completion_tokens":1,"total_tokens":11},"created_at":"2025-01-01T12:00:00","eval_metadata":{"name":"basic_addition","description":"Verify simple arithmetic","version":"0.1.0","status":"finished","num_runs":1,"aggregation_method":"mean","threshold_of_success":0.95,"passed":true},"pid":12345}
+```
 
 ### EvaluationTest
 
@@ -103,12 +125,16 @@ class EvaluateResult(BaseModel):
 ### Additional Core Types
 
 #### Message
-Represents a chat message with trajectory evaluation support:
+Represents a chat message with trajectory evaluation support. `content` supports either a string or OpenAI content parts.
 
 ```python
+class ChatCompletionContentPartTextParam(BaseModel):
+    text: str
+    type: Literal["text"] = "text"
+
 class Message(BaseModel):
-    role: str
-    content: Optional[str] = ""
+    role: str  # assistant, user, system, tool
+    content: Optional[Union[str, List[ChatCompletionContentPartTextParam]]] = ""
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
@@ -139,39 +165,79 @@ class StepOutput(BaseModel):
     reason: Optional[str]  # Optional explanation for the step's base reward
 ```
 
+#### CompletionParams
+```python
+class CompletionParams(BaseModel):
+    model: str
+    temperature: Optional[float]
+    max_tokens: Optional[int]
+    max_tool_calls: Optional[int]
+```
+
+#### InputMetadata
+```python
+class InputMetadata(BaseModel):
+    row_id: Optional[str]
+    completion_params: Optional[CompletionParams]
+    dataset_info: Optional[Dict[str, Any]]  # seed, system_prompt, environment_context, etc.
+    session_data: Optional[Dict[str, Any]]
+```
+
+#### EvalMetadata
+```python
+class EvalMetadata(BaseModel):
+    name: str
+    description: Optional[str]
+    version: str  # PEP 440 version string
+    status: Optional[Literal["running","finished","error","stopped"]]
+    num_runs: int
+    aggregation_method: str
+    threshold_of_success: Optional[float]
+    passed: Optional[bool]
+```
+
+#### RolloutStatus
+```python
+class RolloutStatus(BaseModel):
+    status: Literal["running","finished","error","stopped"] = "finished"
+    error_message: Optional[str]
+```
+
 ### MCP Gym
 
-The `McpGym` class is the base class for MCP-Gym environments implementing the north star vision.
+`McpGym` is the base class for building environments that an LLM can interact with via MCP tool calls (data plane) while exposing rewards and episode status via HTTP control-plane endpoints. This enables reproducible RL-style rollouts with clean separation of concerns.
+
+Key concepts:
+- **Data plane**: Tool calls and JSON responses used by the model to act and observe state
+- **Control plane**: Session-scoped endpoints for rewards, termination, and info
+- **Multi-session**: Stable `session_id` keys route control-plane queries to the right episode
+
+Core API surface:
+- `control_plane_endpoint(path)`: Decorator to register a session-aware endpoint
+- `_register_tools()`: Register domain tools with `self.mcp.tool()`
+- `format_observation(obs, env) -> Dict[str, Any]`: Return JSON-serializable observation payloads
+- `run(transport="streamable-http")`: Start the FastMCP server with high-concurrency settings
+- Standard control-plane endpoints on subclasses: `/control/reward`, `/control/status`, `/control/info`, `/control/initial_state`
+
+Example stub:
 
 ```python
 class McpGym(ABC):
-    """
-    Base class for MCP-Gym environments implementing the north star vision.
-    
-    This class provides the universal adapter pattern for RL environments,
-    bridging training infrastructure, production MCP standards, and high-quality
-    environments through a clean, standardized interface.
-    
-    Key Design Principles:
-    - Data Plane: JSON tool calls/responses via MCP (state transitions/actions)
-    - Control Plane: Rewards/termination signals via MCP resources
-    - Environment Implementation: Single-process MCP server per environment
-    """
+    def __init__(self, server_name: str, adapter: EnvironmentAdapter, seed: Optional[int] = None, max_workers: Optional[int] = None):
+        ...
+
+    @abstractmethod
+    def _register_tools(self):
+        ...
+
+    def format_observation(self, obs: Any, env: Any) -> Dict[str, Any]:
+        ...
+
+    def run(self, transport: str = "streamable-http", **kwargs):
+        ...
 ```
 
-**Key Features:**
-- **Universal Adapter Pattern**: Bridges training infrastructure with production MCP standards
-- **Multi-Session Support**: Manages multiple concurrent sessions with stable session IDs
-- **Control Plane Endpoints**: Provides standardized endpoints for rewards, status, and info
-- **Tool Registration**: Automatic discovery and registration of environment tools
-- **Session Management**: Robust session handling with proper cleanup and state management
-
-**Core Methods:**
-- `_register_tools()`: Abstract method for registering environment-specific tools
-- `format_observation()`: Convert environment observations to JSON-serializable format
-- `run()`: Start the MCP server with specified transport
-- `_execute_environment_step()`: Execute a step in the environment
-- `_update_control_plane()`: Update control plane state with rewards and termination info
+See [`python-sdk/eval_protocol/mcp/mcpgym.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/mcpgym.py) for the full implementation including the `control_plane_endpoint` decorator and session handling.
 
 ### Environment
 
@@ -256,8 +322,8 @@ class MCPSession:
     dataset_row: Optional[DatasetRow] = None
     terminated: bool = False
     last_observation: Any = None
-    _exit_stack: Optional[Any] = None
-    _mcp_session: Optional[Any] = None
+    _exit_stack: Optional[AsyncExitStack] = None  # persistent connection resources
+    _mcp_session: Optional[ClientSession] = None  # persistent MCP client session
 ```
 
 #### Trajectory
