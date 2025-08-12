@@ -1,0 +1,94 @@
+---
+title: Starting the UI
+---
+
+Reviewing model outputs by hand is a key part of evaluating quality. EP makes
+this process simple by offering an easy-to-use, locally hosted UI you can set up
+in minutes.
+
+To start the UI, simply run the following command:
+
+```bash
+ep logs
+```
+
+<Note>
+Ensure the `eval-protocol` package is installed so the `ep` CLI is available.
+
+<Tabs>
+  <Tab title="uv">
+
+```bash
+# Add to your project (installs the `ep` CLI in your environment)
+uv add eval-protocol
+
+# Verify installation
+uv run ep --version
+```
+
+  </Tab>
+  <Tab title="pip">
+
+```bash
+# Install or upgrade
+pip install -U eval-protocol
+
+# Verify installation
+ep --version
+```
+
+  </Tab>
+</Tabs>
+</Note>
+
+This will start the UI at http://localhost:8000. Once you navigate to the UI,
+you will see a table of evaluation rows that you can click to inspect.
+
+Whenever you run an `@evaluation_test`—whether from the VSCode Test
+Explorer/Debugger or from the CLI via `pytest`—the UI automatically shows
+`running` tests and you can watch rollouts live in the chat interface. When a
+test finishes, detailed evaluation results appear to the right of the chat.
+Tests are stored under a SQLite database at `.eval_protocol/logs.db`.
+
+<Tabs>
+  <Tab title="Run with uv">
+
+```bash
+# Run your tests (UI will reflect live rollouts)
+uv run pytest -q
+```
+
+  </Tab>
+  <Tab title="Run with pip">
+
+```bash
+# Run your tests (UI will reflect live rollouts)
+pytest -q
+```
+
+  </Tab>
+</Tabs>
+
+
+`-q` runs `pytest` in quiet mode, reducing console noise so you can focus on the live UI updates. Omit it if you prefer full test output.
+
+
+Check out this demo of an agent connected to Fireworks Docs MCP server to see
+the UI in action while a test is running in VSCode.
+
+<Frame caption={<span><b>Left:</b> VSCode Test using <code>@evaluation_test</code><br/><b>Right:</b> Log Viewer UI at <a href="http://localhost:8000">http://localhost:8000</a></span>}>
+<video
+  autoPlay
+  muted
+  loop
+  controls
+  playsInline
+  className="w-full aspect-video rounded-xl"
+  src="https://storage.googleapis.com/fireworks-public/eval-protocol/videos/log-viewer-2.webm"
+></video>
+</Frame>
+
+## Next Steps
+
+Checkout the [Table View](/tutorial/ui/table) and [Pivot View](/tutorial/ui/pivot) for
+more information on how to use the UI.
