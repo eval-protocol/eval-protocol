@@ -65,6 +65,33 @@ you can see the evaluation results, IDs, input metadata, and eval metadata.
 ![Metadata](/assets/metadata.png)
 </Frame>
 
+## Viewing live rollouts
+
+When it takes a long time to run an eval, it can be helpful to see the live 
+rollouts so you can track the progress of an eval and catch unexpected errors or problems.
+
+Whenever you run an `@evaluation_test`, the UI automatically shows `running`
+tests and you can watch rollouts live in the chat interface. When a test finishes,
+detailed evaluation results appear to the right of the chat.
+
+Checkout this example of a test running in VSCode and the UI updating with the
+rollout.
+
+<Frame caption={<span>Expand <code>running</code> rows to see the chat interface update with the rollout.</span>}>
+<video
+  autoPlay
+  muted
+  loop
+  controls
+  playsInline
+  className="w-full aspect-video rounded-xl"
+  src="https://storage.googleapis.com/fireworks-public/eval-protocol/videos/log-viewer-2.webm"
+></video>
+</Frame>
+
+
+
+
 ## Next Steps
 
 Often times you want to ask questions like "how did the model perform on this
