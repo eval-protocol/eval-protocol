@@ -2,7 +2,7 @@
 title: Specification
 ---
 
-### Core Execution Concepts
+## Core Execution Concepts
 
 The following concepts define the lifecycle and data units of an evaluation. These match the semantics used by the `@evaluation_test` decorator in the Python SDK.
 
@@ -16,7 +16,136 @@ The following concepts define the lifecycle and data units of an evaluation. The
 - **eval**: The rubric implemented in the body of an `@evaluation_test`-decorated function. It computes a `score` in 
   \[0, 1\] and writes it to the row’s `evaluation_result`.
 
-### EvaluationRow
+## Foundational Types
+
+### Message
+Represents a chat message with trajectory evaluation support. `content` supports either a string or OpenAI content parts.
+
+```python
+class ChatCompletionContentPartTextParam(BaseModel):
+    text: str
+    type: Literal["text"] = "text"
+
+class Message(BaseModel):
+    role: str  # assistant, user, system, tool
+    content: Optional[Union[str, List[ChatCompletionContentPartTextParam]]] = ""
+    name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
+    function_call: Optional[FunctionCall] = None
+    control_plane_step: Optional[Dict[str, Any]] = None
+```
+
+### CompletionParams
+```python
+class CompletionParams(BaseModel):
+    model: str
+    temperature: Optional[float]
+    max_tokens: Optional[int]
+    max_tool_calls: Optional[int]
+```
+
+### InputMetadata
+```python
+class InputMetadata(BaseModel):
+    row_id: Optional[str]  # defaulted to a generated ID
+    completion_params: Optional[CompletionParams]
+    dataset_info: Optional[Dict[str, Any]]  # seed, system_prompt, environment_context, etc.
+    session_data: Optional[Dict[str, Any]]
+```
+
+### RolloutStatus
+```python
+class RolloutStatus(BaseModel):
+    status: Literal["running","finished","error"] = "running"
+    termination_reason: Optional[str]
+```
+
+### MetricResult
+Result of a single metric evaluation:
+
+```python
+class MetricResult(BaseModel):
+    is_score_valid: bool = True
+    score: float  # Between 0.0 and 1.0
+    reason: str  # Explanation for the score
+```
+
+### StepOutput
+Defines the base reward and other metrics for a single conceptual step within a rollout:
+
+```python
+class StepOutput(BaseModel):
+    step_index: Union[int, str]  # User-defined index for the step
+    base_reward: float  # Base reward calculated by the user's reward function
+    terminated: bool = False  # Whether the environment signaled termination
+    control_plane_info: Optional[Dict[str, Any]]  # Structured info from environment
+    metrics: Dict[str, Any] = Field(default_factory=dict)  # Optional custom metrics
+    reason: Optional[str]  # Optional explanation for the step's base reward
+```
+
+### EvaluationThreshold
+```python
+class EvaluationThreshold(BaseModel):
+    success: float  # Minimum success rate threshold (0.0 to 1.0)
+    standard_deviation: Optional[float]  # Optional maximum stddev threshold
+```
+
+### EvalMetadata
+```python
+class EvalMetadata(BaseModel):
+    name: str
+    description: Optional[str]
+    version: str  # PEP 440 version string (auto-populated)
+    status: Optional[Literal["running","finished","error","stopped"]]
+    num_runs: int
+    aggregation_method: str
+    passed_threshold: Optional[EvaluationThreshold]
+    passed: Optional[bool]
+```
+
+### ExecutionMetadata
+```python
+class ExecutionMetadata(BaseModel):
+    invocation_id: Optional[str]
+    experiment_id: Optional[str]
+    rollout_id: Optional[str]
+    run_id: Optional[str]
+```
+
+## EvaluateResult
+
+The `EvaluateResult` represents the complete result of an evaluator, providing an overall score and component metrics.
+
+```python
+class EvaluateResult(BaseModel):
+    # Core evaluation data
+    score: float  # Overall evaluation score (0.0 to 1.0)
+    is_score_valid: bool  # Whether the overall score is valid
+    reason: Optional[str]  # Optional explanation for the overall score
+    
+    # Component metrics
+    metrics: Dict[str, MetricResult]  # Dictionary of component metrics
+    
+    # RL-specific fields
+    step_outputs: Optional[List[StepOutput]]  # Per-step base rewards for RL
+    
+    # Error handling
+    error: Optional[str]  # Optional error message if evaluation failed
+    
+    # Trajectory information
+    trajectory_info: Optional[Dict[str, Any]]  # Additional trajectory-level information
+    final_control_plane_info: Optional[Dict[str, Any]]  # Final control plane state
+```
+
+**Key Features:**
+- **Unified Model**: Serves both per-turn and per-trajectory evaluation scenarios
+- **Component Metrics**: Detailed breakdown through `MetricResult` objects
+- **RL Support**: Per-step base rewards via `step_outputs` for reinforcement learning
+- **Error Handling**: Graceful error reporting and validation
+- **Trajectory Info**: Additional metadata for trajectory-based evaluations
+
+## EvaluationRow
 
 The `EvaluationRow` is the canonical JSON-serializable unit of data used for both single-turn and trajectory evaluations. It contains the conversation, tool context, evaluation results, and metadata needed for reproducibility and analysis.
 
@@ -56,22 +185,22 @@ class EvaluationRow(BaseModel):
 
 **Key Features:**
 - **Unified Format**: Canonical row format for both pointwise and trajectory evaluations
-- **Explicit Status**: `rollout_status` captures running/finished/error/stopped
+- **Explicit Status**: `rollout_status` captures running/finished/error
 - **Reproducibility**: `input_metadata`, seeds, and identifiers support traceability
 - **Usage Tracking**: Captures token usage statistics from LLM calls
 
-### Dataset
+## Dataset
 
 A list of `EvaluationRow`s. When saved to file, it is a JSONL file where each
 line is a JSON-encoded `EvaluationRow`.
 
-#### JSONL example
+### JSONL example
 
 ```json
-{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Add 2 and 3."},{"role":"assistant","content":"5"}],"tools":null,"input_metadata":{"row_id":"row_123","completion_params":{"model":"gpt-4o","temperature":0.0,"max_tokens":256,"max_tool_calls":0},"dataset_info":{"seed":42,"system_prompt":"You are a helpful assistant.","environment_context":{}},"session_data":{"mode":"batch"}},"rollout_status":{"status":"finished","error_message":null},"ground_truth":"5","evaluation_result":{"score":1.0,"is_score_valid":true,"reason":"Exact match","metrics":{"exact_match":{"is_score_valid":true,"score":1.0,"reason":"assistant output matches ground truth"}},"step_outputs":null,"error":null,"trajectory_info":null,"final_control_plane_info":null},"execution_metadata":{"invocation_id":"ivk_abcd","experiment_id":"exp_efgh","rollout_id":"rll_ijkl","run_id":null},"usage":{"prompt_tokens":10,"completion_tokens":1,"total_tokens":11},"created_at":"2025-01-01T12:00:00","eval_metadata":{"name":"basic_addition","description":"Verify simple arithmetic","version":"0.1.0","status":"finished","num_runs":1,"aggregation_method":"mean","passed_threshold":{"success":0.95},"passed":true},"pid":12345}
+{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Add 2 and 3."},{"role":"assistant","content":"5"}],"tools":null,"input_metadata":{"row_id":"row_123","completion_params":{"model":"gpt-4o","temperature":0.0,"max_tokens":256,"max_tool_calls":0},"dataset_info":{"seed":42,"system_prompt":"You are a helpful assistant.","environment_context":{}},"session_data":{"mode":"batch"}},"rollout_status":{"status":"finished","termination_reason":""},"ground_truth":"5","evaluation_result":{"score":1.0,"is_score_valid":true,"reason":"Exact match","metrics":{"exact_match":{"is_score_valid":true,"score":1.0,"reason":"assistant output matches ground truth"}},"step_outputs":null,"error":null,"trajectory_info":null,"final_control_plane_info":null},"execution_metadata":{"invocation_id":"ivk_abcd","experiment_id":"exp_efgh","rollout_id":"rll_ijkl","run_id":null},"usage":{"prompt_tokens":10,"completion_tokens":1,"total_tokens":11},"created_at":"2025-01-01T12:00:00","eval_metadata":{"name":"basic_addition","description":"Verify simple arithmetic","version":"0.1.0","status":"finished","num_runs":1,"aggregation_method":"mean","passed_threshold":{"success":0.95},"passed":true},"pid":12345}
 ```
 
-### EvaluationTest
+## EvaluationTest
 
 The `EvaluationTest` represents a test configuration for evaluating models.
 While not explicitly defined as a separate class in the current implementation,
@@ -80,7 +209,7 @@ can be used to configure the following:
 
 - **Dataset Configuration**: JSONL files containing test cases
 - **Model Configuration**: Model parameters and completion settings
-- **Evaluation Criteria**: Success thresholds and metrics (e.g. threshold of success)
+- **Evaluation Criteria**: Success thresholds (via `passed_threshold`) and metrics
 - **Environment Configuration**: MCP server settings and tool definitions
 - **Rollout Processor**: Function to process the rollout (e.g. default_single_turn_rollout_processor)
 - **Number of Runs**: Number of times to run the evaluation (e.g. 1)
@@ -101,136 +230,9 @@ def test_markdown_highlighting_evaluation(row: EvaluationRow) -> EvaluationRow:
     ...
 ```
 
-### EvaluateResult
+ 
 
-The `EvaluateResult` represents the complete result of an evaluator, providing an overall score and component metrics.
-
-```python
-class EvaluateResult(BaseModel):
-    # Core evaluation data
-    score: float  # Overall evaluation score (0.0 to 1.0)
-    is_score_valid: bool  # Whether the overall score is valid
-    reason: Optional[str]  # Optional explanation for the overall score
-    
-    # Component metrics
-    metrics: Dict[str, MetricResult]  # Dictionary of component metrics
-    
-    # RL-specific fields
-    step_outputs: Optional[List[StepOutput]]  # Per-step base rewards for RL
-    
-    # Error handling
-    error: Optional[str]  # Optional error message if evaluation failed
-    
-    # Trajectory information
-    trajectory_info: Optional[Dict[str, Any]]  # Additional trajectory-level information
-    final_control_plane_info: Optional[Dict[str, Any]]  # Final control plane state
-```
-
-**Key Features:**
-- **Unified Model**: Serves both per-turn and per-trajectory evaluation scenarios
-- **Component Metrics**: Detailed breakdown through `MetricResult` objects
-- **RL Support**: Per-step base rewards via `step_outputs` for reinforcement learning
-- **Error Handling**: Graceful error reporting and validation
-- **Trajectory Info**: Additional metadata for trajectory-based evaluations
-
-### Additional Core Types
-
-#### Message
-Represents a chat message with trajectory evaluation support. `content` supports either a string or OpenAI content parts.
-
-```python
-class ChatCompletionContentPartTextParam(BaseModel):
-    text: str
-    type: Literal["text"] = "text"
-
-class Message(BaseModel):
-    role: str  # assistant, user, system, tool
-    content: Optional[Union[str, List[ChatCompletionContentPartTextParam]]] = ""
-    name: Optional[str] = None
-    tool_call_id: Optional[str] = None
-    tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
-    function_call: Optional[FunctionCall] = None
-    control_plane_step: Optional[Dict[str, Any]] = None
-```
-
-#### MetricResult
-Result of a single metric evaluation:
-
-```python
-class MetricResult(BaseModel):
-    is_score_valid: bool = True
-    score: float  # Between 0.0 and 1.0
-    reason: str  # Explanation for the score
-```
-
-#### StepOutput
-Defines the base reward and other metrics for a single conceptual step within a rollout:
-
-```python
-class StepOutput(BaseModel):
-    step_index: Union[int, str]  # User-defined index for the step
-    base_reward: float  # Base reward calculated by the user's reward function
-    terminated: bool = False  # Whether the environment signaled termination
-    control_plane_info: Optional[Dict[str, Any]]  # Structured info from environment
-    metrics: Dict[str, Any] = Field(default_factory=dict)  # Optional custom metrics
-    reason: Optional[str]  # Optional explanation for the step's base reward
-```
-
-#### CompletionParams
-```python
-class CompletionParams(BaseModel):
-    model: str
-    temperature: Optional[float]
-    max_tokens: Optional[int]
-    max_tool_calls: Optional[int]
-```
-
-#### InputMetadata
-```python
-class InputMetadata(BaseModel):
-    row_id: Optional[str]  # defaulted to a generated ID
-    completion_params: Optional[CompletionParams]
-    dataset_info: Optional[Dict[str, Any]]  # seed, system_prompt, environment_context, etc.
-    session_data: Optional[Dict[str, Any]]
-```
-
-#### EvalMetadata
-```python
-class EvalMetadata(BaseModel):
-    name: str
-    description: Optional[str]
-    version: str  # PEP 440 version string (auto-populated)
-    status: Optional[Literal["running","finished","error","stopped"]]
-    num_runs: int
-    aggregation_method: str
-    passed_threshold: Optional[EvaluationThreshold]
-    passed: Optional[bool]
-```
-
-#### EvaluationThreshold
-```python
-class EvaluationThreshold(BaseModel):
-    success: float  # Minimum success rate threshold (0.0 to 1.0)
-    standard_deviation: Optional[float]  # Optional maximum stddev threshold
-```
-
-#### RolloutStatus
-```python
-class RolloutStatus(BaseModel):
-    status: Literal["running","finished","error","stopped"] = "finished"
-    error_message: Optional[str]
-```
-
-#### ExecutionMetadata
-```python
-class ExecutionMetadata(BaseModel):
-    invocation_id: Optional[str]
-    experiment_id: Optional[str]
-    rollout_id: Optional[str]
-    run_id: Optional[str]
-```
-
-### MCP Gym
+## MCP Gym
 
 `McpGym` is the base class for building environments that an LLM can interact with via MCP tool calls (data plane) while exposing rewards and episode status via HTTP control-plane endpoints. This enables reproducible RL-style rollouts with clean separation of concerns.
 
@@ -266,7 +268,7 @@ class McpGym(ABC):
 
 See [`python-sdk/eval_protocol/mcp/mcpgym.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/mcpgym.py) for the full implementation including the `control_plane_endpoint` decorator and session handling.
 
-### Environment
+## Environment
 
 The `EnvironmentAdapter` class provides the interface for connecting environments to the MCP framework.
 
@@ -297,7 +299,7 @@ class EnvironmentAdapter:
 - `parse_action()`: Parse action string to environment-specific format
 - `format_observation()`: Format observation for MCP transmission
 
-### Policy
+## Policy
 
 A policy is a model such as `gpt-4o` or `llama-3.1-8b`. In more advanced scenarios, a policy can be your own custom fine-tuned model.
 
@@ -334,9 +336,9 @@ class LiteLLMPolicy(LLMBasePolicy):
 - **Caching**: Response caching for improved performance and cost reduction
 - **Logging**: Comprehensive logging for debugging and analysis
 
-### Additional Core Classes
+## Additional Core Classes
 
-#### MCPSession
+### MCPSession
 Represents a single MCP session with an environment:
 
 ```python
@@ -353,7 +355,7 @@ class MCPSession:
     _mcp_session: Optional[ClientSession] = None  # persistent MCP client session
 ```
 
-#### Trajectory
+### Trajectory
 Represents a complete rollout trajectory:
 
 ```python
