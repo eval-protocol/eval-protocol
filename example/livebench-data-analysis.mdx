@@ -1,0 +1,50 @@
+---
+title: LiveBench — Data Analysis
+description: 'CTA, Table Join, and Table Reformat tasks with lightweight scoring ports'
+sidebarTitle: LiveBench (Data Analysis)
+---
+
+This example showcases three LiveBench Data Analysis tasks wired into Eval Protocol with minimal scoring ports adapted from the original benchmark: CTA, Table Join, and Table Reformat.
+
+<Note>
+Suites live in the Python SDK under `eval_protocol/benchmarks/suites/livebench_data_analysis.py` and are exported as runnable benchmarks.
+</Note>
+
+## What it includes
+
+- CTA: case-insensitive exact/suffix match over cleaned strings
+- Table Join: F1 over key-value mappings recovered from model output
+- Table Reformat: strict table equivalence with parser fallbacks; version auto-selects by release date
+
+## Run from CLI (exported benchmark)
+
+From the Python SDK repo root:
+
+```bash
+python -m eval_protocol.benchmarks.run live_bench/data_analysis \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
+  --print-summary \
+  --out artifacts/
+```
+
+This composite benchmark aggregates the three tasks and emits per-task artifacts into `artifacts/` with a final combined summary.
+
+## Run each task individually
+
+```bash
+python -m eval_protocol.benchmarks.run live_bench/data_analysis/cta \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+
+python -m eval_protocol.benchmarks.run live_bench/data_analysis/tablejoin \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+
+python -m eval_protocol.benchmarks.run live_bench/data_analysis/tablereformat \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+```
+
+## Notes
+
+- Uses `datasets` to pull `livebench/data_analysis` at import time.
+- Scoring is intentionally lightweight and aims for compatibility with LiveBench behavior (e.g., tolerant parsing, suffix matches, and defensive fallbacks), not an official reproduction.
+
+

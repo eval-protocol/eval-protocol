@@ -1,0 +1,41 @@
+---
+title: AIME 2025 (Open-Resource)
+description: 'Quick AIME-style math check using boxed final answers'
+sidebarTitle: AIME 2025
+---
+
+This example wires up a lightweight AIME-style evaluation using the open `AIME2025` JSONL from Hugging Face. It is intended for quick model picking rather than a full reimplementation of the benchmark.
+
+<Note>
+This example is now implemented as a suite in `eval_protocol/benchmarks/suites/aime25.py` and exported as `aime25`.
+</Note>
+
+## What it does
+
+- Pulls AIME2025 JSONL directly from Hugging Face.
+- Prompts the model to reason and place the final answer inside `\\boxed{...}`.
+- Parses the boxed value and compares it against ground truth for exact match scoring.
+
+## How it’s configured
+
+Key pieces in the SDK example:
+- Dataset adapter converts raw rows with `question` and `answer` into `EvaluationRow`s.
+- `@evaluation_test` provides URLs, model, and rollout parameters (including optional reasoning-effort variants).
+- Evaluator extracts a final integer from the assistant message and checks equality with the ground truth.
+
+## Run it locally
+
+From the Python SDK repo root:
+
+```bash
+python -m eval_protocol.benchmarks.run aime25 \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
+  --print-summary --out artifacts/aime25.json
+```
+
+Tip: remove `--ep-max-rows` to run the full dataset. You can also adjust `rollout_input_params` in the test to try different reasoning-effort settings.
+
+## Notes
+
+- This is a convenience wrapper for model selection, not a canonical reproduction of AIME.
+- The evaluation is strict exact match over a parsed integer from `\\boxed{...}`.

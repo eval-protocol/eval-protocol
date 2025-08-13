@@ -63,6 +63,16 @@
           "integrations/huggingface-adapter"
         ]
       }
+      ,
+      {
+        "group": "Open-Resource Benchmarks",
+        "pages": [
+          "example/aime2025",
+          "example/gpqa",
+          "example/healthbench",
+          "example/livebench-data-analysis"
+        ]
+      }
     ]
   },
   "navbar": {
