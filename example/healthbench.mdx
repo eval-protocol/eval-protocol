@@ -7,7 +7,7 @@ sidebarTitle: HealthBench
 This example provides a minimal, rubric-driven proxy inspired by HealthBench—for quick sanity checks in clinical-style prompts. It is not a comprehensive or official reimplementation.
 
 <Note>
-Code lives in the Python SDK at examples/healthbench. See the test at [examples/healthbench/tests/test_evaluation.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/healthbench/tests/test_evaluation.py).
+This example is now implemented as a suite in `eval_protocol/benchmarks/suites/healthbench.py` and exported as `healthbench`.
 </Note>
 
 ## What it does
@@ -26,8 +26,9 @@ Code lives in the Python SDK at examples/healthbench. See the test at [examples/
 From the Python SDK repo root:
 
 ```bash
-pytest -q examples/healthbench/tests/test_evaluation.py \
-  --ep-model fireworks_ai/accounts/fireworks/models/gpt-oss-120b
+python -m eval_protocol.benchmarks.run healthbench \
+  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
+  --print-summary --out artifacts/
 ```
 
 ## Notes
