@@ -48,7 +48,8 @@
         "pages": [
           "example/aime2025",
           "example/gpqa",
-          "example/healthbench"
+          "example/healthbench",
+          "example/livebench-data-analysis"
         ]
       }
     ]

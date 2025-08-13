@@ -7,7 +7,7 @@ sidebarTitle: GPQA
 This example runs a minimal GPQA-style evaluation using the public Diamond split CSV. It’s meant for quick comparisons during model picking, not a full benchmark reproduction.
 
 <Note>
-Code lives in the Python SDK at examples/gpqa. See the test at [examples/gpqa/tests/test_evaluation.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/gpqa/tests/test_evaluation.py).
+Code lives in the Python SDK at examples/gpqa. See the test at [examples/gpqa/tests/test_gpqa.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/gpqa/tests/test_gpqa.py).
 </Note>
 
 ## What it does
@@ -26,7 +26,7 @@ Code lives in the Python SDK at examples/gpqa. See the test at [examples/gpqa/te
 From the Python SDK repo root:
 
 ```bash
-pytest -q examples/gpqa/tests/test_evaluation.py \
+pytest -q examples/gpqa/tests/test_gpqa.py \
   --ep-model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
   --ep-max-rows 100
 ```

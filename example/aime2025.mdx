@@ -7,7 +7,7 @@ sidebarTitle: AIME 2025
 This example wires up a lightweight AIME-style evaluation using the open `AIME2025` JSONL from Hugging Face. It is intended for quick model picking rather than a full reimplementation of the benchmark.
 
 <Note>
-Code lives in the Python SDK at examples/aime2025_chat_completion. See the test at [examples/aime2025_chat_completion/tests/test_evaluation.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/aime2025_chat_completion/tests/test_evaluation.py).
+Code lives in the Python SDK at examples/aime2025_chat_completion. See the test at [examples/aime2025_chat_completion/tests/test_aime2025.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/aime2025_chat_completion/tests/test_aime2025.py).
 </Note>
 
 ## What it does
@@ -28,7 +28,7 @@ Key pieces in the SDK example:
 From the Python SDK repo root:
 
 ```bash
-pytest -q examples/aime2025_chat_completion/tests/test_evaluation.py \
+pytest -q examples/aime2025_chat_completion/tests/test_aime2025.py \
   --ep-model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
   --ep-max-rows 2
 ```
