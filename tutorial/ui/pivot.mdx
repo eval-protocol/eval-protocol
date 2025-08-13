@@ -1,3 +1,56 @@
 ---
 title: Pivot View
 ---
+
+EP's convenient and locally hosted UI offers a pivot view to help you analyze
+your data. If you a familiar with Excel's Pivot Tables, you will feel right at
+home. For those who are unfamiliar, pivot tables are an easy way to summarize
+and analyze data without having to write formulas or code.
+
+Using a pivot table, you can easily compute aggregate metrics across your data to answer questions like:
+
+- Which model performs best for my application?
+- Which prompt performs best for my application?
+- How does each model perform on this evaluation and dataset?
+- What impact does temperature have on model performance?
+- Which tasks in my dataset are the most challenging?
+- Is my fine-tuned model outperforming the base model?
+- What is the average score across multiple runs?
+- Which set of completion parameters yields the best results?
+
+### How to open the pivot view
+
+To know if you are in the pivot view, check that the `Pivot` tab is selected in
+the top left corner of the UI.
+
+<Frame caption={<span>Make sure you are in the Pivot View by checking the top left corner of the UI for the <code>Pivot</code> tab.</span>}>
+![Pivot tab](/assets/pivot-tab.png)
+</Frame>
+
+### Configuring the pivot table
+
+In the pivot view, you will see a section at the top where you configure your
+pivot table.
+
+<Frame caption={<span>The pivot table configuration section.</span>}>
+![Pivot table configuration](/assets/pivot-config.png)
+</Frame>
+
+The pivot table configuration section has five parts:
+
+- **Pivot Rows**: The rows that will be used to group the data.
+- **Pivot Columns**: The columns that will be used to group the data.
+- **Pivot Values**: The values that will be used to aggregate the data.
+- **Pivot Aggregation**: The aggregation function to use for the values.
+- **Pivot Filters**: The filters that will be used to filter the data.
+
+## Examples
+
+To help you understand how to use the pivot view, let's walk through some
+examples. Each example uses the airline customer support example from tau-bench
+as the evaluation. You can find the evaluation
+[test_tau_bench_airline.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_tau_bench_airline.py).
+
+
+
+### "Which model performs best for my application?"
