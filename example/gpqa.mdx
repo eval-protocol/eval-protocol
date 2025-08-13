@@ -1,0 +1,39 @@
+---
+title: GPQA (Open-Resource)
+description: 'Multiple-choice science QA with simple exact-match scoring'
+sidebarTitle: GPQA
+---
+
+This example runs a minimal GPQA-style evaluation using the public Diamond split CSV. It’s meant for quick comparisons during model picking, not a full benchmark reproduction.
+
+<Note>
+Code lives in the Python SDK at examples/gpqa. See the test at [examples/gpqa/tests/test_gpqa.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/gpqa/tests/test_gpqa.py).
+</Note>
+
+## What it does
+
+- Downloads the GPQA Diamond CSV and constructs MCQ prompts (A–D).
+- Appends a system-side ground-truth token (e.g., `__GT__:A`) per row.
+- Extracts the predicted letter from the assistant’s final message and checks exact match.
+
+## How it’s configured
+
+- `@evaluation_test` feeds prebuilt `input_messages` and sets rollout parameters.
+- Simple scoring: 1.0 for exact letter match, else 0.0.
+
+## Run it locally
+
+From the Python SDK repo root:
+
+```bash
+pytest -q examples/gpqa/tests/test_gpqa.py \
+  --ep-model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
+  --ep-max-rows 100
+```
+
+Adjust `--ep-max-rows` to tune runtime. The CSV is fetched at runtime.
+
+## Notes
+
+- Convenience-oriented: focuses on a clean pipeline and minimal metrics.
+- The evaluation relies on extracting exactly one of `A, B, C, D` from the model output.

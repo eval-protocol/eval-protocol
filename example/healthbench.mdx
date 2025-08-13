@@ -1,0 +1,36 @@
+---
+title: HealthBench (Open-Resource)
+description: 'Tiny, rubric-keyword proxy for clinical safety/quality signals'
+sidebarTitle: HealthBench
+---
+
+This example provides a minimal, rubric-driven proxy inspired by HealthBench—for quick sanity checks in clinical-style prompts. It is not a comprehensive or official reimplementation.
+
+<Note>
+Code lives in the Python SDK at examples/healthbench. See the test at [examples/healthbench/tests/test_evaluation.py](https://github.com/eval-protocol/python-sdk/blob/main/examples/healthbench/tests/test_evaluation.py).
+</Note>
+
+## What it does
+
+- Uses a few in-memory prompts with small rubric lists.
+- Extracts simple keyword requirements from rubric criteria (e.g., “hospital”, “urgent”, “hydration”, “rest”).
+- Scores 1.0 if the assistant’s response contains any required rubric keywords; otherwise 0.0.
+
+## How it’s configured
+
+- `@evaluation_test` sets a small temperature and token budget.
+- Messages are constructed inline; rubrics are mapped by prompt string.
+
+## Run it locally
+
+From the Python SDK repo root:
+
+```bash
+pytest -q examples/healthbench/tests/test_evaluation.py \
+  --ep-model fireworks_ai/accounts/fireworks/models/gpt-oss-120b
+```
+
+## Notes
+
+- This is a minimal proxy to surface safety/quality cues—not a validated clinical benchmark.
+- You can expand the rubric list or keyword extraction as needed for your domain.
