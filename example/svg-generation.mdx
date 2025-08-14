@@ -1,0 +1,562 @@
+---
+title: SVG Generation Evaluation
+description: 'Evaluate AI models ability to generate SVG code that meets specific visual requirements using automated rendering and LLM judge scoring'
+sidebarTitle: SVG Generation Evaluation
+---
+
+This example demonstrates how to create comprehensive SVG generation evaluations using the Eval Protocol (EP) framework. The evaluation combines automated SVG rendering with LLM judge assessment to measure how well models can generate visual content that meets specific requirements.
+
+<Note>
+You can find the complete code for this example at [test_svgbench.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_svgbench.py).
+</Note>
+
+## Understanding SVG Generation Evaluation
+
+SVG generation evaluation assesses a model's ability to:
+- **Interpret visual requirements**: Understand textual descriptions of visual elements
+- **Generate valid SVG code**: Create syntactically correct SVG markup
+- **Meet specific criteria**: Fulfill detailed visual requirements like colors, shapes, positions
+- **Follow formatting conventions**: Use proper SVG code block formatting
+
+Unlike traditional text evaluations, SVG generation testing evaluates **visual creativity and technical precision** - essential capabilities for AI systems that need to create graphical content, diagrams, icons, and visual representations.
+
+## Understanding the Dataset Structure
+
+The SVG generation dataset contains diverse test cases that evaluate different aspects of visual content creation, from simple geometric shapes to complex multi-element compositions.
+
+### Dataset Format
+
+Each entry in the dataset contains:
+
+- **`id`**: Unique identifier for the test case
+- **`prompt`**: Base textual description of what to create
+- **`requirements`**: List of specific visual criteria that must be met
+- **`total_requirements`**: Number of requirements for scoring normalization
+
+### Example Dataset Entry
+
+**Complex UI Recreation - Google Homepage:**
+```json
+{
+  "id": "google_homepage",
+  "prompt": "Write `svg` code for a screenshot of the [Google homepage](https://google.com).",
+  "requirements": [
+    "The overall background of the SVG must be white",
+    "All primary elements must be horizontally centered on the canvas",
+    "Include the Google logo in the center, using its official multi-color scheme (blue, red, yellow, blue, green, red)",
+    "Place a prominent search bar directly below the Google logo",
+    "The search bar must be a rounded rectangle with a light gray border",
+    "The search bar must contain a gray magnifying glass icon on the left side",
+    "The search bar must contain a gray microphone icon on the right side",
+    "Place two distinct buttons below the search bar",
+    "The left button must be labeled 'Google Search'",
+    "The right button must be labeled 'I'm Feeling Lucky'",
+    "Buttons should have a light gray background, a thin border, and dark gray text",
+    "Create a header section at the top right of the canvas",
+    "The header must include text links for 'Gmail' and 'Images'",
+    "The header must include a 3x3 grid icon (Google Apps launcher)",
+    "The header must include a prominent 'Sign in' button, typically with a blue background and white text"
+  ]
+}
+```
+
+### Dataset Characteristics
+
+**Requirement Categories**:
+- **Structural**: Presence of specific shapes, elements, or text
+- **Aesthetic**: Colors, proportions, visual balance, style consistency
+- **Technical**: SVG formatting, dimensions, code validity
+- **Functional**: Scalability, accessibility, professional appearance
+
+**Evaluation Approach**:
+- **Automated rendering**: SVG to PNG conversion using Selenium WebDriver
+- **LLM judge scoring**: GPT-4o vision model evaluates requirement fulfillment
+- **Ratio-based scoring**: Score = fulfilled_requirements / total_requirements
+
+## Step 1: Import Required Dependencies
+
+First, we import the necessary modules for SVG evaluation:
+
+```python
+import base64
+import json
+import logging
+import os
+import re
+import tempfile
+from typing import Any, Dict, List, Optional
+
+import litellm
+from pydantic import BaseModel
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, InputMetadata, Message
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.pytest.default_single_turn_rollout_process import default_single_turn_rollout_processor
+```
+
+Key dependencies:
+- `base64`: For encoding rendered images for LLM judge evaluation
+- `litellm`: For calling the GPT-4o vision model as LLM judge
+- `selenium`: For automated SVG to PNG rendering (imported conditionally)
+- `pydantic`: For structured response validation from LLM judge
+- Standard EP framework components for evaluation structure
+
+## Step 2: Create the Dataset Adapter
+
+We need to convert the SVG dataset format to the EP's expected format:
+
+```python
+def svgbench_to_evaluation_row(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """
+    Convert SVGBench dataset entries to EvaluationRow objects.
+    
+    This adapter formats the visual requirements as a numbered list and creates
+    a proper generation prompt that includes formatting instructions and
+    specific requirements for the SVG generation task.
+    
+    Args:
+        data: List of dictionaries containing prompt and requirements
+        
+    Returns:
+        List of EvaluationRow objects ready for evaluation
+    """
+    rows = []
+
+    for row in data:
+        # Format requirements as numbered list
+        requirements = "\n".join([f"{i+1}. {req}" for i, req in enumerate(row["requirements"])])
+
+        # Create the generation prompt following SVGBench format
+        prompt = f"""{row['prompt']} Wrap the SVG code in an SVG code block following the example below.
+
+Requirements:
+{requirements}"""
+
+        eval_row = EvaluationRow(
+            messages=[Message(role="user", content=prompt)],
+            input_metadata=InputMetadata(
+                row_id=row["id"],
+                dataset_info={
+                    "original_prompt": row["prompt"],
+                    "requirements": row["requirements"],
+                    "total_requirements": len(row["requirements"]),
+                    "formatted_prompt": prompt,
+                },
+            ),
+        )
+
+        rows.append(eval_row)
+
+    return rows
+```
+
+This adapter:
+- Formats visual requirements as a clear numbered list
+- Provides SVG code block formatting instructions with examples
+- Preserves original prompt and requirements for evaluation reference
+- Creates structured metadata for scoring calculations
+
+## Step 3: Implement SVG Code Extraction
+
+Extract SVG code from model responses with robust parsing:
+
+```python
+def extract_svg_code(text: str) -> Optional[str]:
+    """
+    Extract SVG code from model response using multiple fallback strategies.
+    
+    This function handles various ways models might format SVG code:
+    - Standard ```svg code blocks
+    - Raw <svg>...</svg> tags in text
+    - Mixed formatting approaches
+    
+    Args:
+        text: Raw model response text
+        
+    Returns:
+        Extracted SVG code or None if not found
+    """
+    # First try: Look for ```svg code blocks
+    if "```svg" in text:
+        svg_parts = text.split("```svg")
+        if len(svg_parts) > 1:
+            svg_code = svg_parts[1].split("```")[0].strip()
+            return svg_code
+
+    # Second try: Look for <svg>...</svg> tags
+    if "<svg" in text and "</svg>" in text:
+        start = text.find("<svg")
+        end = text.find("</svg>") + 6
+        svg_code = text[start:end].strip()
+        return svg_code
+
+    return None
+```
+
+**Key features:**
+- **Multiple parsing strategies**: Handles both code blocks and raw SVG tags
+- **Fallback logic**: Tries different extraction methods sequentially
+- **Robust extraction**: Handles various formatting styles from different models
+- **Error handling**: Returns None for invalid or missing SVG content
+
+## Step 4: Implement SVG to PNG Rendering
+
+Convert SVG code to PNG images for visual evaluation:
+
+```python
+def render_svg_to_png(svg_code: str, output_path: str) -> bool:
+    """
+    Render SVG code to PNG using Selenium WebDriver.
+    
+    This function creates a temporary HTML wrapper around the SVG code
+    and uses a headless Chrome browser to render it as a PNG image.
+    The rendering process handles dimension detection and proper scaling.
+    
+    Args:
+        svg_code: Valid SVG code
+        output_path: Path where PNG should be saved
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Import Selenium components (with error handling)
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.ui import WebDriverWait
+
+        # Parse SVG dimensions with multiple fallback strategies
+        width, height = 800, 600  # Default dimensions
+
+        # Try to extract dimensions from SVG attributes
+        width_match = re.search(r'width="(\d+)"', svg_code)
+        height_match = re.search(r'height="(\d+)"', svg_code)
+        viewbox_match = re.search(r'viewBox="[^"]*?(\d+)\s+(\d+)"', svg_code)
+
+        if width_match and height_match:
+            width, height = int(width_match.group(1)), int(height_match.group(1))
+        elif viewbox_match:
+            width, height = int(viewbox_match.group(1)), int(viewbox_match.group(2))
+
+        # Create HTML wrapper for proper rendering
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+                         <style>
+                 body {`{ margin: 0; padding: 20px; background: white; }`}
+                 svg {`{ max-width: 100%; height: auto; }`}
+             </style>
+        </head>
+        <body>
+            {svg_code}
+        </body>
+        </html>
+        """
+
+        # Configure headless Chrome with appropriate settings
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument(f"--window-size={width+40},{height+40}")
+
+        # Render using temporary HTML file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+            f.write(html_content)
+            html_path = f.name
+
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get(f"file://{html_path}")
+
+            # Wait for SVG to load completely
+            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "svg")))
+
+            # Capture screenshot
+            driver.save_screenshot(output_path)
+            driver.quit()
+            return True
+
+        finally:
+            os.unlink(html_path)
+
+    except ImportError:
+        logger.error("Selenium not available. Install with: pip install selenium")
+        return False
+    except Exception as e:
+        logger.error(f"SVG rendering failed: {e}")
+        return False
+```
+
+**Rendering process:**
+1. **Dimension detection**: Extracts SVG dimensions from attributes or viewBox
+2. **HTML wrapping**: Creates proper HTML container with CSS styling
+3. **Browser automation**: Uses headless Chrome for consistent rendering
+4. **Screenshot capture**: Generates PNG image of rendered SVG
+5. **Cleanup**: Removes temporary files and browser instances
+
+## Step 5: Implement LLM Judge Evaluation
+
+Use GPT-4o vision model to evaluate requirement fulfillment:
+
+```python
+def evaluate_with_llm_judge(image_path: str, requirements: List[str]) -> Dict[str, Any]:
+    """
+    Use LLM judge to evaluate how many requirements are fulfilled.
+    
+    This function sends the rendered PNG image along with the requirements
+    to GPT-4o, which uses its vision capabilities to assess visual content
+    and determine how many requirements are successfully met.
+    
+    Args:
+        image_path: Path to rendered PNG image
+        requirements: List of requirements to evaluate
+        
+    Returns:
+        Dictionary with evaluation results
+    """
+    # Format requirements for evaluation
+    requirements_text = "\n".join([f"{i+1}. {req}" for i, req in enumerate(requirements)])
+
+    # Create evaluation prompt with structured JSON response
+    evaluate_prompt = f"""Examine the generated image. How many of the following {len(requirements)} requirements were fulfilled?
+
+ Be strict about the requirements and respond ONLY with a JSON object in this exact format:
+ {`{"number_of_fulfilled_requirements": <count>}`}
+
+ Where <count> is a number between 0 and {len(requirements)}.
+
+Requirements:
+{requirements_text}"""
+
+    # Read and encode image for vision model
+    with open(image_path, "rb") as f:
+        image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    # Prepare multimodal message
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": evaluate_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}},
+            ],
+        }
+    ]
+
+    # Call GPT-4o with structured JSON response
+    response = litellm.completion(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.0,
+        max_tokens=200,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "SVGBenchResponse", "schema": SVGBenchResponse.model_json_schema()},
+        },
+    )
+
+    # Parse and validate response
+    result = json.loads(response.choices[0].message.content)
+    
+    if "number_of_fulfilled_requirements" in result:
+        return result
+    else:
+        raise ValueError("Missing required field in response")
+```
+
+**LLM judge features:**
+- **Vision analysis**: Uses GPT-4o's multimodal capabilities to examine rendered images
+- **Structured evaluation**: Provides clear requirements and expects JSON response
+- **Strict assessment**: Instructs the judge to be thorough in requirement checking
+- **Response validation**: Ensures proper JSON format and required fields
+
+## Step 6: Configure and Run the Evaluation
+
+We use the `@evaluation_test` decorator to configure the comprehensive evaluation:
+
+```python
+@evaluation_test(
+    input_dataset=["tests/pytest/data/svgbench_dataset.jsonl"],
+    dataset_adapter=svgbench_to_evaluation_row,
+    completion_params=[
+        {"temperature": 0.0, "max_tokens": 4096, "model": "gpt-4.1"},
+        {
+            "temperature": 0.8,
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+            "extra_body": {"reasoning_effort": "high"},
+        },
+    ],
+    rollout_processor=default_single_turn_rollout_processor,
+    passed_threshold=0.5,  # 50% average score to pass
+    num_runs=1,
+    mode="pointwise",
+    max_concurrent_rollouts=3,
+)
+def test_svg_generation_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """
+    Test SVG generation and evaluation using comprehensive methodology.
+    
+    This evaluation process:
+    1. Extracts SVG code from model response
+    2. Renders SVG to PNG using Selenium WebDriver
+    3. Uses GPT-4o vision model to evaluate requirement fulfillment
+    4. Calculates score based on fulfilled requirements ratio
+    
+    Args:
+        row: EvaluationRow with model's SVG generation response
+        
+    Returns:
+        EvaluationRow with evaluation results and score
+    """
+    # Extract dataset information
+    requirements = row.input_metadata.dataset_info["requirements"]
+    total_requirements = row.input_metadata.dataset_info["total_requirements"]
+    original_prompt = row.input_metadata.dataset_info["original_prompt"]
+    row_id = row.input_metadata.row_id
+
+    # Get model response and extract SVG
+    model_response = row.messages[-1].content
+    svg_code = extract_svg_code(model_response)
+    
+    if not svg_code:
+        row.evaluation_result = EvaluateResult(
+            score=0.0, 
+            reason="No valid SVG code found in response"
+        )
+        return row
+
+    # Render SVG to PNG
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        png_path = f.name
+
+    if not render_svg_to_png(svg_code, png_path):
+        row.evaluation_result = EvaluateResult(
+            score=0.0, 
+            reason="Failed to render SVG to PNG"
+        )
+        return row
+
+    try:
+        # Evaluate with LLM judge
+        judge_result = evaluate_with_llm_judge(png_path, requirements)
+        
+        # Calculate final score
+        fulfilled_count = judge_result.get("number_of_fulfilled_requirements", 0)
+        fulfilled_count = max(0, min(fulfilled_count, total_requirements))  # Clamp to valid range
+        score = fulfilled_count / total_requirements
+
+        row.evaluation_result = EvaluateResult(
+            score=score,
+            reason=f"Fulfilled {fulfilled_count}/{total_requirements} requirements ({score:.1%}) for prompt: '{original_prompt}'",
+        )
+
+        return row
+
+    finally:
+        # Clean up temporary files
+        os.unlink(png_path)
+```
+
+**Configuration parameters:**
+- `input_dataset`: Path to SVG generation dataset JSONL file
+- `completion_params`: Multiple model configurations for comparison
+- `passed_threshold`: 50% average score required to pass evaluation
+- `max_concurrent_rollouts`: Limits parallel processing for resource management
+
+## Evaluation Pipeline Explained
+
+### Complete Evaluation Flow
+
+The SVG generation evaluation follows a comprehensive multi-stage pipeline:
+
+1. **Prompt Construction**: Formats visual requirements with clear instructions
+2. **SVG Generation**: Model generates SVG code following specified format
+3. **Code Extraction**: Robust parsing extracts SVG from various response formats
+4. **Visual Rendering**: Selenium WebDriver converts SVG to PNG image
+5. **LLM Judge Assessment**: GPT-4o vision model evaluates requirement fulfillment
+6. **Score Calculation**: Ratio-based scoring provides normalized evaluation results
+
+### Evaluation Scenarios and Results
+
+**Perfect Generation (Score: 1.0)**
+```
+Scenario: Model generates SVG that meets all requirements
+- SVG code is syntactically valid
+- All visual elements are present and correct
+- Colors, positions, and proportions match specifications
+- Proper formatting and dimensions
+Result: ✅ All requirements fulfilled (score: 1.0)
+```
+
+**Partial Fulfillment (Score: 0.6)**
+```
+Scenario: Model meets most but not all requirements
+- Correct shapes and colors
+- Proper positioning
+- Missing one element or incorrect dimension
+- Otherwise high-quality output
+Result: ⚠️ 3/5 requirements fulfilled (score: 0.6)
+```
+
+**Technical Issues (Score: 0.0)**
+```
+Scenario: Model generates invalid or non-rendering SVG
+- Syntax errors in SVG code
+- Missing closing tags or invalid attributes
+- Code that cannot be rendered to image
+- Completely incorrect format
+Result: ❌ Technical failure (score: 0.0)
+```
+
+**Requirements Mismatch (Score: 0.2)**
+```
+Scenario: Model generates valid SVG but wrong content
+- Technically correct SVG code
+- Wrong shapes, colors, or elements
+- Misunderstood the visual requirements
+- Poor adherence to specifications
+Result: ❌ 1/5 requirements fulfilled (score: 0.2)
+```
+
+## Advanced Features and Capabilities
+
+### Debug File Generation
+
+The evaluation supports saving debug files for analysis:
+
+```python
+# Enable debug file saving
+save_debug_files = os.environ.get("SVGBENCH_SAVE_DEBUG_FILES", "false").lower() == "true"
+
+if save_debug_files:
+    # Create debug directory and save files
+    debug_dir = "svgbench_debug"
+    os.makedirs(debug_dir, exist_ok=True)
+    
+    # Save both SVG source and rendered PNG
+    with open(svg_path, "w") as f:
+        f.write(svg_code)
+```
+
+### Multi-Model Comparison
+
+The evaluation supports comparing multiple models simultaneously:
+
+```python
+completion_params=[
+    {"temperature": 0.0, "max_tokens": 4096, "model": "gpt-4.1"},
+    {"temperature": 0.8, "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b"},
+]
+```
+
+## Conclusion
+
+This SVG generation evaluation example demonstrates how to create comprehensive assessments of AI models' visual content creation capabilities. The multi-stage evaluation process ensures models can understand visual requirements, generate syntactically correct SVG code, meet specific criteria consistently, and follow proper formatting standards.
+
+This evaluation approach is particularly valuable for visual AI development, design automation, educational applications, and creative tooling. The SVG generation evaluation complements other evaluation types by focusing on **visual-technical accuracy** and **requirement adherence**, making it essential for developing reliable AI systems that can bridge the gap between textual understanding and visual creation. 

@@ -52,7 +52,8 @@
           "example/apps-coding",
           "example/hallucination-detection",
           "example/lunar-lander",
-          "example/gsm8k"
+          "example/gsm8k",
+          "example/svg-generation"
         ]
       },
       {
