@@ -38,18 +38,30 @@ class Message(BaseModel):
 
 ### CompletionParams
 ```python
-class CompletionParams(BaseModel):
-    model: str
-    temperature: Optional[float]
-    max_tokens: Optional[int]
-    max_tool_calls: Optional[int]
+CompletionParams = Dict[str, Any]
+"""
+Provider-agnostic completion parameters.
+
+Required:
+- model: str
+
+Common fields:
+- temperature: Optional[float]
+- max_tokens: Optional[int]
+- top_p: Optional[float]
+
+Extra provider-specific fields are allowed and passed through (e.g., max_tool_calls).
+"""
 ```
 
 ### InputMetadata
 ```python
 class InputMetadata(BaseModel):
+    # Accepts additional keys for future extensibility
+    # (model_config = ConfigDict(extra="allow") in implementation)
+
     row_id: Optional[str]  # defaulted to a generated ID
-    completion_params: Optional[CompletionParams]
+    completion_params: CompletionParams = Field(default_factory=dict)
     dataset_info: Optional[Dict[str, Any]]  # seed, system_prompt, environment_context, etc.
     session_data: Optional[Dict[str, Any]]
 ```
@@ -207,21 +219,25 @@ While not explicitly defined as a separate class in the current implementation,
 evaluation tests are configured through the `evaluation_test` decorator. The decorator
 can be used to configure the following:
 
-- **Dataset Configuration**: JSONL files containing test cases
-- **Model Configuration**: Model parameters and completion settings
-- **Evaluation Criteria**: Success thresholds (via `passed_threshold`) and metrics
-- **Environment Configuration**: MCP server settings and tool definitions
-- **Rollout Processor**: Function to process the rollout (e.g. default_single_turn_rollout_processor)
-- **Number of Runs**: Number of times to run the evaluation (e.g. 1)
-- **Mode**: Mode of evaluation (e.g. `pointwise`, `batch`)
+- **Dataset Configuration**: JSONL files containing test cases or hard-coded `input_messages`
+- **Model Configuration**: Completion parameters (must include `model`) and generation settings via `completion_params`
+- **Evaluation Criteria**: Success thresholds (via `passed_threshold`), with optional standard deviation constraint
+- **Environment Configuration**: MCP config, rollout steps, server path, and concurrency
+- **Rollout Processor**: Function to execute rollouts (e.g., `default_single_turn_rollout_processor`)
+- **Number of Runs**: Number of times to repeat the rollout (e.g., `num_runs=1`)
+- **Mode**: Evaluation mode (`pointwise` or `batch`)
+- **Aggregation**: Aggregation method (e.g., `mean`) and optional env overrides for summaries
 
 ```python
 @evaluation_test(
     input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
     dataset_adapter=markdown_dataset_to_evaluation_row,
-    model=["accounts/fireworks/models/llama-v3p1-8b-instruct"],
-    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
-    passed_threshold=0.5,
+    completion_params=[{
+        "model": "accounts/fireworks/models/llama-v3p1-8b-instruct",
+        "temperature": 0.0,
+        "max_tokens": 4096,
+    }],
+    passed_threshold={"success": 0.5},
     rollout_processor=default_single_turn_rollout_processor,
     num_runs=1,
     mode="pointwise",
@@ -230,7 +246,6 @@ def test_markdown_highlighting_evaluation(row: EvaluationRow) -> EvaluationRow:
     ...
 ```
 
- 
 
 ## MCP Gym
 
