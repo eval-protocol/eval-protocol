@@ -6,10 +6,20 @@ Reviewing model outputs by hand is a key part of evaluating quality. EP makes
 this process simple by offering an easy-to-use, locally hosted UI you can set up
 in minutes.
 
-To start the UI, simply run the following command:
+To start the UI, simply run the following command and open your browser to [http://localhost:8000](http://localhost:8000).
 
-```bash
-ep logs
+```bash CLI focus={1,11}
+> ep logs
+INFO:eval_protocol.utils.vite_server:Initialized Vite server for build directory: /Users/dylanhuang/Git/python-sdk/vite-app/dist
+INFO:eval_protocol.utils.logs_server:LogsServer initialized on localhost:8000
+INFO:eval_protocol.utils.logs_server:Starting LogsServer on localhost:8000
+INFO:eval_protocol.utils.logs_server:Serving files from: /Users/dylanhuang/Git/python-sdk/vite-app/dist
+INFO:eval_protocol.utils.logs_server:WebSocket endpoint available at /ws
+INFO:eval_protocol.utils.logs_server:Evaluation watcher started
+INFO:     Started server process [35036]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:8000 (Press CTRL+C to quit)
 ```
 
 <Note>
@@ -41,8 +51,12 @@ ep --version
 </Tabs>
 </Note>
 
-This will start the UI at http://localhost:8000. Once you navigate to the UI,
-you will see a table of evaluation rows that you can click to inspect.
+Once you navigate to the UI at http://localhost:8000, you will see a table of
+evaluation rows that you can click to inspect.
+
+<Frame caption="First look at the UI">
+![Table View](/assets/table.png)
+</Frame>
 
 Whenever you run an `@evaluation_test`—whether from the VSCode Test
 Explorer/Debugger or from the CLI via `pytest`—the UI automatically shows
@@ -56,7 +70,7 @@ Tests are stored under a SQLite database on your local device at
 
 ```bash
 # Run your tests (UI will reflect live rollouts)
-uv run pytest -q
+uv run pytest
 ```
 
   </Tab>
@@ -64,14 +78,11 @@ uv run pytest -q
 
 ```bash
 # Run your tests (UI will reflect live rollouts)
-pytest -q
+pytest
 ```
 
   </Tab>
 </Tabs>
-
-
-`-q` runs `pytest` in quiet mode, reducing console noise so you can focus on the live UI updates. Omit it if you prefer full test output.
 
 
 Check out this demo of an agent connected to Fireworks Docs MCP server to see
