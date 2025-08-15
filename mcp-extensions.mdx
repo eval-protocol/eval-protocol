@@ -5,12 +5,49 @@ sidebarTitle: MCP Extensions
 
 EP adopts a clear split between the data plane (MCP calls that carry observations) and the control plane (HTTP endpoints for rewards, termination, and lifecycle). This separation improves reproducibility, session awareness, and failure recovery.
 
+EP separates agent evaluation into two independent planes: data plane (MCP tool calls carrying observations) and control plane (HTTP endpoints for rewards and termination). This architectural split prevents observation/reward coupling that breaks caching and session isolation, while enabling graceful failure recovery—if reward calculation fails, agents still receive observations and evaluations continue with safe defaults.
+
 ## The Split
 
 - Data plane (MCP): `list_tools`, `call_tool`, `list_resources`/`read_resource`.
-  - Purpose: tool schemas and observations only.
+  - Purpose: tool schemas and observations only--what the agent receives.
 - Control plane (HTTP): `/control/*` endpoints with `mcp-session-id` header.
   - Purpose: initial state, reward, status (terminated/truncated), and reset.
+
+Separation rules:
+
+- Observations never come from control plane endpoints.
+- Rewards/termination never come from tool results.
+
+### Sequence diagram (data vs control planes)
+
+```mermaid
+sequenceDiagram
+    participant LLMPolicy as LLM Policy (Fireworks)
+    participant MCPClient as MCP Client
+    participant MCPServer as MCP-Gym Server
+    participant ControlPlane as HTTP Control Plane
+
+    Note over LLMPolicy,MCPClient: CONVERSATION FLOW
+    LLMPolicy->>LLMPolicy: Clean messages (strip metadata)
+    LLMPolicy->>LLMPolicy: Generate tool calls via LLM API
+
+    Note over MCPClient,MCPServer: DATA PLANE (MCP Protocol)
+    MCPClient->>MCPServer: MCP Tool Call (lake_move)
+    MCPServer->>MCPServer: Execute environment step
+    MCPServer->>ControlPlane: Update session state (reward, terminated)
+    MCPServer-->>MCPClient: MCP Response (observation only)
+
+    Note over MCPClient,ControlPlane: CONTROL PLANE (HTTP Endpoints)
+    MCPClient->>ControlPlane: GET /control/reward (session-id header)
+    ControlPlane-->>MCPClient: {"reward": 1.0}
+    MCPClient->>ControlPlane: GET /control/status (session-id header)
+    ControlPlane-->>MCPClient: {"terminated": true}
+
+    Note over LLMPolicy,MCPClient: TRAJECTORY RECORDING
+    MCPClient->>LLMPolicy: Add tool response + metadata
+    LLMPolicy->>LLMPolicy: Record with control plane data
+```
 
 EP’s client enforces this separation in [MCPConnectionManager](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/client/connection.py) and [GeneralMCPVectorEnv](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/session/manager.py).
 
@@ -37,8 +74,8 @@ Servers should implement the following endpoints alongside their MCP transport (
 
 Notes:
 
-- EP generates a stable `session_id` per dataset row + model via `gen_session_id(...)` and passes it in MCP `clientInfo` and as the control-plane header.
-- The simulator framework ([SimulationServerBase](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/simulation_server.py)) demonstrates session-aware design but you still need to expose the `/control/*` endpoints in your production server.
+- EP generates a stable `session_id` by hashing dataset row values and the model ID via `gen_session_id(...)` and passes it in MCP `clientInfo` and as the control-plane header. Heads up: it does not use run ID, so between runs, the MCP server needs to be restarted. This is automatically done in the current implementation of `MCPGymRolloutProcessor()`.
+- The simulator framework ([SimulationServerBase](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/simulation_server.py)) demonstrates session-aware design but you still need to expose the `/control/*` endpoints in your production server. Note: the EP client does not depend on `SimulationServerBase`; it is provided as a reference pattern only.
 
 ## End-to-End Flows
 
@@ -65,7 +102,8 @@ Key guarantees:
 
 Separation:
 
-- Observations never come from control plane endpoints; rewards/termination never come from tool results.
+- Observations never come from control plane endpoints
+- Rewards/termination never come from tool results.
 
 ### 3) Termination
 

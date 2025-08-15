@@ -44,13 +44,6 @@
         ]
       },
       {
-        "group": "Concepts",
-        "pages": [
-          "mcp-extensions",
-          "simulated-users"
-        ]
-      },
-      {
         "group": "Examples",
         "pages": [
           "example/function-calling",
@@ -73,20 +66,25 @@
       }
       ,
       {
+        "group": "Concepts",
+        "pages": [
+          "mcp-extensions",
+          "simulated-users"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
           "reference/rollout-processors"
         ]
-      }
-      ,
+      },
       {
         "group": "Open-Resource Benchmarks",
         "pages": [
           "example/aime2025",
           "example/gpqa",
           "example/healthbench",
-          "example/livebench-data-analysis",
-          "example/tau-bench-retail"
+          "example/livebench-data-analysis"
         ]
       }
     ]
