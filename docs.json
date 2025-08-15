@@ -85,7 +85,8 @@
           "example/aime2025",
           "example/gpqa",
           "example/healthbench",
-          "example/livebench-data-analysis"
+          "example/livebench-data-analysis",
+          "example/tau-bench-retail"
         ]
       }
     ]
