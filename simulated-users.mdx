@@ -1,0 +1,117 @@
+---
+title: Simulated Users
+sidebarTitle: Simulated Users
+---
+
+EP can simulate end-users in multi-turn evaluations, enabling full conversational loops without a human in the loop. This is powered by a lightweight user simulator derived from 𝜏²-bench and integrated into EP’s rollout manager.
+
+## What It Does
+
+- Generates realistic user turns based on scenario instructions and global guidelines.
+- Interleaves with the agent’s tool-using turns to create full conversations.
+- Signals when to stop (e.g., task complete, transfer, or out-of-scope) via a special termination token.
+
+Under the hood, EP uses [UserSimulator](https://github.com/eval-protocol/python-sdk/blob/main/vendor/tau2/user/user_simulator.py). Rollout orchestration is handled by [ExecutionManager](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/execution/manager.py). The simulator:
+
+- Builds a system prompt from global guidelines + your scenario instructions.
+- Optionally uses tool schemas to steer requests.
+- Provides a `is_stop(...)` check that EP maps to `termination_reason = "user_stop"`.
+
+## Enabling Simulation
+
+Provide `dataset_info.user_simulation` in your `EvaluationRow` (or dataset) to turn on the simulator for that row.
+
+```json
+{
+  "messages": [
+    { "role": "system", "content": "You are an assistant that uses tools." }
+  ],
+  "input_metadata": {
+    "dataset_info": {
+      "user_prompt_template": "Observation: {observation}",
+      "environment_context": { "seed": 42 },
+      "user_simulation": {
+        "enabled": true,
+        "system_prompt": "You are a shopper trying to find a red jacket under $100.",
+        "llm": "gpt-4.1",
+        "llm_args": { "temperature": 0.0 }
+      }
+    }
+  }
+}
+```
+
+Fields and defaults:
+
+- `enabled`: boolean flag; if true, EP uses the simulator for the conversation.
+- `system_prompt`: scenario instructions appended to global guidelines.
+- `llm`: backing model for the user simulation (default: `gpt-4.1`).
+- `llm_args`: sampling args for the simulator (default: `{ "temperature": 0.0 }`).
+
+## Conversation Flow
+
+When `user_simulation.enabled` is true:
+
+- EP seeds the conversation with the simulator’s first user message.
+- The agent policy receives tool schemas and responds with tool calls or a final answer.
+- After each agent turn, the simulator may produce the next user message.
+- If the simulator emits a stop intent, EP ends the episode with `termination_reason = user_stop`.
+
+Step counting:
+
+- Without simulation: each tool call increments the step counter.
+- With simulation: EP increments the step counter after a full agent↔user turn, and records a consolidated control-plane step (reward, termination, tool calls).
+
+## Minimal End-to-End
+
+```python
+import eval_protocol as ep
+from eval_protocol.models import EvaluationRow, Message
+
+rows = [
+    EvaluationRow(
+        messages=[Message(role="system", content="Use tools to help the user.")],
+        input_metadata={
+            "dataset_info": {
+                "user_prompt_template": "Obs: {observation}",
+                "environment_context": {"seed": 7},
+                "user_simulation": {
+                    "enabled": True,
+                    "system_prompt": "Book a table for two tonight at 7pm.",
+                    "llm": "gpt-4.1",
+                    "llm_args": {"temperature": 0.0}
+                }
+            }
+        },
+    )
+]
+
+envs = ep.make("http://localhost:8000/mcp", evaluation_rows=rows, model_id="my-model")
+policy = ep.OpenAIPolicy(model_id="gpt-4o-mini")
+
+async def run():
+    async for row in ep.rollout(envs, policy=policy, steps=64):
+        print(row.rollout_status.termination_reason)
+```
+
+## Tips
+
+- Keep scenario instructions specific and outcome-oriented to guide the simulator.
+- Set `temperature` low for reproducible behavior (or use record/playback).
+- Use rewards and control-plane summaries to assess task success rather than only length of the dialogue.
+
+## Troubleshooting
+
+- Simulator does nothing: ensure `user_simulation.enabled` is `true` and you have at least a system message.
+- Episode never ends: check that your environment’s rewards/termination are wired, or set a sensible `steps` limit.
+- Unexpected termination: the simulator may have emitted a stop intent; inspect `termination_reason` and conversation history.
+
+## GitHub References
+
+- User simulation integration in rollouts (ExecutionManager):
+  - https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp/execution/manager.py
+- Backing user simulator (𝜏²-bench):
+  - https://github.com/eval-protocol/python-sdk/blob/main/vendor/tau2/user/user_simulator.py
+- Convenience facade and types:
+  - https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/mcp_env.py
+  - https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/types/types.py
