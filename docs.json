@@ -22,6 +22,7 @@
       "why",
       "principles",
       "community",
+      "other-content",
       {
         "group": "Tutorials",
         "pages": [
@@ -78,7 +79,8 @@
           "example/aime2025",
           "example/gpqa",
           "example/healthbench",
-          "example/livebench-data-analysis"
+          "example/livebench-data-analysis",
+          "example/tau-bench-retail"
         ]
       }
     ]
