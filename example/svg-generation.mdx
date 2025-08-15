@@ -70,7 +70,7 @@ Each entry in the dataset contains:
 
 **Evaluation Approach**:
 - **Automated rendering**: SVG to PNG conversion using Selenium WebDriver
-- **LLM judge scoring**: GPT-4o vision model evaluates requirement fulfillment
+- **LLM judge scoring**: GPT-4.1 vision model evaluates requirement fulfillment
 - **Ratio-based scoring**: Score = fulfilled_requirements / total_requirements
 
 ## Step 1: Import Required Dependencies
@@ -96,7 +96,7 @@ from eval_protocol.pytest.default_single_turn_rollout_process import default_sin
 
 Key dependencies:
 - `base64`: For encoding rendered images for LLM judge evaluation
-- `litellm`: For calling the GPT-4o vision model as LLM judge
+- `litellm`: For calling the GPT-4.1 vision model as LLM judge
 - `selenium`: For automated SVG to PNG rendering (imported conditionally)
 - `pydantic`: For structured response validation from LLM judge
 - Standard EP framework components for evaluation structure
@@ -302,7 +302,7 @@ def render_svg_to_png(svg_code: str, output_path: str) -> bool:
 
 ## Step 5: Implement LLM Judge Evaluation
 
-Use GPT-4o vision model to evaluate requirement fulfillment:
+Use GPT-4.1 vision model to evaluate requirement fulfillment:
 
 ```python
 def evaluate_with_llm_judge(image_path: str, requirements: List[str]) -> Dict[str, Any]:
@@ -310,7 +310,7 @@ def evaluate_with_llm_judge(image_path: str, requirements: List[str]) -> Dict[st
     Use LLM judge to evaluate how many requirements are fulfilled.
     
     This function sends the rendered PNG image along with the requirements
-    to GPT-4o, which uses its vision capabilities to assess visual content
+    to GPT-4.1, which uses its vision capabilities to assess visual content
     and determine how many requirements are successfully met.
     
     Args:
@@ -349,9 +349,9 @@ Requirements:
         }
     ]
 
-    # Call GPT-4o with structured JSON response
+    # Call GPT-4.1 with structured JSON response
     response = litellm.completion(
-        model="gpt-4o",
+        model="gpt-4.1",
         messages=messages,
         temperature=0.0,
         max_tokens=200,
@@ -371,7 +371,7 @@ Requirements:
 ```
 
 **LLM judge features:**
-- **Vision analysis**: Uses GPT-4o's multimodal capabilities to examine rendered images
+- **Vision analysis**: Uses GPT-4.1's multimodal capabilities to examine rendered images
 - **Structured evaluation**: Provides clear requirements and expects JSON response
 - **Strict assessment**: Instructs the judge to be thorough in requirement checking
 - **Response validation**: Ensures proper JSON format and required fields
@@ -405,7 +405,7 @@ def test_svg_generation_evaluation(row: EvaluationRow) -> EvaluationRow:
     This evaluation process:
     1. Extracts SVG code from model response
     2. Renders SVG to PNG using Selenium WebDriver
-    3. Uses GPT-4o vision model to evaluate requirement fulfillment
+    3. Uses GPT-4.1 vision model to evaluate requirement fulfillment
     4. Calculates score based on fulfilled requirements ratio
     
     Args:
@@ -479,7 +479,7 @@ The SVG generation evaluation follows a comprehensive multi-stage pipeline:
 2. **SVG Generation**: Model generates SVG code following specified format
 3. **Code Extraction**: Robust parsing extracts SVG from various response formats
 4. **Visual Rendering**: Selenium WebDriver converts SVG to PNG image
-5. **LLM Judge Assessment**: GPT-4o vision model evaluates requirement fulfillment
+5. **LLM Judge Assessment**: GPT-4.1 vision model evaluates requirement fulfillment
 6. **Score Calculation**: Ratio-based scoring provides normalized evaluation results
 
 ### Evaluation Scenarios and Results
