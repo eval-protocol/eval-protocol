@@ -67,12 +67,18 @@
       }
       ,
       {
+        "group": "Concepts",
+        "pages": [
+          "mcp-extensions",
+          "simulated-users"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
           "reference/rollout-processors"
         ]
-      }
-      ,
+      },
       {
         "group": "Open-Resource Benchmarks",
         "pages": [
