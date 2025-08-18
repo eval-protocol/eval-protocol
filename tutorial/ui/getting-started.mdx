@@ -2,9 +2,9 @@
 title: Starting the UI
 ---
 
-Reviewing model outputs by hand is a key part of evaluating quality. EP makes
-this process simple by offering an easy-to-use, locally hosted UI you can set up
-in minutes.
+Reviewing model outputs by hand is an important part of evaluating quality. EP
+makes this process simple by offering an easy-to-use, locally hosted UI you can
+set up in minutes.
 
 To start the UI, simply run the following command and open your browser to [http://localhost:8000](http://localhost:8000).
 
@@ -55,7 +55,7 @@ test finishes, detailed evaluation results appear to the right of the chat.
 Tests are stored under a SQLite database on your local device at
 `.eval_protocol/logs.db` in the root of your Python project.
 
-To run your tests, you use the `pytest` command directly.
+To run your tests in CLI, you use the `pytest` command directly.
 
 <Tabs>
   <Tab title="Run with uv virtual environment">
@@ -77,8 +77,9 @@ pytest
 </Tabs>
 
 
-Once you have your tests running, you can open the UI at
-[http://localhost:8000](http://localhost:8000) to monitor rollouts live.
+You can also run tests in your IDE. Once you have your tests running, you can
+open the UI at [http://localhost:8000](http://localhost:8000) to monitor
+rollouts live.
 
 <Frame caption={<span>Example of a test running in VSCode and the UI showing live rollouts<br/><br/><b>Left:</b> VSCode Test using <code>@evaluation_test</code><br/><b>Right:</b> Log Viewer UI at <a href="http://localhost:8000">http://localhost:8000</a></span>}>
 <video

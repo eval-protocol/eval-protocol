@@ -44,13 +44,26 @@ The pivot table configuration section has five parts:
 - **Pivot Aggregation**: The aggregation function to use for the values.
 - **Pivot Filters**: The filters that will be used to filter the data.
 
-## Examples
+### Viewing the data
 
-To help you understand how to use the pivot view, let's walk through some
-examples. Each example uses the airline customer support example from tau-bench
-as the evaluation. You can find the evaluation
-[test_tau_bench_airline.py](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_tau_bench_airline.py).
+Once you have configured the pivot table, you can view the data either by chart or table.
 
+#### Chart 
 
+A chart will be automatically rendered based on the pivot table you generate.
 
-### "Which model performs best for my application?"
+<Frame caption={<span>Example of a chart rendered based on the pivot table.</span>}>
+![Pivot table chart](/assets/pivot-chart-export.png)
+</Frame>
+
+You can also click `Export as Image` to download the chart as an image.
+
+#### Table
+
+You can also see the exact computed values in the table view below the chart.
+
+<Frame caption={<span>Example of the table view below the chart.</span>}>
+![Pivot table table](/assets/pivot-table.png)
+</Frame>
+
+You can also click `Export as CSV` to download the table as a CSV file.
