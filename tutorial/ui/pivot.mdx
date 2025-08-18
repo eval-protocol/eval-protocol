@@ -67,3 +67,97 @@ You can also see the exact computed values in the table view below the chart.
 </Frame>
 
 You can also click `Export as CSV` to download the table as a CSV file.
+
+### Example (Picking the best model for a given task)
+
+An common example of how to use the pivot view to analyze the data is to compare the performance of different models on a given dataset. For our example, we will compare the performance of 
+
+1. gpt-oss-120b (on Fireworks)
+2. kimi-k2-instruct (on Fireworks)
+3. gpt-4o (on OpenAI)
+4. gpt-4o-mini (on OpenAI)
+
+An implementation of this eval is publicly available in EP at
+[aime25.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/benchmarks/suites/aime25.py).
+To run this eval with 4 different models, you can modify the `completion_params`
+parameter in the `evaluation_test` decorator to the following value:
+
+```python focus={7-23} expandable
+@evaluation_test(
+    input_dataset=[
+        "https://huggingface.co/datasets/opencompass/AIME2025/raw/main/aime2025-I.jsonl",
+        "https://huggingface.co/datasets/opencompass/AIME2025/raw/main/aime2025-II.jsonl",
+    ],
+    dataset_adapter=aime2025_dataset_adapter,
+    completion_params=[
+        {
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        },
+        {
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct",
+        },
+        {
+            "model": "openai/gpt-4o",
+        },
+        
+        {
+            "model": "openai/gpt-4o-mini",
+        },
+    ],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    aggregation_method="mean",
+    passed_threshold=None,
+    num_runs=8,
+    max_dataset_rows=2,
+    max_concurrent_rollouts=4,
+    mode="pointwise",
+)
+def test_aime25_pointwise(row: EvaluationRow) -> EvaluationRow:
+    assistant_msgs = [m for m in row.messages if m.role == "assistant"]
+    content = assistant_msgs[-1].content if assistant_msgs else ""
+
+    extracted_text = _extract_boxed_text(content or "")
+    extracted_int = _normalize_to_int_or_none(extracted_text)
+    gt_int = _normalize_to_int_or_none(row.ground_truth or "")
+
+    is_valid = extracted_int is not None and gt_int is not None
+    score = 1.0 if (is_valid and extracted_int == gt_int) else 0.0
+
+    metrics = {
+        "exact_match": MetricResult(
+            score=score,
+            is_score_valid=is_valid,
+            reason=(
+                "Parsed both integers and they matched"
+                if score == 1.0
+                else ("Parsed integers did not match" if is_valid else "Failed to parse integer")
+            ),
+            data={
+                "extracted_text": extracted_text,
+                "extracted_int": extracted_int,
+                "ground_truth_int": gt_int,
+            },
+        )
+    }
+
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason=("Answer correct" if score == 1.0 else "Answer incorrect"),
+        is_score_valid=is_valid,
+        metrics=metrics,
+    )
+    return row
+```
+
+Then looking at the pivot view, after filtering for the `invocation_id` of the
+execution, you can see the following chart using the default pivot view
+configuration.
+
+
+<Frame caption={<span>Example of the pivot view after running the AIME 2025 eval.</span>}>
+![Pivot view after running the AIME 2025 eval](/assets/pivot-view-aime25.png)
+</Frame>
+
+We can see that `gpt-oss-120b` out-performs the rest of the models using `"reasoning_effort": "low"`.
