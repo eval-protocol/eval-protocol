@@ -70,9 +70,7 @@ rows = list(adapter.get_evaluation_rows(
     limit=100
 ))
 
-# Use rows in evaluation
-from eval_protocol import evaluate_rows
-results = evaluate_rows(rows, your_evaluation_function)
+# Use rows in evaluation via pytest-based tests
 ```
 
 ## Parameterized Queries
@@ -146,7 +144,6 @@ Note that this is likely not a realistic list of EvaluationRows that a user woul
 
 ```python
 from eval_protocol.adapters import create_bigquery_adapter
-from eval_protocol import evaluate_rows
 
 def linguistics_transform(row):
     """Transform Google Books ngrams data to evaluation format."""
