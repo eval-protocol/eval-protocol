@@ -140,6 +140,103 @@ BigQuery supports different column modes that affect how data is returned:
 The BigQuery adapter returns raw Python objects for all data types. For **Repeated** fields (arrays), your `transform_fn` will receive Python lists that you need to handle appropriately - whether by joining them into strings, taking specific elements, or processing them as needed for your evaluation use case.
 </Note>
 
+## Example: Google Books Ngrams (Public Dataset)
+
+Note that this is likely not a realistic list of EvaluationRows that a user would want to evaluate an LLM on. This code snippet merely serves as an end-to-end example of querying a public BigQuery dataset and demonstrates one way of handling **Repeated** fields.
+
+```python
+from eval_protocol.adapters import create_bigquery_adapter
+from eval_protocol import evaluate_rows
+
+def linguistics_transform(row):
+    """Transform Google Books ngrams data to evaluation format."""
+    term = str(row.get("term", ""))
+    term_frequency = row.get("term_frequency", 0)
+    document_frequency = row.get("document_frequency", 0)
+    
+    # Handle REPEATED field (array of tokens)
+    tokens = row.get("tokens", [])
+    tokens_sample = tokens[:3] if tokens else []  # Take first 3 tokens
+    
+    # Handle REPEATED RECORD (array of year objects)
+    years = row.get("years", [])
+    
+    # Create educational linguistics question
+    if tokens_sample:
+        tokens_str = ", ".join(str(token) for token in tokens_sample)
+        question = f"What can you tell me about the term '{term}' and its linguistic tokens: {tokens_str}?"
+    else:
+        question = f"What can you tell me about the term '{term}' based on its usage patterns?"
+    
+    # Create ground truth based on frequency data
+    frequency_desc = (
+        "high frequency" if term_frequency > 1000
+        else "moderate frequency" if term_frequency > 100
+        else "low frequency"
+    )
+    
+    ground_truth = (
+        f"The term '{term}' has {frequency_desc} usage ({term_frequency} occurrences) "
+        f"and appears in {document_frequency} documents."
+    )
+    
+    return {
+        'messages': [
+            {
+                'role': 'system', 
+                'content': 'You are a linguistics expert who analyzes word usage patterns from Google Books data.'
+            },
+            {'role': 'user', 'content': question}
+        ],
+        'ground_truth': ground_truth,
+        'metadata': {
+            'dataset': 'google_books_ngrams',
+            'term': term,
+            'term_frequency': term_frequency,
+            'document_frequency': document_frequency,
+            'tokens_sample': tokens_sample,  # Sample of REPEATED field
+            'num_year_records': len(years)   # Count of REPEATED RECORD
+        }
+    }
+
+# Create adapter (uses your project for billing, queries public data)
+adapter = create_bigquery_adapter(
+    transform_fn=linguistics_transform,
+    dataset_id="your-project-id"  # Your project (for billing)
+)
+
+# Query public Google Books ngrams dataset
+query = """
+SELECT
+    term,
+    term_frequency,
+    document_frequency,
+    tokens,      -- REPEATED field (array)
+    has_tag,
+    years        -- REPEATED RECORD (array of objects)
+FROM `bigquery-public-data.google_books_ngrams_2020.chi_sim_1`
+WHERE term_frequency > 100
+  AND document_frequency > 5
+  AND LENGTH(term) >= 2
+ORDER BY term_frequency DESC
+LIMIT 10
+"""
+
+# Execute query and get evaluation rows
+rows = list(adapter.get_evaluation_rows(
+    query=query,
+    limit=5,
+    model_name="gpt-4",
+    temperature=0.0
+))
+```
+
+This example shows how to:
+- Query **public BigQuery datasets** (no authentication needed for the data, just for billing)
+- Handle **Repeated fields** like `tokens` (arrays) and `years` (array of records)
+- Transform complex linguistic data into educational evaluation prompts
+- Create realistic ground truth based on frequency patterns
+
 ## Authentication
 
 The BigQuery adapter supports multiple authentication methods:
