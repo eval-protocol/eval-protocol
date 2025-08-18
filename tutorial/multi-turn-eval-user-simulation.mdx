@@ -191,10 +191,9 @@ The `@evaluation_test` decorator configures the evaluation with 𝜏²-bench-spe
 @evaluation_test(
     input_dataset=["tests/pytest/data/airline_dataset.jsonl"],
     dataset_adapter=tau_bench_airline_to_evaluation_row,
-    model=["fireworks_ai/accounts/fireworks/models/kimi-k2-instruct"],
-    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
-    rollout_processor=default_mcp_gym_rollout_processor,
-    threshold_of_success=0.4,
+    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct", "temperature": 0.0, "max_tokens": 4096}],
+    rollout_processor=MCPGymRolloutProcessor(),
+    passed_threshold=0.4,
     num_runs=1,
     mode="pointwise",
     max_concurrent_rollouts=32,
@@ -205,7 +204,7 @@ The `@evaluation_test` decorator configures the evaluation with 𝜏²-bench-spe
 **Configuration Highlights:**
 - **`rollout_processor=default_mcp_gym_rollout_processor`**: Uses a default MCP Gym processor for multi-turn conversations with simulated users, reusable for any evaluation benchmark that uses the same MCP Gym architecture
 - **`server_script_path="examples/tau2_mcp/server.py"`**: Points to the MCP server that hosts the airline environment
-- **`threshold_of_success=0.4`**: Threshold of 40% must be achieved for this test to pass
+- **`passed_threshold=0.4`**: Threshold of 40% must be achieved for this test to pass
 - **`max_concurrent_rollouts=32`**: High concurrency for efficient evaluation of multiple scenarios
 
 ### Step 3: Multi-Dimensional Evaluation Function

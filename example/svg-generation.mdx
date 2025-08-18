@@ -90,8 +90,7 @@ import litellm
 from pydantic import BaseModel
 
 from eval_protocol.models import EvaluateResult, EvaluationRow, InputMetadata, Message
-from eval_protocol.pytest import evaluation_test
-from eval_protocol.pytest.default_single_turn_rollout_process import default_single_turn_rollout_processor
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
 ```
 
 Key dependencies:
@@ -392,7 +391,7 @@ We use the `@evaluation_test` decorator to configure the comprehensive evaluatio
             "extra_body": {"reasoning_effort": "high"},
         },
     ],
-    rollout_processor=default_single_turn_rollout_processor,
+    rollout_processor=SingleTurnRolloutProcessor(),
     passed_threshold=0.5,  # 50% average score to pass
     num_runs=1,
     mode="pointwise",
