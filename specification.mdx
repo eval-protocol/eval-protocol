@@ -6,14 +6,37 @@ title: Specification
 
 The following concepts define the lifecycle and data units of an evaluation. These match the semantics used by the `@evaluation_test` decorator in the Python SDK.
 
-- **invocation**: A single execution of a test function. One invocation can generate one or more experiments.
-- **experiment**: A group of runs for a specific combination of parameters (e.g., model × dataset × generation params). Each new execution of the test function produces a new experiment.
-- **run**: A group of rollouts produced when repeating the same experiment multiple times. When `num_runs > 1`, each repetition has a unique `run_id`.
-- **rollout**: The process that produces a `trajectory` for a single row. Each rollout has a unique `rollout_id`.
-- **trajectory**: The sequence of chat `messages` (and optional tool calls) produced during a rollout.
-- **row**: The atomic evaluation unit. A row contains the conversation `messages`, optional `ground_truth`, and the evaluator’s `evaluation_result`.
-- **dataset**: A collection (list) of rows. When stored, it is a JSONL file where each line is an `EvaluationRow`.
-- **eval**: The rubric implemented in the body of an `@evaluation_test`-decorated function. It computes a `score` in 
+### invocation
+
+A single execution of a test function. One invocation can generate one or more experiments.
+
+### experiment
+
+A group of runs for a specific combination of parameters (e.g., model × dataset × generation params). Each new execution of the test function produces a new experiment.
+
+### run
+
+A group of rollouts produced when repeating the same experiment multiple times. When `num_runs > 1`, each repetition has a unique `run_id`.
+
+### rollout
+
+The process that produces a `trajectory` for a single row. Each rollout has a unique `rollout_id`.
+
+### trajectory
+
+The sequence of chat `messages` (and optional tool calls) produced during a rollout.
+
+### row
+
+The atomic evaluation unit. A row contains the conversation `messages`, optional `ground_truth`, and the evaluator’s `evaluation_result`.
+
+### dataset
+
+A collection (list) of rows. When stored, it is a JSONL file where each line is an `EvaluationRow`.
+
+### eval
+
+The rubric implemented in the body of an `@evaluation_test`-decorated function. It computes a `score` in 
   \[0, 1\] and writes it to the row’s `evaluation_result`.
 
 ## Foundational Types
