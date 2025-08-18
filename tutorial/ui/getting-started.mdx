@@ -2,13 +2,13 @@
 title: Starting the UI
 ---
 
-Reviewing model outputs by hand is a key part of evaluating quality. EP makes
-this process simple by offering an easy-to-use, locally hosted UI you can set up
-in minutes.
+Reviewing model outputs by hand is an important part of evaluating quality. EP
+makes this process simple by offering an easy-to-use, locally hosted UI you can
+set up in minutes.
 
-To start the UI, simply run the following command:
+To start the UI, simply run the following command and open your browser to [http://localhost:8000](http://localhost:8000).
 
-```bash
+```bash CLI
 ep logs
 ```
 
@@ -41,42 +41,47 @@ ep --version
 </Tabs>
 </Note>
 
-This will start the UI at http://localhost:8000. Once you navigate to the UI,
-you will see a table of evaluation rows that you can click to inspect.
+Once you navigate to the UI at http://localhost:8000, you will see a table of
+evaluation rows that you can click to inspect.
+
+<Frame caption="First look at the UI">
+![Table View](/assets/table.png)
+</Frame>
 
 Whenever you run an `@evaluation_test`—whether from the VSCode Test
 Explorer/Debugger or from the CLI via `pytest`—the UI automatically shows
 `running` tests and you can watch rollouts live in the chat interface. When a
 test finishes, detailed evaluation results appear to the right of the chat.
-Tests are stored under a SQLite database at `.eval_protocol/logs.db`.
+Tests are stored under a SQLite database on your local device at
+`.eval_protocol/logs.db` in the root of your Python project.
+
+To run your tests in CLI, you use the `pytest` command directly.
 
 <Tabs>
-  <Tab title="Run with uv">
+  <Tab title="Run with uv virtual environment">
 
 ```bash
 # Run your tests (UI will reflect live rollouts)
-uv run pytest -q
+uv run pytest
 ```
 
   </Tab>
-  <Tab title="Run with pip">
+  <Tab title="Run with your current Python environment">
 
 ```bash
 # Run your tests (UI will reflect live rollouts)
-pytest -q
+pytest
 ```
 
   </Tab>
 </Tabs>
 
 
-`-q` runs `pytest` in quiet mode, reducing console noise so you can focus on the live UI updates. Omit it if you prefer full test output.
+You can also run tests in your IDE. Once you have your tests running, you can
+open the UI at [http://localhost:8000](http://localhost:8000) to monitor
+rollouts live.
 
-
-Check out this demo of an agent connected to Fireworks Docs MCP server to see
-the UI in action while a test is running in VSCode.
-
-<Frame caption={<span><b>Left:</b> VSCode Test using <code>@evaluation_test</code><br/><b>Right:</b> Log Viewer UI at <a href="http://localhost:8000">http://localhost:8000</a></span>}>
+<Frame caption={<span>Example of a test running in VSCode and the UI showing live rollouts<br/><br/><b>Left:</b> VSCode Test using <code>@evaluation_test</code><br/><b>Right:</b> Log Viewer UI at <a href="http://localhost:8000">http://localhost:8000</a></span>}>
 <video
   autoPlay
   muted

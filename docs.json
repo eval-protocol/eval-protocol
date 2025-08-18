@@ -35,7 +35,7 @@
             ]
           },
           {
-            "group": "UI",
+            "group": "Reviewing Evals (UI)",
             "pages": [
               "tutorial/ui/getting-started",
               "tutorial/ui/table",
@@ -68,16 +68,11 @@
       },
       {
         "group": "Concepts",
-        "pages": [
-          "mcp-extensions",
-          "simulated-users"
-        ]
+        "pages": ["mcp-extensions", "simulated-users"]
       },
       {
         "group": "Reference",
-        "pages": [
-          "reference/rollout-processors"
-        ]
+        "pages": ["reference/rollout-processors"]
       },
       {
         "group": "Open-Resource Benchmarks",
