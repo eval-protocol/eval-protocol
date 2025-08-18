@@ -62,10 +62,10 @@
         "pages": [
           "integrations/index",
           "integrations/langfuse-adapter",
-          "integrations/huggingface-adapter"
+          "integrations/huggingface-adapter",
+          "integrations/bigquery-adapter"
         ]
-      }
-      ,
+      },
       {
         "group": "Concepts",
         "pages": [
