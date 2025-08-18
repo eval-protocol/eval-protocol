@@ -69,7 +69,7 @@ First, we import the necessary modules from the EP framework:
 import re
 from typing import Any, Dict, List
 from eval_protocol.models import EvaluateResult, EvaluationRow, MetricResult
-from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
 from eval_protocol.rewards.math import math_reward
 from examples.math_example.main import check_think_answer_format
 from tests.pytest.helper.gsm8k_to_evaluation_row import gsm8k_to_evaluation_row
@@ -137,11 +137,10 @@ We use the `@evaluation_test` decorator to configure the evaluation. The evaluat
 @evaluation_test(
     input_dataset=["development/gsm8k_sample.jsonl"],
     dataset_adapter=gsm8k_to_evaluation_row,
-    model=["accounts/fireworks/models/kimi-k2-instruct"],
-    rollout_input_params=[{"temperature": 0.0}],
+    completion_params=[{"model": "accounts/fireworks/models/kimi-k2-instruct", "temperature": 0.0}],
     max_dataset_rows=5,
-    threshold_of_success=0.0,
-    rollout_processor=default_single_turn_rollout_processor,
+    passed_threshold=0.0,
+    rollout_processor=SingleTurnRolloutProcessor(),
     mode="pointwise",
     evaluation_test_kwargs=[
         {"math_reward_kwargs": {"tolerance": 0.001, "absolute_tolerance": 1e-8, "require_units": False}}

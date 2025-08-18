@@ -65,9 +65,7 @@ rows = list(adapter.get_evaluation_rows(
     from_timestamp=datetime.now() - timedelta(days=7)  # Last 7 days
 ))
 
-# Use rows in evaluation
-from eval_protocol import evaluate_rows
-results = evaluate_rows(rows, your_evaluation_function)
+# Use rows in evaluation via pytest-based tests
 ```
 
 ## Advanced Filtering
@@ -111,7 +109,6 @@ rows = adapter.get_evaluation_rows(
 
 ```python
 from eval_protocol.adapters import create_langfuse_adapter
-from eval_protocol import evaluate_rows
 from eval_protocol.rewards.accuracy import accuracy_reward
 from datetime import datetime, timedelta
 
@@ -128,12 +125,7 @@ rows = list(adapter.get_evaluation_rows(
     from_timestamp=datetime.now() - timedelta(days=1)
 ))
 
-# Evaluate accuracy
-results = evaluate_rows(rows, accuracy_reward)
-
-# Calculate average score
-avg_score = sum(r.score for r in results) / len(results) if results else 0
-print(f"Average accuracy score: {avg_score:.2f}")
+# Evaluate accuracy in a pytest test using @evaluation_test; for ad-hoc usage, see SDK README's direct runner.
 ```
 
 ## Troubleshooting

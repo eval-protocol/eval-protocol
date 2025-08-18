@@ -191,10 +191,9 @@ The `@evaluation_test` decorator configures the RL evaluation with Frozen Lake-s
 @evaluation_test(
     input_dataset=["tests/pytest/data/frozen_lake_dataset.jsonl"],
     dataset_adapter=frozen_lake_to_evaluation_row,
-    model=["fireworks_ai/accounts/fireworks/models/kimi-k2-instruct"],
-    rollout_input_params=[{"temperature": 0.0, "max_tokens": 4096}],
-    rollout_processor=default_mcp_gym_rollout_processor,
-    threshold_of_success=0.66,
+    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct", "temperature": 0.0, "max_tokens": 4096}],
+    rollout_processor=MCPGymRolloutProcessor(),
+    passed_threshold=0.66,
     num_runs=1,
     mode="pointwise",
     server_script_path="examples/frozen_lake_mcp/server.py",

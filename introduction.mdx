@@ -47,7 +47,7 @@ FIREWORKS_API_KEY=your_api_key
 
 ```python test_bold_format.py
 from eval_protocol.models import EvaluateResult, EvaluationRow, Message
-from eval_protocol.pytest import default_single_turn_rollout_processor, evaluation_test
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
 
 
 @evaluation_test(
@@ -61,8 +61,8 @@ from eval_protocol.pytest import default_single_turn_rollout_processor, evaluati
             ),
         ],
     ],
-    model=["fireworks_ai/accounts/fireworks/models/llama-v3p1-8b-instruct"],
-    rollout_processor=default_single_turn_rollout_processor,
+    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/llama-v3p1-8b-instruct"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
     mode="pointwise",
 )
 def test_bold_format(row: EvaluationRow) -> EvaluationRow:
