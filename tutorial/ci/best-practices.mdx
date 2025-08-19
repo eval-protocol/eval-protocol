@@ -8,7 +8,7 @@ they are not deterministic.
 
 This page describes best practices for running evals in CI.
 
-### Before CI
+### Before running evals in CI
 
 Its important that before you run evals in CI, you ensure that your evals are
 running as expected. Here are a couple things we suggest doing/checking based on experience.
@@ -19,5 +19,31 @@ your trajectories and eval results. For example, EP ignores tool call errors,
 since sometimes evals might require tool calls to fail. In that case, you need
 to manually review the tool call errors to ensure they are expected.
 2. Try your eval with [`num_runs`](/reference/evaluation-test#multiple-runs-and-aggregation) `> 1` to see if the results are consistent. The more runs you have, the beter data you can gather to make assertions.
-3. Ensure that [`standard_error`](/specification#evaluateresult) is not `0`. If it is, it means that something is deterministically wrong and you need to debug.
-5. Determine a [`pass_threshold`](/specification#evaluationthreshold) for your evals. First decide on a `num_runs > 1` that gives you enough signal to make a reasonable `pass_threshold`.
+3. Ensure that [`standard_error`](/reference/evaluation-test#threshold-configuration) is not `0`. If it is, it means that something is deterministically wrong and you need to debug.
+5. Determine a [`success`](/reference/evaluation-test#threshold-configuration) threshold for your evals. First decide on a `num_runs > 1` that gives you enough signal to make a reasonable `pass_threshold`.
+
+### Determining the frequency of your evals
+
+Once you have your evals running as expected, you can integrate them into your
+CI pipeline. Since EP adopts `pytest` conventions, its easy to integrate with
+CI. Based on the complexity of your evals, you will likely want to run them at
+different frequencies. In general, the more complex the eval, the more time it
+will take to run.
+
+Here are some guidelines for how often to run evals based on the complexity of
+the evals:
+
+
+| Method        | Description                                                                 | Frequency      |
+|---------------|-----------------------------------------------------------------------------|---------------|
+| Unit          | <ul><li>Single-turn evals</li><li>Simple or deterministic evals</li></ul>   | Frequently    |
+| Integration   | <ul><li>Multi-turn evals</li><li>LLM-as-a-judge</li><li>Reliable external dependencies</li></ul> | Semi-frequently |
+| End-to-end    | <ul><li>Unreliable external dependencies</li></ul>                          | Infrequently  |
+
+#### Separating tests into different categories
+
+Since an eval is a pytest test, you can use best practies from `pytest` to
+separate tests into different categories. For example, you can use `pytest`'s
+`@pytest.mark.unit` and `@pytest.mark.integration` decorators to separate tests
+into different categories. Or you can separate tests into different folders and
+run `pytest` on each folder.
