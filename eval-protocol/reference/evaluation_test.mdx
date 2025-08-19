@@ -1,0 +1,220 @@
+---
+title: evaluation_test Decorator
+description: "Pytest-based evaluation decorator for defining model evaluation suites with rollouts, batching, retries, and CI-friendly outputs"
+sidebarTitle: @evaluation_test
+---
+
+The `@evaluation_test` decorator turns a plain Python function into a fully parameterized, pytest-executable evaluation suite. It coordinates dataset loading, rollout execution, parallelism, aggregation, threshold checks, and optional CI summaries.
+
+## When to use
+
+- Use `@evaluation_test` to define repeatable, CI-friendly evals for LLM tasks.
+- Works for simple single-turn prompts, multi-turn agent/tool usage, and MCP gym-like environments.
+- Supports both batch evaluations (entire dataset at once) and pointwise evaluations (evaluate per-row as results stream in).
+
+## Function signature
+
+```python
+from typing import Any, Callable, Dict, List, Optional, Union
+
+from eval_protocol.models import (
+    CompletionParams,
+    EvaluationRow,
+    EvaluationThreshold,
+)
+from eval_protocol.pytest import evaluation_test
+
+
+def evaluation_test(
+    *,
+    completion_params: List[CompletionParams],
+    input_messages: Optional[List] = None,
+    input_dataset: Optional[List] = None,
+    dataset_adapter: Callable[[List[Dict[str, Any]]], List[EvaluationRow]] = ...,  # default adapter
+    rollout_processor = ...,  # default no-op rollout processor
+    evaluation_test_kwargs: Optional[List[Dict[str, Any]]] = None,
+    rollout_processor_kwargs: Optional[Dict[str, Any]] = None,
+    aggregation_method: str = "mean",
+    passed_threshold: Optional[Union[EvaluationThreshold, float, dict]] = None,
+    num_runs: int = 1,
+    max_dataset_rows: Optional[int] = None,
+    mcp_config_path: Optional[str] = None,
+    max_concurrent_rollouts: int = 8,
+    server_script_path: Optional[str] = None,
+    steps: int = 30,
+    mode: str = "batch",  # "batch" | "pointwise"
+    combine_datasets: bool = True,
+    logger = None,
+):
+    ...
+```
+
+## Parameters
+
+- **completion_params**: List of provider-agnostic generation parameter objects (via LiteLLM). Must include `model`.
+- **input_messages**: Optional in-memory inputs. Accepts either a single `List[Message]` (one row) or `List[List[Message]]` (many rows).
+- **input_dataset**: Optional list of JSONL file paths containing dataset rows. Use with `dataset_adapter` to map to `List[EvaluationRow]`.
+- **dataset_adapter**: Callable to convert parsed JSONL items (list of dicts) into `List[EvaluationRow]`. Defaults to a built-in adapter for the common EP JSONL schema.
+- **rollout_processor**: Async generator that performs the rollout per row and yields `EvaluationRow`s with outputs appended. See `reference/rollout-processors.mdx` for built-ins.
+- **evaluation_test_kwargs**: Optional list of kwargs dicts passed through to your evaluation function for each parameter combination.
+- **rollout_processor_kwargs**: Extra options passed to the rollout processor (inside `RolloutProcessorConfig.kwargs`).
+- **aggregation_method**: How to aggregate per-run scores, e.g. `"mean"`.
+- **passed_threshold**: Either a float (minimum aggregated success) or an `EvaluationThreshold`-compatible dict with fields like `{ "success": 0.8, "standard_error": 0.05 }`.
+- **num_runs**: Number of repeated runs; useful for confidence intervals and stability checks.
+- **max_dataset_rows**: Truncate dataset to the first N rows (also configurable via pytest flags).
+- **mcp_config_path**: Path to MCP client config (required by agent/tool processors).
+- **max_concurrent_rollouts**: Max number of rows rolled out in parallel (default 8).
+- **server_script_path**: MCP server entry point for gym-like processors.
+- **steps**: Upper bound on rollout steps for multi-turn processors (default 30).
+- **mode**: `"batch"` (evaluate after collecting all rows) or `"pointwise"` (evaluate each row as it finishes).
+- **combine_datasets**: If multiple datasets are passed, controls whether to fan-in to a combined experiment.
+- **logger**: Optional `DatasetLogger` to capture per-row logs and intermediate artifacts.
+
+## Modes and function contracts
+
+- **Batch mode (`mode="batch"`)**
+  - Your function signature must be `def my_eval(rows: List[EvaluationRow]) -> List[EvaluationRow]` (sync or async allowed).
+  - You should set `row.evaluation_result` for each row and return the list of rows.
+
+- **Pointwise mode (`mode="pointwise"`)**
+  - Your function signature must be `def my_eval(row: EvaluationRow) -> EvaluationRow` (sync or async allowed).
+  - You should set `row.evaluation_result` and return the row.
+
+Type checks are enforced at runtime; mismatches raise descriptive errors.
+
+## Environment variables (optional)
+
+- **EP_INPUT_PARAMS_JSON**: JSON object deep-merged into `completion_params` at runtime. Example: `{"temperature":0,"extra_body":{"reasoning":{"effort":"low"}}}`.
+- **EP_MAX_RETRY**: Integer. Retries a rollout row up to N times on failure before surfacing the error.
+- **EP_PRINT_SUMMARY**: Set to `1` to print a concise summary line at the end of each parameterization.
+- **EP_SUMMARY_JSON**: File or directory path. Writes a JSON artifact summarizing the run (per combination when a directory is provided).
+
+Related pytest flags are documented in `reference/rollout-processors.mdx` (e.g., `--ep-max-rows`, `--ep-summary-json`, `--ep-input-param`).
+
+## Aggregation, confidence intervals, and thresholds
+
+- Per-run scores are aggregated (default mean). When `aggregation_method == "mean"`, a 95% CI for the fixed-set mean μ is computed when possible.
+- If `passed_threshold` is set, the test asserts that the aggregated score ≥ `success`, and if provided, that the standard error ≤ `standard_error`.
+
+## Quickstart (batch mode)
+
+```python test_single_turn_eval.py
+from typing import Any, Dict, List
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
+
+
+@evaluation_test(
+    completion_params=[{
+        "model": "openai/gpt-4o-mini",
+        "temperature": 0.0,
+    }],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="batch",
+)
+def test_single_turn(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Simple correctness check over single-turn prompts"""
+    for row in rows:
+        # Example heuristic: correct if model mentions the keyword in last assistant message
+        last = next((m for m in reversed(row.messages) if m.role == "assistant"), None)
+        contains_keyword = (last is not None) and ("answer" in (last.content or "").lower())
+        row.evaluation_result = EvaluateResult(score=1.0 if contains_keyword else 0.0)
+    return rows
+
+
+if __name__ == "__main__":
+    # Optional: run via pytest for full parameterization
+    import pytest
+    raise SystemExit(pytest.main(["-k", "test_single_turn", "-q"]))
+```
+
+Run:
+
+```bash
+pytest -k test_single_turn -q --ep-print-summary --ep-summary-json artifacts/
+```
+
+Expected output includes a concise summary line (when `--ep-print-summary` is used) and a JSON artifact under `artifacts/`.
+
+## Pointwise mode example
+
+```python test_pointwise_eval.py
+from typing import List
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
+
+
+@evaluation_test(
+    completion_params=[{"model": "openai/gpt-4o-mini"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+)
+def test_pointwise(row: EvaluationRow) -> EvaluationRow:
+    # Evaluate each row independently as results stream in
+    last = next((m for m in reversed(row.messages) if m.role == "assistant"), None)
+    row.evaluation_result = EvaluateResult(score=1.0 if last and last.content else 0.0)
+    return row
+```
+
+Run:
+
+```bash
+pytest -k test_pointwise -q --ep-print-summary
+```
+
+## Using datasets (JSONL) with a custom adapter
+
+```python test_with_dataset.py
+import json
+from typing import Any, Dict, List
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
+
+
+def my_dataset_adapter(items: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    rows: List[EvaluationRow] = []
+    for it in items:
+        # Each JSONL item contains {"id": str, "question": str}
+        messages = [
+            Message(role="user", content=it["question"]),
+        ]
+        rows.append(EvaluationRow(messages=messages))
+    return rows
+
+
+@evaluation_test(
+    completion_params=[{"model": "openai/gpt-4o-mini", "temperature": 0}],
+    input_dataset=["./sample.jsonl"],
+    dataset_adapter=my_dataset_adapter,
+    rollout_processor=SingleTurnRolloutProcessor(),
+    passed_threshold={"success": 0.8},
+)
+def test_dataset(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        last = next((m for m in reversed(row.messages) if m.role == "assistant"), None)
+        row.evaluation_result = EvaluateResult(score=1.0 if last and last.content else 0.0)
+    return rows
+```
+
+Example `sample.jsonl` (descriptive alt text: small, two-row QA dataset in JSONL):
+
+```json sample.jsonl
+{"id":"q1","question":"Say answer for this prompt"}
+{"id":"q2","question":"Say answer again"}
+```
+
+Run with truncation and summaries:
+
+```bash
+pytest -k test_dataset -q --ep-max-rows 2 --ep-summary-json artifacts/eval.json
+```
+
+## Tips
+
+- Provide either `input_messages` or `input_dataset` (or both). When both are provided, parameter combinations are generated for each.
+- Always return rows with `evaluation_result` set; otherwise aggregation will fail.
+- For tool-using or gym evals, see the processors in `reference/rollout-processors.mdx` and pass the matching `rollout_processor` plus `mcp_config_path`/`server_script_path`.
+
