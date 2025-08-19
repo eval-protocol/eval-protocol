@@ -28,7 +28,9 @@ Once you have your evals running as expected, you can integrate them into your
 CI pipeline. Since EP adopts `pytest` conventions, its easy to integrate with
 CI. Based on the complexity of your evals, you will likely want to run them at
 different frequencies. In general, the more complex the eval, the more time it
-will take to run.
+will take to run. Complexity can come in the form of many LLM calls or
+unreliable external dependencies. More complex evals can also be more expensive
+and time-consuming to run.
 
 Here are some guidelines for how often to run evals based on the complexity of
 the evals:
@@ -36,7 +38,7 @@ the evals:
 
 | Method        | Description                                                                 | Frequency      |
 |---------------|-----------------------------------------------------------------------------|---------------|
-| Unit          | <ul><li>Single-turn evals</li><li>Simple or deterministic evals</li></ul>   | Frequently    |
+| Unit          | <ul><li>Single-turn evals</li><li>Simple or semi-deterministic evals</li></ul>   | Frequently    |
 | Integration   | <ul><li>Multi-turn evals</li><li>LLM-as-a-judge</li><li>Reliable external dependencies</li></ul> | Semi-frequently |
 | End-to-end    | <ul><li>Unreliable external dependencies</li></ul>                          | Infrequently  |
 
