@@ -12,7 +12,7 @@ A single execution of a test function. One invocation can generate one or more e
 
 ### experiment
 
-A group of runs for a specific combination of parameters (e.g., model × dataset × generation params). Each new execution of the test function produces a new experiment.
+A group of runs for a specific combination of parameters (e.g., model x dataset x generation params). Each new execution of the test function produces a new experiment.
 
 ### run
 
@@ -28,7 +28,10 @@ The sequence of chat `messages` (and optional tool calls) produced during a roll
 
 ### row
 
-The atomic evaluation unit. A row contains the conversation `messages`, optional `ground_truth`, and the evaluator’s `evaluation_result`.
+The atomic evaluation unit. A row contains the conversation `messages`, optional
+`ground_truth`, and the evaluator's `evaluation_result`. Every row is uniquely
+identified by its `row_id`. If not provided by the dataset, a stable hash is
+generated based on the row's content.
 
 ### dataset
 
