@@ -1,0 +1,23 @@
+---
+title: "Running Evals in CI"
+---
+
+To ensure the quality of your AI applications do not regress, it is important to
+run evals at a regular cadence. But evals are different than regular tests since
+they are not deterministic.
+
+This page describes best practices for running evals in CI.
+
+### Before CI
+
+Its important that before you run evals in CI, you ensure that your evals are
+running as expected. Here are a couple things we suggest doing/checking based on experience.
+
+1. Use [EP's UI](/tutorial/ui/getting-started) to review your evals by hand.
+Often times the best and only way to ensure quality is by manually reviewing
+your trajectories and eval results.
+2. Try your eval with [num_runs](/reference/evaluation-test#multiple-runs-and-aggregation) `> 1` to see if the results are consistent. The more runs you have, the beter data you can gather to make assertions.
+3. Ensure that `standard_error` is not `0`. If it is, it means that something is deterministically wrong.
+4. EP gracefully handles tool calls errors, since sometimes evals might require
+tool calls to fail. Again, use the UI to review your evals by hand.
+5. Determine a `pass_threshold` for your evals 

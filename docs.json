@@ -41,7 +41,8 @@
               "tutorial/ui/table",
               "tutorial/ui/pivot"
             ]
-          }
+          },
+          "tutorial/ci/best-practices"
         ]
       },
       {
@@ -72,7 +73,7 @@
       },
       {
         "group": "Reference",
-        "pages": ["reference/rollout-processors"]
+        "pages": ["reference/rollout-processors", "reference/evaluation-test"]
       },
       {
         "group": "Open-Resource Benchmarks",

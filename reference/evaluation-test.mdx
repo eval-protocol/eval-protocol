@@ -1,0 +1,494 @@
+---
+title: "@evaluation_test"
+description: "Create pytest-based evaluation tests for AI model evaluation with support for batch and pointwise evaluation modes"
+---
+
+The `@evaluation_test` decorator is the core component for creating pytest-based evaluation tests in the Evaluation Protocol. It enables you to evaluate AI models by running rollouts and applying evaluation criteria to measure performance.
+
+## Key Concepts
+
+Before diving into the API, it's important to understand the terminology used in the Evaluation Protocol:
+
+- **Invocation**: A single execution of a test function that can generate 1 or more experiments
+- **Experiment**: A group of runs for a combination of parameters (multiple experiments if `num_runs > 1`)
+- **Run**: A group of rollouts (multiple run IDs if `num_runs > 1`)
+- **Rollout**: The execution/process that produces a trajectory
+- **Trajectory**: The result produced by a rollout — a list of OpenAI Chat Completion messages
+- **Row**: Both input and output of an evaluation (e.g., a task within a dataset)
+- **Dataset**: A collection of rows (List[EvaluationRow])
+- **Eval**: A rubric implemented in the test function body that produces a score from 0 to 1
+
+Each of these entities has a unique ID for easy grouping and identification.
+
+## Basic Usage
+
+```python
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.models import EvaluationRow
+
+@evaluation_test(
+    completion_params=[
+        {"model": "gpt-4", "temperature": 0.1},
+        {"model": "gpt-3.5-turbo", "temperature": 0.1},
+    ],
+    input_dataset=["path/to/dataset.jsonl"],
+    passed_threshold=0.8
+)
+def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Evaluate mathematical reasoning capabilities."""
+    for row in rows:
+        # Your evaluation logic here
+        score = evaluate_math_reasoning(row.messages)
+        row.evaluation_result.score = score
+    
+    return rows
+```
+
+## Parameters
+
+Only `completion_params` is required; all other parameters are optional.
+
+<ParamField name="completion_params" type="List[dict]" required>
+Generation parameters for the rollout. Must include a `model` field.
+</ParamField>
+
+<ParamField name="input_messages" type="Optional[List[InputMessagesParam]]">
+Messages to send to the model. Useful when you don't have a dataset but can hard-code messages. Will be passed as "input_dataset" to the test function.
+</ParamField>
+
+<ParamField name="input_dataset" type="Optional[List[DatasetPathParam]]">
+Paths to JSONL datasets. Provide a `dataset_adapter` to convert custom dataset formats to EvaluationRows.
+</ParamField>
+
+<ParamField name="dataset_adapter" type="Callable[[List[Dict[str, Any]], Dataset]">
+Function to convert input dataset to a list of EvaluationRows. Defaults to `default_dataset_adapter`.
+</ParamField>
+
+<ParamField name="rollout_processor" type="RolloutProcessor">
+Function used to perform the rollout. Defaults to `NoOpRolloutProcessor()`.
+</ParamField>
+
+<ParamField name="evaluation_test_kwargs" type="Optional[List[EvaluationInputParam]]">
+Additional keyword arguments for the evaluation function.
+</ParamField>
+
+<ParamField name="rollout_processor_kwargs" type="Optional[RolloutProcessorInputParam]">
+Additional keyword arguments for the rollout processor.
+</ParamField>
+
+<ParamField name="aggregation_method" type="AggregationMethod">
+How to aggregate scores across runs. One of: "mean", "max", "min". Defaults to "mean".
+</ParamField>
+
+<ParamField name="passed_threshold" type="Optional[Union[EvaluationThreshold, float, dict]]">
+Threshold configuration for test success. Can be a float or EvaluationThreshold object. Success rate must be above `success`, and if set, standard error must be below `standard_error`.
+</ParamField>
+
+<ParamField name="num_runs" type="int">
+Number of times to repeat the rollout and evaluations. Defaults to 1.
+</ParamField>
+
+<ParamField name="max_dataset_rows" type="Optional[int]">
+Limit dataset to the first N rows.
+</ParamField>
+
+<ParamField name="mcp_config_path" type="Optional[str]">
+Path to MCP config file that follows MCPMultiClientConfiguration schema.
+</ParamField>
+
+<ParamField name="max_concurrent_rollouts" type="int">
+Maximum number of concurrent rollouts to run in parallel. Defaults to 8.
+</ParamField>
+
+<ParamField name="server_script_path" type="Optional[str]">
+Path to the MCP server script to run. Defaults to "examples/tau2_mcp/server.py".
+</ParamField>
+
+<ParamField name="steps" type="int">
+Number of rollout steps to execute. Defaults to 30.
+</ParamField>
+
+<ParamField name="mode" type="EvaluationTestMode">
+Evaluation mode. "batch" (default) expects test function to handle full dataset. "pointwise" applies test function to each row individually.
+</ParamField>
+
+<ParamField name="combine_datasets" type="bool">
+Whether to combine multiple datasets. Defaults to True.
+</ParamField>
+
+<ParamField name="logger" type="Optional[DatasetLogger]">
+DatasetLogger to use for logging. If not provided, a default logger will be used.
+</ParamField>
+
+## Evaluation Modes
+
+### Batch Mode (Default)
+
+In batch mode, your test function receives the entire dataset and processes all rows together:
+
+```python
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    input_dataset=["dataset.jsonl"],
+    mode="batch"
+)
+def test_batch_evaluation(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Process all rows together."""
+    # Access to full dataset for cross-row analysis
+    for row in rows:
+        # Evaluate each row
+        score = evaluate_single_row(row)
+        row.evaluation_result.score = score
+    
+    return rows
+```
+
+**Requirements:**
+- Function must have a parameter named `rows` of type `List[EvaluationRow]`
+- Function must return `List[EvaluationRow]`
+
+### Pointwise Mode
+
+In pointwise mode, your test function processes each row individually, enabling pipelined evaluation:
+
+```python
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    input_dataset=["dataset.jsonl"],
+    mode="pointwise"
+)
+def test_pointwise_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """Process each row individually."""
+    # Evaluate single row
+    score = evaluate_single_row(row)
+    row.evaluation_result.score = score
+    
+    return row
+```
+
+**Requirements:**
+- Function must have a parameter named `row` of type `EvaluationRow`
+- Function must return `EvaluationRow`
+
+## Threshold Configuration
+
+You can set thresholds for test success using the `passed_threshold` parameter:
+
+```python
+# Simple threshold (just success rate)
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    passed_threshold=0.8
+)
+
+# Advanced threshold with standard error
+@evaluation_test(
+    completion_params=[CompletionParams(model="gpt-4")],
+    passed_threshold={
+        "success": 0.8,
+        "standard_error": 0.05
+    }
+)
+
+# Using EvaluationThreshold object
+from eval_protocol.models import EvaluationThreshold
+
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    passed_threshold=EvaluationThreshold(success=0.8, standard_error=0.05)
+)
+```
+
+## Multiple Runs and Aggregation
+
+Set `num_runs > 1` to run multiple evaluations and aggregate results:
+
+```python
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    input_dataset=["dataset.jsonl"],
+    num_runs=5,
+    aggregation_method="mean"
+)
+def test_with_multiple_runs(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # This function will be called 5 times
+    # Results will be aggregated using the mean
+    return rows
+```
+
+## Environment Variables
+
+The decorator supports several environment variables for configuration:
+
+- `EP_MAX_DATASET_ROWS`: Override `max_dataset_rows` parameter. Applies to both datasets and `input_messages` (slices to first N rows).
+- `EP_INPUT_PARAMS_JSON`: JSON object deep-merged into `completion_params`. Example: `{"temperature":0,"extra_body":{"reasoning":{"effort":"low"}}}`.
+- `EP_MAX_RETRY`: Maximum retry attempts for rollouts (default: 0). See "Retries and failure policy".
+- `EP_FAIL_ON_MAX_RETRY`: When a rollout permanently fails after retries, raise (default: "true"). Set to "false" to continue and include failed rows.
+- `EP_PRINT_SUMMARY`: Set to "1" to print a one-line evaluation summary to stdout.
+- `EP_SUMMARY_JSON`: File or directory path to write a JSON summary artifact. See "Summary artifacts" for naming behavior.
+
+## Return Values
+
+Your test function must return the appropriate type based on the mode:
+
+- **Batch mode**: `List[EvaluationRow]`
+- **Pointwise mode**: `EvaluationRow`
+
+Each returned row should have:
+- `evaluation_result.score`: A float between 0 and 1
+- Optional `evaluation_result.metrics`: Additional metric scores
+
+## Dataset loading and input formats
+
+- **Datasets (`input_dataset`)**: You can pass a single path or a list of paths. When a list is provided and `combine_datasets=True` (default), files are concatenated into one dataset; when `combine_datasets=False`, each path is parameterized into separate test invocations.
+- **Input messages (`input_messages`)**: Accepts either a single row as `List[Message]` or many rows as `List[List[Message]]`. When `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
+- **Dataset adapter (`dataset_adapter`)**: Receives raw JSONL rows and must return `List[EvaluationRow]`.
+
+## Error Handling
+
+The decorator handles errors gracefully:
+
+- Failed rollouts are still evaluated (you can choose to give them a score of 0)
+- Assertion errors are logged with status "finished"
+- Other exceptions are logged with status "error"
+- Summary generation failures don't cause test failures
+
+## Row IDs and metadata
+
+- Stable `row_id` values are generated for rows missing `row.input_metadata.row_id`, using a deterministic hash of row content. This ensures consistent IDs across processes and runs.
+- `EvalMetadata` is created for each evaluation with: `name` (test function name), `description` (docstring), `num_runs`, `aggregation_method`, and threshold info. Its `status` transitions from "running" to "finished" or "error".
+- `completion_params` used for a row are recorded in `row.input_metadata.completion_params`.
+
+## Dataset combination and parameterization
+
+- Parameter combinations are generated across `input_dataset`, `completion_params`, `input_messages`, and `evaluation_test_kwargs`.
+- Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `evaluation_test_kwargs`.
+- Set `combine_datasets=False` to parameterize each dataset path separately. With `True` (default), multiple paths are combined into a single logical dataset per invocation.
+
+## Summary artifacts
+
+When `EP_SUMMARY_JSON` is set:
+
+- If a directory or a non-`.json` path is provided, a file is written inside with the base name: `"{suite}__{model}__{mode}__runs{num_runs}.json"`, where `suite` is the test function name and `model` is a sanitized slug.
+- If a file path is provided, it writes that file. If an "effort" tag is detected in `completion_params` (e.g., `reasoning_effort`), a variant suffixed with `__{effort}` is written instead.
+- The summary includes: `suite`, `model`, `agg_score`, `num_runs`, `rows`, optional 95% CI (`agg_ci_low`, `agg_ci_high`) when `aggregation_method="mean"`, and a `timestamp`.
+
+## Retries and failure policy
+
+- Rollouts are retried up to `EP_MAX_RETRY` times.
+- Permanent failures are, by default, raised immediately to fail the test. Override with `EP_FAIL_ON_MAX_RETRY=false` to continue and include errored rows (you can score them as 0 in your evaluation).
+
+## [Rollout processors](/reference/rollout-processors)
+
+- A rollout processor turns input rows into completed rows (e.g., by calling a model). The decorator passes a `RolloutProcessorConfig` containing `completion_params`, `mcp_config_path`, `server_script_path`, `max_concurrent_rollouts`, and `steps`.
+- Built-ins include:
+  - `NoOpRolloutProcessor()`: passes rows through unchanged (useful for offline evaluation of pre-generated outputs).
+  - `SingleTurnRolloutProcessor()`: performs a single chat completion via LiteLLM and appends the assistant message.
+  - Others (e.g., agent/MCP variants) exist in `eval_protocol.pytest`.
+
+## Direct invocation (dual-mode)
+
+Decorated functions can be called directly in addition to running under pytest:
+
+- Batch mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
+- Pointwise mode: `await test_fn(row)`
+
+## Examples
+
+### Basic Math Evaluation
+
+```python
+@evaluation_test(
+    completion_params=[CompletionParams(model="gpt-4")],
+    input_messages=[
+        [Message(role="user", content="What is 2 + 2?")]
+    ],
+    passed_threshold=0.9
+)
+def test_basic_math(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        # Simple correctness check
+        response = row.messages[-1].content
+        if "4" in response:
+            row.evaluation_result.score = 1.0
+        else:
+            row.evaluation_result.score = 0.0
+    
+    return rows
+```
+
+### Multi-Model Comparison
+
+```python
+@evaluation_test(
+    completion_params=[
+        {"model": "gpt-4", "temperature": 0.1},
+        {"model": "gpt-3.5-turbo", "temperature": 0.1},
+        {"model": "claude-3-sonnet", "temperature": 0.1},
+    ],
+    input_dataset=["reasoning_tasks.jsonl"],
+    passed_threshold=0.7,
+    num_runs=3
+)
+def test_reasoning_capabilities(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        # Complex evaluation logic
+        score = evaluate_reasoning_quality(row.messages)
+        row.evaluation_result.score = score
+        
+        # Add additional metrics
+        row.evaluation_result.metrics = {
+            "clarity": evaluate_clarity(row.messages),
+            "correctness": evaluate_correctness(row.messages)
+        }
+    
+    return rows
+```
+
+### Pointwise Evaluation with Custom Dataset
+
+```python
+def custom_dataset_adapter(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Convert custom format to EvaluationRows."""
+    rows = []
+    for item in data:
+        messages = [
+            Message(role="user", content=item["question"]),
+            Message(role="assistant", content=item["answer"])
+        ]
+        row = EvaluationRow(messages=messages)
+        rows.append(row)
+    return rows
+
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    input_dataset=["custom_format.jsonl"],
+    dataset_adapter=custom_dataset_adapter,
+    mode="pointwise"
+)
+def test_custom_format(row: EvaluationRow) -> EvaluationRow:
+    # Process individual row
+    score = evaluate_custom_metric(row.messages)
+    row.evaluation_result.score = score
+    return row
+```
+
+### Complete runnable example (offline, no model calls)
+
+This example evaluates pre-generated assistant messages using the no-op rollout processor.
+
+```python
+from typing import Any, Dict, List
+from eval_protocol.models import EvaluationRow, Message, EvaluateResult
+from eval_protocol.pytest.evaluation_test import evaluation_test
+from eval_protocol.pytest.default_no_op_rollout_processor import NoOpRolloutProcessor
+
+def adapter(json_rows: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    rows: List[EvaluationRow] = []
+    for r in json_rows:
+        # Expect fields: question, model_answer, ground_truth
+        rows.append(
+            EvaluationRow(
+                messages=[
+                    Message(role="user", content=str(r["question"])) ,
+                    Message(role="assistant", content=str(r["model_answer"]))
+                ],
+                ground_truth=str(r.get("ground_truth", ""))
+            )
+        )
+    return rows
+
+@evaluation_test(
+    input_dataset=["offline_answers.jsonl"],
+    dataset_adapter=adapter,
+    completion_params=[{"model": "not-used-offline"}],
+    rollout_processor=NoOpRolloutProcessor(),
+    mode="batch"
+)
+def test_offline_eval(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        pred = (row.get_assistant_messages()[-1].content or "").strip()
+        gt = (row.ground_truth or "").strip()
+        score = 1.0 if pred == gt else 0.0
+        row.evaluation_result = EvaluateResult(score=score, reason="exact match")
+    return rows
+```
+
+### Complete runnable example (single-turn online via LiteLLM)
+
+Requires `pip install litellm` and provider credentials configured.
+
+```python
+from typing import List
+from eval_protocol.models import EvaluationRow, Message, EvaluateResult
+from eval_protocol.pytest.evaluation_test import evaluation_test
+from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnRolloutProcessor
+
+@evaluation_test(
+    input_messages=[[Message(role="user", content="What is 2 + 2?")]],
+    completion_params=[{"model": "openai/gpt-4o-mini", "temperature": 0}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    passed_threshold=0.8,
+    mode="pointwise"
+)
+def test_online_math(row: EvaluationRow) -> EvaluationRow:
+    answer = (row.get_assistant_messages()[-1].content or "").strip()
+    score = 1.0 if "4" in answer else 0.0
+    row.evaluation_result = EvaluateResult(score=score, reason="contains 4")
+    return row
+```
+
+## Integration with pytest
+
+The decorator automatically creates pytest-compatible test functions:
+
+```bash
+# Run all evaluation tests
+pytest test_file.py
+
+# Run specific test
+pytest test_file.py::test_math_reasoning
+
+# Run with specific parameters
+pytest test_file.py::test_math_reasoning[dataset_path0-completion_params0]
+```
+
+## Programmatic Usage
+
+You can also call decorated functions directly for programmatic evaluation:
+
+```python
+# Direct call with rows
+rows = [EvaluationRow(messages=[...])]
+results = await test_function(rows)
+
+# Direct call with single row (pointwise mode)
+row = EvaluationRow(messages=[...])
+result = await test_function(row)
+```
+
+## Best Practices
+
+1. **Clear Documentation**: Always include docstrings explaining what your evaluation measures
+2. **Error Handling**: Handle edge cases gracefully and provide meaningful scores for failed rollouts
+3. **Metric Design**: Design metrics that are objective and reproducible
+4. **Reason**: Include a `reason` field in the `evaluation_result` to explain the score
+5. **Threshold Setting**: Set realistic thresholds based on your use case
+6. **Multiple Runs**: Use `num_runs > 1` for more reliable results when possible
+7. **Resource Management**: Consider `max_concurrent_rollouts` based on your system capabilities
+
+## Troubleshooting
+
+### Common Issues
+
+- **"No combinations of parameters found"**: Ensure you provide both `completion_params` and either `input_dataset` or `input_messages`
+- **"No model provided"**: Check that your `CompletionParams` includes a `model` field
+- **Signature validation errors**: Ensure your function signature matches the mode requirements
+- **Return type errors**: Verify you're returning the correct type based on your mode
+
+### Debug Tips
+
+- Set `EP_PRINT_SUMMARY=1` to see evaluation results in console
+- Use `EP_SUMMARY_JSON` to save detailed results to a file
+- Check the generated pytest parameterization for complex setups
+- Use `max_dataset_rows` to limit dataset size during development
