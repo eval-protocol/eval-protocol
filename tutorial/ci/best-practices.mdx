@@ -43,7 +43,29 @@ the evals:
 #### Separating tests into different categories
 
 Since an eval is a pytest test, you can use best practies from `pytest` to
-separate tests into different categories. For example, you can use `pytest`'s
-`@pytest.mark.unit` and `@pytest.mark.integration` decorators to separate tests
-into different categories. Or you can separate tests into different folders and
-run `pytest` on each folder.
+separate tests into different categories. 
+
+1. You can use `pytest`'s `@pytest.mark.unit` and `@pytest.mark.integration` decorators to separate tests into different categories.
+
+```python test_unit.py
+@pytest.mark.unit
+@evaluation_test(
+    input_messages=[{"role": "user", "content": "Hello, world!"}],
+    completion_params=[{"model": "gpt-4o"}],
+    rollout_processor=SingleModelRolloutProcessor(),
+    num_runs=1,
+    mode="pointwise",
+)
+def test_unit(row: EvaluationRow):
+    score = evaluate_response(row)
+    row.evaluation_result.score = score
+    return row
+```
+
+2. You can also separate tests into different folders and run `pytest` on each folder.
+
+```bash CLI
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/end-to-end/
+```
