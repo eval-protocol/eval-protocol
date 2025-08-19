@@ -23,12 +23,11 @@ This example is now implemented as a suite in `eval_protocol/benchmarks/suites/h
 
 ## Run it locally
 
-From the Python SDK repo root:
+After installing eval-protocol, you can run the benchmark from anywhere:
 
 ```bash
-python -m eval_protocol.benchmarks.run healthbench \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
-  --print-summary --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_healthbench -v \
+  --ep-print-summary --ep-summary-json artifacts/healthbench.json
 ```
 
 ## Notes

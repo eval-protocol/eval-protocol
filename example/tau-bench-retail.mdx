@@ -25,15 +25,14 @@ You can find the complete implementation in the Python SDK at `tests/pytest/test
 
 ## Run it locally
 
-From the Python SDK repo root:
+After installing eval-protocol, you can run the benchmark from anywhere:
 
 ```bash
-python -m eval_protocol.benchmarks.run tau_bench_retail \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
-  --print-summary --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_tau_bench_retail -v \
+  --ep-print-summary --ep-summary-json artifacts/tau_bench_retail.json
 ```
 
-Use `--ep-num-runs 8` and `--max-concurrency 64` for efficient multiple evaluation runs to assess consistency across the stochastic multi-turn interactions.
+Use `--ep-max-rows=5` for quick testing, or `--ep-reasoning-effort=high` for more thorough evaluation of the stochastic multi-turn interactions.
 
 ## Notes
 

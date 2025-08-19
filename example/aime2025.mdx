@@ -25,15 +25,14 @@ Key pieces in the SDK example:
 
 ## Run it locally
 
-From the Python SDK repo root:
+After installing eval-protocol, you can run the benchmark from anywhere:
 
 ```bash
-python -m eval_protocol.benchmarks.run aime25 \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
-  --print-summary --out artifacts/aime25.json
+pytest --pyargs eval_protocol.benchmarks.test_aime25 -v \
+  --ep-print-summary --ep-summary-json artifacts/aime25.json
 ```
 
-Tip: remove `--ep-max-rows` to run the full dataset. You can also adjust `rollout_input_params` in the test to try different reasoning-effort settings.
+Tip: use `--ep-max-rows=50` to limit dataset size, or `--ep-max-rows=all` for the full dataset. You can also use `--ep-reasoning-effort=high` and `--ep-input-param temperature=0.0` to adjust model settings.
 
 ## Notes
 

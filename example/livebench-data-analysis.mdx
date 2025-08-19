@@ -18,28 +18,27 @@ Suites live in the Python SDK under `eval_protocol/benchmarks/suites/livebench_d
 
 ## Run from CLI (exported benchmark)
 
-From the Python SDK repo root:
+After installing eval-protocol, you can run the composite benchmark from anywhere:
 
 ```bash
-python -m eval_protocol.benchmarks.run live_bench/data_analysis \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b \
-  --print-summary \
-  --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_live_bench_data_analysis -v \
+  --ep-print-summary \
+  --ep-summary-json artifacts/live_bench_data_analysis.json
 ```
 
-This composite benchmark aggregates the three tasks and emits per-task artifacts into `artifacts/` with a final combined summary.
+This composite benchmark aggregates the three tasks with a final combined summary.
 
 ## Run each task individually
 
 ```bash
-python -m eval_protocol.benchmarks.run live_bench/data_analysis/cta \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_live_bench_data_analysis_cta -v \
+  --ep-print-summary --ep-summary-json artifacts/cta.json
 
-python -m eval_protocol.benchmarks.run live_bench/data_analysis/tablejoin \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_live_bench_data_analysis_tablejoin -v \
+  --ep-print-summary --ep-summary-json artifacts/tablejoin.json
 
-python -m eval_protocol.benchmarks.run live_bench/data_analysis/tablereformat \
-  --model fireworks_ai/accounts/fireworks/models/gpt-oss-120b --print-summary --out artifacts/
+pytest --pyargs eval_protocol.benchmarks.test_live_bench_data_analysis_tablereformat -v \
+  --ep-print-summary --ep-summary-json artifacts/tablereformat.json
 ```
 
 ## Notes
