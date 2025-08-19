@@ -15,9 +15,9 @@ running as expected. Here are a couple things we suggest doing/checking based on
 
 1. Use [EP's UI](/tutorial/ui/getting-started) to review your evals by hand.
 Often times the best and only way to ensure quality is by manually reviewing
-your trajectories and eval results.
-2. Try your eval with [num_runs](/reference/evaluation-test#multiple-runs-and-aggregation) `> 1` to see if the results are consistent. The more runs you have, the beter data you can gather to make assertions.
-3. Ensure that `standard_error` is not `0`. If it is, it means that something is deterministically wrong.
-4. EP gracefully handles tool calls errors, since sometimes evals might require
-tool calls to fail. Again, use the UI to review your evals by hand.
-5. Determine a `pass_threshold` for your evals 
+your trajectories and eval results. For example, EP ignores tool call errors,
+since sometimes evals might require tool calls to fail. In that case, you need
+to manually review the tool call errors to ensure they are expected.
+2. Try your eval with [`num_runs`](/reference/evaluation-test#multiple-runs-and-aggregation) `> 1` to see if the results are consistent. The more runs you have, the beter data you can gather to make assertions.
+3. Ensure that [`standard_error`](/specification#evaluateresult) is not `0`. If it is, it means that something is deterministically wrong and you need to debug.
+5. Determine a [`pass_threshold`](/specification#evaluationthreshold) for your evals. First decide on a `num_runs > 1` that gives you enough signal to make a reasonable `pass_threshold`.
