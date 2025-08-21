@@ -1,6 +1,6 @@
 ---
 title: "@evaluation_test"
-description: "Create pytest-based evaluation tests for AI model evaluation with support for batch, pointwise, and groupwise evaluation modes"
+description: "Create pytest-based evaluation tests for AI model evaluation with support for pointwise, groupwise, and all modes"
 ---
 
 The [`@evaluation_test`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/evaluation_test.py) decorator is the core component for creating pytest-based evaluation tests in the Evaluation Protocol. It enables you to evaluate AI models by running rollouts and applying evaluation criteria to measure performance.
@@ -331,7 +331,7 @@ def test_groupwise_evaluation(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 - Function must return `List[EvaluationRow]`
 - Must provide at least 2 completion parameters
 
-### All Mode (Batch Mode)
+### All Mode
 
 In all mode, your test function receives the entire dataset and processes all rows together:
 

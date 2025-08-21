@@ -92,12 +92,78 @@ class InputMetadata(BaseModel):
     session_data: Optional[Dict[str, Any]]
 ```
 
-### RolloutStatus
+### ErrorInfo (AIP-193)
+Structured error detail used inside `Status.details` per Google's AIP-193.
+
 ```python
-class RolloutStatus(BaseModel):
-    status: Literal["running","finished","error"] = "running"
-    termination_reason: Optional[TerminationReason]
-    extra_info: Optional[Dict[str, Any]] = None
+class ErrorInfo(BaseModel):
+    REASON_TERMINATION_REASON: ClassVar[str] = "TERMINATION_REASON"
+    REASON_EXTRA_INFO: ClassVar[str] = "EXTRA_INFO"
+    DOMAIN: ClassVar[str] = "evalprotocol.io"
+
+    reason: str
+    domain: str
+    metadata: Dict[str, Any] = {}
+
+    def to_aip193_format(self) -> Dict[str, Any]:
+        return {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            "reason": self.reason,
+            "domain": self.domain,
+            "metadata": self.metadata,
+        }
+```
+
+### Status (AIP-193)
+```python
+class Status(BaseModel):
+    class Code(int, Enum):
+        OK = 0
+        CANCELLED = 1
+        UNKNOWN = 2
+        INVALID_ARGUMENT = 3
+        DEADLINE_EXCEEDED = 4
+        NOT_FOUND = 5
+        ALREADY_EXISTS = 6
+        PERMISSION_DENIED = 7
+        RESOURCE_EXHAUSTED = 8
+        FAILED_PRECONDITION = 9
+        ABORTED = 10
+        OUT_OF_RANGE = 11
+        UNIMPLEMENTED = 12
+        INTERNAL = 13
+        UNAVAILABLE = 14
+        DATA_LOSS = 15
+        UNAUTHENTICATED = 16
+
+        # Custom code used to mark a finished rollout
+        FINISHED = 100
+
+    code: Code
+    message: str
+    details: List[Dict[str, Any]] = []
+
+    @classmethod
+    def rollout_running(cls) -> "Status":
+        return cls(code=cls.Code.OK, message="Rollout is running", details=[])
+
+    @classmethod
+    def rollout_finished(
+        cls, termination_reason: Optional[TerminationReason] = None, extra_info: Optional[Dict[str, Any]] = None
+    ) -> "Status":
+        details = []
+        if termination_reason:
+            details.append(ErrorInfo.termination_reason(termination_reason).to_aip193_format())
+        if extra_info:
+            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
+        return cls(code=cls.Code.FINISHED, message="Rollout finished", details=details)
+
+    @classmethod
+    def rollout_error(cls, error_message: str, extra_info: Optional[Dict[str, Any]] = None) -> "Status":
+        details = []
+        if extra_info:
+            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
+        return cls(code=cls.Code.INTERNAL, message=error_message, details=details)
 ```
 
 ### TerminationReason
@@ -217,8 +283,8 @@ class EvaluationRow(BaseModel):
     # Input-related metadata
     input_metadata: InputMetadata = Field(default_factory=InputMetadata)
 
-    # Rollout status
-    rollout_status: RolloutStatus = Field(default_factory=RolloutStatus)
+    # Rollout status (AIP-193)
+    rollout_status: Status = Field(default_factory=Status.rollout_running)
 
     # Optional ground truth reference
     ground_truth: Optional[str] = None
@@ -275,13 +341,13 @@ line is a JSON-encoded `EvaluationRow`.
       "environment_context": {}
     },
     "session_data": {
-      "mode": "batch"
+      "mode": "pointwise"
     }
   },
   "rollout_status": {
-    "status": "finished",
-    "termination_reason": "stop",
-    "extra_info": {}
+    "code": 100,
+    "message": "Rollout finished",
+    "details": []
   },
   "ground_truth": "5",
   "evaluation_result": {
@@ -339,12 +405,14 @@ can be used to configure the following:
 - **Model Configuration**: Completion parameters (must include `model`) and generation settings via `completion_params`
 - **Evaluation Criteria**: Success thresholds (via `passed_threshold`), with optional standard deviation constraint
 - **Environment Configuration**: MCP config, rollout steps, server path, and concurrency
-- **Rollout Processor**: Function to execute rollouts (e.g., `default_single_turn_rollout_processor`)
+- **Rollout Processor**: Class to execute rollouts (e.g., `SingleTurnRolloutProcessor()`)
 - **Number of Runs**: Number of times to repeat the rollout (e.g., `num_runs=1`)
-- **Mode**: Evaluation mode (`pointwise` or `batch`)
+- **Mode**: Evaluation mode (`pointwise`, `groupwise`, or `all`)
 - **Aggregation**: Aggregation method (e.g., `mean`) and optional env overrides for summaries
 
 ```python
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
+
 @evaluation_test(
     input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
     dataset_adapter=markdown_dataset_to_evaluation_row,
@@ -354,7 +422,7 @@ can be used to configure the following:
         "max_tokens": 4096,
     }],
     passed_threshold={"success": 0.5},
-    rollout_processor=default_single_turn_rollout_processor,
+    rollout_processor=SingleTurnRolloutProcessor(),
     num_runs=1,
     mode="pointwise",
 )
