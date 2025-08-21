@@ -10,17 +10,17 @@ This page describes best practices for running evals in CI.
 
 ### Before running evals in CI
 
-Its important that before you run evals in CI, you ensure that your evals are
-running as expected. Here are a couple things we suggest doing/checking based on experience.
+It's important that before you run evals in CI, you verify that your evals are
+functioning as intended. Here are a few recommended steps based on experience:
 
-1. Use [EP's UI](/tutorial/ui/getting-started) to review your evals by hand.
-Often times the best and only way to ensure quality is by manually reviewing
-your trajectories and eval results. For example, EP ignores tool call errors,
-since sometimes evals might require tool calls to fail. In that case, you need
-to manually review the tool call errors to ensure they are expected.
-2. Try your eval with [`num_runs`](/reference/evaluation-test#multiple-runs-and-aggregation) `> 1` to see if the results are consistent. The more runs you have, the beter data you can gather to make assertions.
-3. Ensure that [`standard_error`](/reference/evaluation-test#threshold-configuration) is not `0`. If it is, it means that something is deterministically wrong and you need to debug.
-5. Determine a [`success`](/reference/evaluation-test#threshold-configuration) threshold for your evals. First decide on a `num_runs > 1` that gives you enough signal to make a reasonable `pass_threshold`.
+1. Use [EP's UI](/tutorial/ui/getting-started) to manually review your evals.
+Manual inspection of your trajectories and eval results is often the most effective way to ensure quality. For example, EP ignores tool call errors, since some evals might require tool calls to fail. In such cases, you should manually review these errors to confirm they are expected.
+2. Run your eval with [`num_runs`](/reference/evaluation-test#multiple-runs-and-aggregation) set to a value greater than 1 to check for consistency in results. Increasing the number of runs provides better data for making assertions.
+3. If your eval does not always return the same score (e.g., a benchmark eval where most models do not achieve 100% correct responses), check that [`standard_error`](/reference/evaluation-test#threshold-configuration) is not `0` after several runs. If it is, this indicates a deterministic issue that needs debugging.
+4. Establish a [`success`](/reference/evaluation-test#threshold-configuration)
+threshold for your evals. First, choose a `num_runs > 1` that provides enough
+signal to set a reasonable `pass_threshold`. Then decide based on your
+confidence in the eval that you want to set as the `pass_threshold`.
 
 ### Determining the frequency of your evals
 
