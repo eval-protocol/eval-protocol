@@ -73,7 +73,7 @@
       },
       {
         "group": "Reference",
-        "pages": ["reference/rollout-processors", "reference/evaluation-test"]
+        "pages": ["reference/evaluation-test", "reference/rollout-processors"]
       },
       {
         "group": "Open-Resource Benchmarks",
