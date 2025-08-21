@@ -29,8 +29,8 @@ from eval_protocol.models import EvaluationRow
 
 @evaluation_test(
     completion_params=[
-        {"model": "gpt-4", "temperature": 0.1},
-        {"model": "gpt-3.5-turbo", "temperature": 0.1},
+        {"model": "openai/gpt-4o", "temperature": 0.1},
+        {"model": "openai/gpt-3.5-turbo", "temperature": 0.1},
     ],
     input_dataset=["path/to/dataset.jsonl"],
     passed_threshold=0.8,
@@ -51,7 +51,7 @@ def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 Only `completion_params` is required; all other parameters are optional.
 
 <ParamField path="completion_params" type="List[dict]" required>
-Generation parameters for the rollout. Must include a `model` field.
+Generation parameters for the rollout. Must include a `model` field using a LiteLLM-compatible provider route (e.g., `openai/gpt-4o`, `anthropic/claude-3-sonnet`, `fireworks_ai/*`). See the LiteLLM providers list for supported prefixes and models: https://docs.litellm.ai/docs/providers
 </ParamField>
 
 <ParamField path="input_messages" type="Optional[List[InputMessagesParam]]">
@@ -60,6 +60,10 @@ Messages to send to the model. Useful when you don't have a dataset but can hard
 
 <ParamField path="input_dataset" type="Optional[List[DatasetPathParam]]">
 Paths to JSONL datasets. Provide a `dataset_adapter` to convert custom dataset formats to EvaluationRows.
+</ParamField>
+
+<ParamField path="input_rows" type="Optional[List[InputRowsParam]]">
+Pre-constructed EvaluationRow objects to use directly. Useful when you already have messages and/or metadata prepared. Will be passed as "input_dataset" to the test function.
 </ParamField>
 
 <ParamField path="dataset_adapter" type="Callable[[List[Dict[str, Any]]], Dataset]">
