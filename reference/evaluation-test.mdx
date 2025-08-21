@@ -1,6 +1,6 @@
 ---
 title: "@evaluation_test"
-description: "Create pytest-based evaluation tests for AI model evaluation with support for batch and pointwise evaluation modes"
+description: "Create pytest-based evaluation tests for AI model evaluation with support for batch, pointwise, and groupwise evaluation modes"
 ---
 
 The [`@evaluation_test`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/evaluation_test.py) decorator is the core component for creating pytest-based evaluation tests in the Evaluation Protocol. It enables you to evaluate AI models by running rollouts and applying evaluation criteria to measure performance.
@@ -23,6 +23,7 @@ Each of these entities has a unique ID for easy grouping and identification.
 ## Basic Usage
 
 ```python
+from typing import List
 from eval_protocol.pytest import evaluation_test
 from eval_protocol.models import EvaluationRow
 
@@ -32,7 +33,8 @@ from eval_protocol.models import EvaluationRow
         {"model": "gpt-3.5-turbo", "temperature": 0.1},
     ],
     input_dataset=["path/to/dataset.jsonl"],
-    passed_threshold=0.8
+    passed_threshold=0.8,
+    mode="all"
 )
 def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
     """Evaluate mathematical reasoning capabilities."""
@@ -48,106 +50,237 @@ def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 
 Only `completion_params` is required; all other parameters are optional.
 
-<ParamField name="completion_params" type="List[dict]" required>
+<ParamField path="completion_params" type="List[dict]" required>
 Generation parameters for the rollout. Must include a `model` field.
 </ParamField>
 
-<ParamField name="input_messages" type="Optional[List[InputMessagesParam]]">
+<ParamField path="input_messages" type="Optional[List[InputMessagesParam]]">
 Messages to send to the model. Useful when you don't have a dataset but can hard-code messages. Will be passed as "input_dataset" to the test function.
 </ParamField>
 
-<ParamField name="input_dataset" type="Optional[List[DatasetPathParam]]">
+<ParamField path="input_dataset" type="Optional[List[DatasetPathParam]]">
 Paths to JSONL datasets. Provide a `dataset_adapter` to convert custom dataset formats to EvaluationRows.
 </ParamField>
 
-<ParamField name="dataset_adapter" type="Callable[[List[Dict[str, Any]], Dataset]">
+<ParamField path="dataset_adapter" type="Callable[[List[Dict[str, Any]]], Dataset]">
 Function to convert input dataset to a list of EvaluationRows. Defaults to `default_dataset_adapter`.
 </ParamField>
 
-<ParamField name="rollout_processor" type="RolloutProcessor">
+<ParamField path="rollout_processor" type="RolloutProcessor">
 Function used to perform the rollout. Defaults to `NoOpRolloutProcessor()`.
 </ParamField>
 
-<ParamField name="evaluation_test_kwargs" type="Optional[List[EvaluationInputParam]]">
+<ParamField path="evaluation_test_kwargs" type="Optional[List[EvaluationInputParam]]">
 Additional keyword arguments for the evaluation function.
 </ParamField>
 
-<ParamField name="rollout_processor_kwargs" type="Optional[RolloutProcessorInputParam]">
+<ParamField path="rollout_processor_kwargs" type="Optional[RolloutProcessorInputParam]">
 Additional keyword arguments for the rollout processor.
 </ParamField>
 
-<ParamField name="aggregation_method" type="AggregationMethod">
+<ParamField path="aggregation_method" type="AggregationMethod">
 How to aggregate scores across runs. One of: "mean", "max", "min". Defaults to "mean".
 </ParamField>
 
-<ParamField name="passed_threshold" type="Optional[Union[EvaluationThreshold, float, dict]]">
+<ParamField path="passed_threshold" type="Optional[Union[EvaluationThreshold, float, dict]]">
 Threshold configuration for test success. Can be a float or EvaluationThreshold object. Success rate must be above `success`, and if set, standard error must be below `standard_error`.
 </ParamField>
 
-<ParamField name="num_runs" type="int">
+<ParamField path="num_runs" type="int">
 Number of times to repeat the rollout and evaluations. Defaults to 1.
 </ParamField>
 
-<ParamField name="max_dataset_rows" type="Optional[int]">
+<ParamField path="max_dataset_rows" type="Optional[int]">
 Limit dataset to the first N rows.
 </ParamField>
 
-<ParamField name="mcp_config_path" type="Optional[str]">
+<ParamField path="mcp_config_path" type="Optional[str]">
 Path to MCP config file that follows MCPMultiClientConfiguration schema.
 </ParamField>
 
-<ParamField name="max_concurrent_rollouts" type="int">
+<ParamField path="max_concurrent_rollouts" type="int">
 Maximum number of concurrent rollouts to run in parallel. Defaults to 8.
 </ParamField>
 
-<ParamField name="server_script_path" type="Optional[str]">
+<ParamField path="max_concurrent_evaluations" type="int">
+Maximum number of concurrent evaluations to run in parallel. Defaults to 64.
+</ParamField>
+
+<ParamField path="server_script_path" type="Optional[str]">
 Path to the MCP server script to run. Defaults to "examples/tau2_mcp/server.py".
 </ParamField>
 
-<ParamField name="steps" type="int">
+<ParamField path="steps" type="int">
 Number of rollout steps to execute. Defaults to 30.
 </ParamField>
 
-<ParamField name="mode" type="EvaluationTestMode">
-Evaluation mode. "batch" (default) expects test function to handle full dataset. "pointwise" applies test function to each row individually.
+<ParamField path="mode" type="EvaluationTestMode">
+Evaluation mode. "pointwise" (default) applies test function to each row individually. "groupwise" applies test function to a group of rollout results from the same original row (for use cases such as DPO/GRPO). "all" applies test function to the whole dataset.
 </ParamField>
 
-<ParamField name="combine_datasets" type="bool">
+<ParamField path="combine_datasets" type="bool">
 Whether to combine multiple datasets. Defaults to True.
 </ParamField>
 
-<ParamField name="logger" type="Optional[DatasetLogger]">
+<ParamField path="logger" type="Optional[DatasetLogger]">
 DatasetLogger to use for logging. If not provided, a default logger will be used.
 </ParamField>
 
-## Evaluation Modes
+<ParamField path="exception_handler_config" type="Optional[ExceptionHandlerConfig]">
+Configuration for exception handling and backoff retry logic. If not provided, a default configuration will be used with common retryable exceptions. See the ExceptionHandlerConfig section below for detailed configuration options.
+</ParamField>
 
-### Batch Mode (Default)
+## ExceptionHandlerConfig
 
-In batch mode, your test function receives the entire dataset and processes all rows together:
+The `ExceptionHandlerConfig` parameter allows you to customize exception handling and retry logic for your evaluation tests. This configuration is defined in [`eval_protocol.pytest.exception_config.ExceptionHandlerConfig`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/exception_config.py).
+
+### Key Features
+
+- **Retryable Exceptions**: Configure which exceptions should trigger retry attempts
+- **Backoff Strategies**: Choose between exponential or constant backoff with configurable delays
+- **Environment Variable Overrides**: Automatically respect `EP_MAX_RETRY` and `EP_FAIL_ON_MAX_RETRY` settings
+- **Custom Giveup Logic**: Define custom conditions for when to stop retrying
+
+### Configuration Classes
+
+#### ExceptionHandlerConfig
+
+The main configuration class that controls exception handling behavior:
 
 ```python
+@dataclass
+class ExceptionHandlerConfig:
+    # Exceptions that should be retried using backoff
+    retryable_exceptions: Set[Type[Exception]] = DEFAULT_RETRYABLE_EXCEPTIONS
+    
+    # Backoff configuration
+    backoff_config: BackoffConfig = BackoffConfig()
+```
+
+#### BackoffConfig
+
+Controls the retry backoff behavior:
+
+```python
+@dataclass
+class BackoffConfig:
+    strategy: str = "expo"           # "expo" or "constant"
+    base_delay: float = 1.0         # Base delay in seconds
+    max_delay: float = 60.0         # Maximum delay in seconds
+    max_tries: int = 3              # Maximum number of retry attempts
+    jitter: Union[None, Callable] = None  # Jitter function for randomization
+    factor: float = 2.0             # Factor for exponential backoff
+    raise_on_giveup: bool = True    # Whether to raise exception when giving up
+    giveup_func: Callable[[Exception], bool] = lambda e: False  # Custom giveup logic
+```
+
+### Default Configuration
+
+By default, the following exceptions are considered retryable:
+- **Standard library exceptions**: `ConnectionError`, `TimeoutError`, `OSError`
+- **Requests library exceptions**: `requests.exceptions.ConnectionError`, `requests.exceptions.Timeout`, `requests.exceptions.HTTPError`, `requests.exceptions.RequestException`
+- **HTTPX library exceptions**: `httpx.ConnectError`, `httpx.TimeoutException`, `httpx.NetworkError`, `httpx.RemoteProtocolError`
+
+### Backoff Strategies
+
+#### Exponential Backoff (Default)
+- Starts with `base_delay` and multiplies by `factor` each retry
+- Good for transient failures that may resolve quickly
+- Example: 1s → 2s → 4s → 8s → 16s (capped at `max_delay`)
+
+#### Constant Backoff
+- Uses the same delay (`base_delay`) for all retries
+- Good for predictable, consistent retry timing
+- Example: 2s → 2s → 2s → 2s
+
+### Environment Variable Integration
+
+The configuration automatically respects these environment variables:
+
+- `EP_MAX_RETRY`: Overrides `max_tries` in BackoffConfig
+- `EP_FAIL_ON_MAX_RETRY`: Controls `raise_on_giveup` behavior
+
+### Example Usage
+
+#### Basic Custom Configuration
+
+```python
+from eval_protocol.pytest.exception_config import ExceptionHandlerConfig, BackoffConfig
+
+# Custom exception handling configuration
+custom_config = ExceptionHandlerConfig(
+    backoff_config=BackoffConfig(
+        strategy="expo",
+        base_delay=2.0,
+        max_delay=120.0,
+        max_tries=5,
+        jitter=None
+    )
+)
+
 @evaluation_test(
     completion_params=[{"model": "gpt-4"}],
-    input_dataset=["dataset.jsonl"],
-    mode="batch"
+    exception_handler_config=custom_config
 )
-def test_batch_evaluation(rows: List[EvaluationRow]) -> List[EvaluationRow]:
-    """Process all rows together."""
-    # Access to full dataset for cross-row analysis
-    for row in rows:
-        # Evaluate each row
-        score = evaluate_single_row(row)
-        row.evaluation_result.score = score
-    
+def test_with_custom_retry_logic(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # Your evaluation logic here
     return rows
 ```
 
-**Requirements:**
-- Function must have a parameter named `rows` of type `List[EvaluationRow]`
-- Function must return `List[EvaluationRow]`
+#### Aggressive Retry Strategy
 
-### Pointwise Mode
+```python
+# Aggressive retry for unreliable networks
+aggressive_config = ExceptionHandlerConfig(
+    backoff_config=BackoffConfig(
+        strategy="expo",
+        base_delay=0.5,    # Start with 0.5s delay
+        max_delay=30.0,    # Cap at 30s
+        max_tries=10,      # Try up to 10 times
+        jitter=None        # No jitter for predictable timing
+    )
+)
+```
+
+#### Conservative Retry Strategy
+
+```python
+# Conservative retry for stable networks
+conservative_config = ExceptionHandlerConfig(
+    backoff_config=BackoffConfig(
+        strategy="constant",
+        base_delay=5.0,    # 5 second constant delay
+        max_tries=3,       # Only 3 attempts
+        jitter=None
+    )
+)
+```
+
+#### Custom Exception Handling
+
+```python
+from typing import Set, Type
+
+# Only retry on specific exceptions
+custom_exceptions: Set[Type[Exception]] = {
+    ConnectionError,
+    TimeoutError,
+    # Add your custom exceptions here
+}
+
+custom_config = ExceptionHandlerConfig(
+    retryable_exceptions=custom_exceptions,
+    backoff_config=BackoffConfig(
+        strategy="expo",
+        base_delay=1.0,
+        max_tries=3
+    )
+)
+```
+
+## Evaluation Modes
+
+### Pointwise Mode (Default)
 
 In pointwise mode, your test function processes each row individually, enabling pipelined evaluation:
 
@@ -169,6 +302,59 @@ def test_pointwise_evaluation(row: EvaluationRow) -> EvaluationRow:
 **Requirements:**
 - Function must have a parameter named `row` of type `EvaluationRow`
 - Function must return `EvaluationRow`
+
+### Groupwise Mode
+
+In groupwise mode, your test function processes groups of rollout results from the same original row, useful for comparing different models or parameters:
+
+```python
+@evaluation_test(
+    completion_params=[
+        {"model": "gpt-4", "temperature": 0.1},
+        {"model": "gpt-3.5-turbo", "temperature": 0.1},
+    ],
+    input_dataset=["dataset.jsonl"],
+    mode="groupwise"
+)
+def test_groupwise_evaluation(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Process groups of rows from the same original input."""
+    # Compare results across different models/parameters
+    scores = compare_model_outputs(rows)
+    for i, row in enumerate(rows):
+        row.evaluation_result.score = scores[i]
+    
+    return rows
+```
+
+**Requirements:**
+- Function must have a parameter named `rows` of type `List[EvaluationRow]`
+- Function must return `List[EvaluationRow]`
+- Must provide at least 2 completion parameters
+
+### All Mode (Batch Mode)
+
+In all mode, your test function receives the entire dataset and processes all rows together:
+
+```python
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    input_dataset=["dataset.jsonl"],
+    mode="all"
+)
+def test_all_evaluation(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Process all rows together."""
+    # Access to full dataset for cross-row analysis
+    for row in rows:
+        # Evaluate each row
+        score = evaluate_single_row(row)
+        row.evaluation_result.score = score
+    
+    return rows
+```
+
+**Requirements:**
+- Function must have a parameter named `rows` of type `List[EvaluationRow]`
+- Function must return `List[EvaluationRow]`
 
 ## Threshold Configuration
 
@@ -222,17 +408,17 @@ The decorator supports several environment variables for configuration:
 
 - `EP_MAX_DATASET_ROWS`: Override `max_dataset_rows` parameter. Applies to both datasets and `input_messages` (slices to first N rows).
 - `EP_INPUT_PARAMS_JSON`: JSON object deep-merged into `completion_params`. Example: `{"temperature":0,"extra_body":{"reasoning":{"effort":"low"}}}`.
-- `EP_MAX_RETRY`: Maximum retry attempts for rollouts (default: 0). See "Retries and failure policy".
-- `EP_FAIL_ON_MAX_RETRY`: When a rollout permanently fails after retries, raise (default: "true"). Set to "false" to continue and include failed rows.
 - `EP_PRINT_SUMMARY`: Set to "1" to print a one-line evaluation summary to stdout.
 - `EP_SUMMARY_JSON`: File or directory path to write a JSON summary artifact. See "Summary artifacts" for naming behavior.
+- Retry-related environment variables are documented in the [Retries and failure policy](#retries-and-failure-policy) section.
 
 ## Return Values
 
 Your test function must return the appropriate type based on the mode:
 
-- **Batch mode**: `List[EvaluationRow]`
 - **Pointwise mode**: `EvaluationRow`
+- **Groupwise mode**: `List[EvaluationRow]`
+- **All mode**: `List[EvaluationRow]`
 
 Each returned row should have:
 - `evaluation_result.score`: A float between 0 and 1
@@ -252,6 +438,7 @@ The decorator handles errors gracefully:
 - Assertion errors are logged with status "finished"
 - Other exceptions are logged with status "error"
 - Summary generation failures don't cause test failures
+- For retry behavior and configuration, see [ExceptionHandlerConfig](#exceptionhandlerconfig) and [Retries and failure policy](#retries-and-failure-policy).
 
 ## Row IDs and metadata
 
@@ -277,6 +464,41 @@ When `EP_SUMMARY_JSON` is set:
 
 - Rollouts are retried up to `EP_MAX_RETRY` times.
 - Permanent failures are, by default, raised immediately to fail the test. Override with `EP_FAIL_ON_MAX_RETRY=false` to continue and include errored rows (you can score them as 0 in your evaluation).
+- Exception handling and retry logic can be customized via `exception_handler_config`.
+
+### Environment Variables
+
+The following environment variables control retry behavior:
+
+- `EP_MAX_RETRY`: Maximum number of retry attempts (default: 0, meaning no retries)
+- `EP_FAIL_ON_MAX_RETRY`: Whether to fail the test after max retries (default: "true")
+
+### Custom Retry Configuration
+
+For advanced retry logic, you can provide a custom `ExceptionHandlerConfig`:
+
+```python
+from eval_protocol.pytest.exception_config import ExceptionHandlerConfig, BackoffConfig
+
+# Aggressive retry strategy for unreliable networks
+aggressive_retry = ExceptionHandlerConfig(
+    backoff_config=BackoffConfig(
+        strategy="expo",
+        base_delay=0.5,  # Start with 0.5s delay
+        max_delay=30.0,  # Cap at 30s
+        max_tries=10,    # Try up to 10 times
+        jitter=None      # No jitter for predictable timing
+    )
+)
+
+@evaluation_test(
+    completion_params=[{"model": "gpt-4"}],
+    exception_handler_config=aggressive_retry
+)
+def test_with_aggressive_retries(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # Your evaluation logic here
+    return rows
+```
 
 ## [Rollout processors](/reference/rollout-processors)
 
@@ -290,12 +512,13 @@ When `EP_SUMMARY_JSON` is set:
 
 Decorated functions can be called directly in addition to running under pytest:
 
-- Batch mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
-- Pointwise mode: `await test_fn(row)`
+- Pointwise mode: `await test_fn(row)` or `await test_fn(row=...)`
+- Groupwise mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
+- All mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
 
 ## Examples
 
-### Basic Math Evaluation
+### Basic Math Evaluation (Pointwise Mode)
 
 ```python
 @evaluation_test(
@@ -303,21 +526,21 @@ Decorated functions can be called directly in addition to running under pytest:
     input_messages=[
         [Message(role="user", content="What is 2 + 2?")]
     ],
-    passed_threshold=0.9
+    passed_threshold=0.9,
+    mode="pointwise"
 )
-def test_basic_math(rows: List[EvaluationRow]) -> List[EvaluationRow]:
-    for row in rows:
-        # Simple correctness check
-        response = row.messages[-1].content
-        if "4" in response:
-            row.evaluation_result.score = 1.0
-        else:
-            row.evaluation_result.score = 0.0
+def test_basic_math(row: EvaluationRow) -> EvaluationRow:
+    # Simple correctness check
+    response = row.messages[-1].content
+    if "4" in response:
+        row.evaluation_result.score = 1.0
+    else:
+        row.evaluation_result.score = 0.0
     
-    return rows
+    return row
 ```
 
-### Multi-Model Comparison
+### Multi-Model Comparison (All Mode)
 
 ```python
 @evaluation_test(
@@ -328,7 +551,8 @@ def test_basic_math(rows: List[EvaluationRow]) -> List[EvaluationRow]:
     ],
     input_dataset=["reasoning_tasks.jsonl"],
     passed_threshold=0.7,
-    num_runs=3
+    num_runs=3,
+    mode="all"
 )
 def test_reasoning_capabilities(rows: List[EvaluationRow]) -> List[EvaluationRow]:
     for row in rows:
@@ -341,6 +565,28 @@ def test_reasoning_capabilities(rows: List[EvaluationRow]) -> List[EvaluationRow
             "clarity": evaluate_clarity(row.messages),
             "correctness": evaluate_correctness(row.messages)
         }
+    
+    return rows
+```
+
+### Groupwise Evaluation for Model Comparison
+
+```python
+@evaluation_test(
+    completion_params=[
+        {"model": "gpt-4", "temperature": 0.1},
+        {"model": "gpt-3.5-turbo", "temperature": 0.1},
+    ],
+    input_dataset=["comparison_tasks.jsonl"],
+    mode="groupwise"
+)
+def test_model_comparison(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    """Compare outputs from different models on the same input."""
+    # Group rows by their original input
+    for row in rows:
+        # Evaluate relative to other models or absolute quality
+        score = evaluate_model_output(row.messages, row.input_metadata.completion_params)
+        row.evaluation_result.score = score
     
     return rows
 ```
@@ -403,7 +649,7 @@ def adapter(json_rows: List[Dict[str, Any]]) -> List[EvaluationRow]:
     dataset_adapter=adapter,
     completion_params=[{"model": "not-used-offline"}],
     rollout_processor=NoOpRolloutProcessor(),
-    mode="batch"
+    mode="all"
 )
 def test_offline_eval(rows: List[EvaluationRow]) -> List[EvaluationRow]:
     for row in rows:
@@ -455,17 +701,7 @@ pytest test_file.py::test_math_reasoning[dataset_path0-completion_params0]
 
 ## Programmatic Usage
 
-You can also call decorated functions directly for programmatic evaluation:
-
-```python
-# Direct call with rows
-rows = [EvaluationRow(messages=[...])]
-results = await test_function(rows)
-
-# Direct call with single row (pointwise mode)
-row = EvaluationRow(messages=[...])
-result = await test_function(row)
-```
+Decorated functions can be called directly in addition to running under pytest. See [Direct invocation (dual-mode)](#direct-invocation-dual-mode) for patterns by mode.
 
 ## Best Practices
 
@@ -475,7 +711,11 @@ result = await test_function(row)
 4. **Reason**: Include a `reason` field in the `evaluation_result` to explain the score
 5. **Threshold Setting**: Set realistic thresholds based on your use case
 6. **Multiple Runs**: Use `num_runs > 1` for more reliable results when possible
-7. **Resource Management**: Consider `max_concurrent_rollouts` based on your system capabilities
+7. **Resource Management**: Consider `max_concurrent_rollouts` and `max_concurrent_evaluations` based on your system capabilities
+8. **Mode Selection**: Choose the appropriate mode for your evaluation needs:
+   - Use "pointwise" for simple per-row evaluation
+   - Use "groupwise" for comparing multiple models/parameters on the same inputs
+   - Use "all" for batch processing with cross-row analysis
 
 ## Troubleshooting
 
@@ -483,8 +723,12 @@ result = await test_function(row)
 
 - **"No combinations of parameters found"**: Ensure you provide both `completion_params` and either `input_dataset` or `input_messages`
 - **"No model provided"**: Check that your `CompletionParams` includes a `model` field
-- **Signature validation errors**: Ensure your function signature matches the mode requirements
+- **Signature validation errors**: Ensure your function signature matches the mode requirements:
+  - Pointwise mode: `def func(row: EvaluationRow) -> EvaluationRow`
+  - Groupwise mode: `def func(rows: List[EvaluationRow]) -> List[EvaluationRow]`
+  - All mode: `def func(rows: List[EvaluationRow]) -> List[EvaluationRow]`
 - **Return type errors**: Verify you're returning the correct type based on your mode
+- **"In groupwise mode, you must provide at least 2 completion parameters"**: Groupwise mode requires multiple completion parameters to compare
 
 ### Debug Tips
 
@@ -492,3 +736,4 @@ result = await test_function(row)
 - Use `EP_SUMMARY_JSON` to save detailed results to a file
 - Check the generated pytest parameterization for complex setups
 - Use `max_dataset_rows` to limit dataset size during development
+- Monitor `max_concurrent_rollouts` and `max_concurrent_evaluations` for performance tuning
