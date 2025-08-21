@@ -12,7 +12,7 @@ A single execution of a test function. One invocation can generate one or more e
 
 ### experiment
 
-A group of runs for a specific combination of parameters (e.g., model × dataset × generation params). Each new execution of the test function produces a new experiment.
+A group of runs for a specific combination of parameters (e.g., model x dataset x generation params). Each new execution of the test function produces a new experiment.
 
 ### run
 
@@ -28,7 +28,10 @@ The sequence of chat `messages` (and optional tool calls) produced during a roll
 
 ### row
 
-The atomic evaluation unit. A row contains the conversation `messages`, optional `ground_truth`, and the evaluator’s `evaluation_result`.
+The atomic evaluation unit. A row contains the conversation `messages`, optional
+`ground_truth`, and the evaluator's `evaluation_result`. Every row is uniquely
+identified by its `row_id`. If not provided by the dataset, a stable hash is
+generated based on the row's content.
 
 ### dataset
 
@@ -89,11 +92,91 @@ class InputMetadata(BaseModel):
     session_data: Optional[Dict[str, Any]]
 ```
 
-### RolloutStatus
+### ErrorInfo (AIP-193)
+Structured error detail used inside `Status.details` per Google's AIP-193.
+
 ```python
-class RolloutStatus(BaseModel):
-    status: Literal["running","finished","error"] = "running"
-    termination_reason: Optional[str]
+class ErrorInfo(BaseModel):
+    REASON_TERMINATION_REASON: ClassVar[str] = "TERMINATION_REASON"
+    REASON_EXTRA_INFO: ClassVar[str] = "EXTRA_INFO"
+    DOMAIN: ClassVar[str] = "evalprotocol.io"
+
+    reason: str
+    domain: str
+    metadata: Dict[str, Any] = {}
+
+    def to_aip193_format(self) -> Dict[str, Any]:
+        return {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            "reason": self.reason,
+            "domain": self.domain,
+            "metadata": self.metadata,
+        }
+```
+
+### Status (AIP-193)
+```python
+class Status(BaseModel):
+    class Code(int, Enum):
+        OK = 0
+        CANCELLED = 1
+        UNKNOWN = 2
+        INVALID_ARGUMENT = 3
+        DEADLINE_EXCEEDED = 4
+        NOT_FOUND = 5
+        ALREADY_EXISTS = 6
+        PERMISSION_DENIED = 7
+        RESOURCE_EXHAUSTED = 8
+        FAILED_PRECONDITION = 9
+        ABORTED = 10
+        OUT_OF_RANGE = 11
+        UNIMPLEMENTED = 12
+        INTERNAL = 13
+        UNAVAILABLE = 14
+        DATA_LOSS = 15
+        UNAUTHENTICATED = 16
+
+        # Custom code used to mark a finished rollout
+        FINISHED = 100
+
+    code: Code
+    message: str
+    details: List[Dict[str, Any]] = []
+
+    @classmethod
+    def rollout_running(cls) -> "Status":
+        return cls(code=cls.Code.OK, message="Rollout is running", details=[])
+
+    @classmethod
+    def rollout_finished(
+        cls, termination_reason: Optional[TerminationReason] = None, extra_info: Optional[Dict[str, Any]] = None
+    ) -> "Status":
+        details = []
+        if termination_reason:
+            details.append(ErrorInfo.termination_reason(termination_reason).to_aip193_format())
+        if extra_info:
+            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
+        return cls(code=cls.Code.FINISHED, message="Rollout finished", details=details)
+
+    @classmethod
+    def rollout_error(cls, error_message: str, extra_info: Optional[Dict[str, Any]] = None) -> "Status":
+        details = []
+        if extra_info:
+            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
+        return cls(code=cls.Code.INTERNAL, message=error_message, details=details)
+```
+
+### TerminationReason
+```python
+class TerminationReason(str, Enum):
+    MAX_STEPS = "max_steps"
+    CONTROL_PLANE_SIGNAL = "control_plane_signal"
+    USER_STOP = "user_stop"
+    SKIPPABLE_ERROR = "skippable_error"
+    NON_SKIPPABLE_ERROR = "non_skippable_error"
+    STOP = "stop"
+    LENGTH = "length"
+    TOOL_CALLS = "tool_calls"
 ```
 
 ### MetricResult
@@ -123,7 +206,7 @@ class StepOutput(BaseModel):
 ```python
 class EvaluationThreshold(BaseModel):
     success: float  # Minimum success rate threshold (0.0 to 1.0)
-    standard_deviation: Optional[float]  # Optional maximum stddev threshold
+    standard_error: Optional[float]  # Optional maximum standard error threshold
 ```
 
 ### EvalMetadata
@@ -142,9 +225,9 @@ class EvalMetadata(BaseModel):
 ### ExecutionMetadata
 ```python
 class ExecutionMetadata(BaseModel):
-    invocation_id: Optional[str]
-    experiment_id: Optional[str]
-    rollout_id: Optional[str]
+    invocation_id: Optional[str]  
+    experiment_id: Optional[str]  
+    rollout_id: Optional[str]     
     run_id: Optional[str]
 ```
 
@@ -156,7 +239,7 @@ The `EvaluateResult` represents the complete result of an evaluator, providing a
 class EvaluateResult(BaseModel):
     # Core evaluation data
     score: float  # Overall evaluation score (0.0 to 1.0)
-    is_score_valid: bool  # Whether the overall score is valid
+    is_score_valid: bool  # Whether the overall score is valid (defaults to True)
     reason: Optional[str]  # Optional explanation for the overall score
     
     # Component metrics
@@ -171,6 +254,10 @@ class EvaluateResult(BaseModel):
     # Trajectory information
     trajectory_info: Optional[Dict[str, Any]]  # Additional trajectory-level information
     final_control_plane_info: Optional[Dict[str, Any]]  # Final control plane state
+
+    # Aggregation across runs
+    agg_score: Optional[float]  # Aggregated score across runs
+    standard_error: Optional[float]  # Standard error across runs
 ```
 
 **Key Features:**
@@ -179,6 +266,7 @@ class EvaluateResult(BaseModel):
 - **RL Support**: Per-step base rewards via `step_outputs` for reinforcement learning
 - **Error Handling**: Graceful error reporting and validation
 - **Trajectory Info**: Additional metadata for trajectory-based evaluations
+- **Aggregation**: Optional `agg_score` and `standard_error` for multi-run summaries
 
 ## EvaluationRow
 
@@ -195,8 +283,8 @@ class EvaluationRow(BaseModel):
     # Input-related metadata
     input_metadata: InputMetadata = Field(default_factory=InputMetadata)
 
-    # Rollout status
-    rollout_status: RolloutStatus = Field(default_factory=RolloutStatus)
+    # Rollout status (AIP-193)
+    rollout_status: Status = Field(default_factory=Status.rollout_running)
 
     # Optional ground truth reference
     ground_truth: Optional[str] = None
@@ -231,8 +319,79 @@ line is a JSON-encoded `EvaluationRow`.
 
 ### JSONL example
 
-```json
-{"messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Add 2 and 3."},{"role":"assistant","content":"5"}],"tools":null,"input_metadata":{"row_id":"row_123","completion_params":{"model":"gpt-4o","temperature":0.0,"max_tokens":256,"max_tool_calls":0},"dataset_info":{"seed":42,"system_prompt":"You are a helpful assistant.","environment_context":{}},"session_data":{"mode":"batch"}},"rollout_status":{"status":"finished","termination_reason":""},"ground_truth":"5","evaluation_result":{"score":1.0,"is_score_valid":true,"reason":"Exact match","metrics":{"exact_match":{"is_score_valid":true,"score":1.0,"reason":"assistant output matches ground truth"}},"step_outputs":null,"error":null,"trajectory_info":null,"final_control_plane_info":null},"execution_metadata":{"invocation_id":"ivk_abcd","experiment_id":"exp_efgh","rollout_id":"rll_ijkl","run_id":null},"usage":{"prompt_tokens":10,"completion_tokens":1,"total_tokens":11},"created_at":"2025-01-01T12:00:00","eval_metadata":{"name":"basic_addition","description":"Verify simple arithmetic","version":"0.1.0","status":"finished","num_runs":1,"aggregation_method":"mean","passed_threshold":{"success":0.95},"passed":true},"pid":12345}
+```json expandable
+{
+  "messages": [
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "Add 2 and 3." },
+    { "role": "assistant", "content": "5" }
+  ],
+  "tools": null,
+  "input_metadata": {
+    "row_id": "row_123",
+    "completion_params": {
+      "model": "gpt-4o",
+      "temperature": 0.0,
+      "max_tokens": 256,
+      "max_tool_calls": 0
+    },
+    "dataset_info": {
+      "seed": 42,
+      "system_prompt": "You are a helpful assistant.",
+      "environment_context": {}
+    },
+    "session_data": {
+      "mode": "pointwise"
+    }
+  },
+  "rollout_status": {
+    "code": 100,
+    "message": "Rollout finished",
+    "details": []
+  },
+  "ground_truth": "5",
+  "evaluation_result": {
+    "score": 1.0,
+    "is_score_valid": true,
+    "reason": "Exact match",
+    "metrics": {
+      "exact_match": {
+        "is_score_valid": true,
+        "score": 1.0,
+        "reason": "assistant output matches ground truth"
+      }
+    },
+    "step_outputs": null,
+    "error": null,
+    "trajectory_info": null,
+    "final_control_plane_info": null,
+    "agg_score": 1.0,
+    "standard_error": 0.0
+  },
+  "execution_metadata": {
+    "invocation_id": "ivk_abcd",
+    "experiment_id": "exp_efgh",
+    "rollout_id": "rll_ijkl",
+    "run_id": null
+  },
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 1,
+    "total_tokens": 11
+  },
+  "created_at": "2025-01-01T12:00:00",
+  "eval_metadata": {
+    "name": "basic_addition",
+    "description": "Verify simple arithmetic",
+    "version": "0.1.0",
+    "status": "finished",
+    "num_runs": 1,
+    "aggregation_method": "mean",
+    "passed_threshold": { "success": 0.95 },
+    "passed": true
+  },
+  "pid": 12345
+}
 ```
 
 ## EvaluationTest
@@ -246,12 +405,14 @@ can be used to configure the following:
 - **Model Configuration**: Completion parameters (must include `model`) and generation settings via `completion_params`
 - **Evaluation Criteria**: Success thresholds (via `passed_threshold`), with optional standard deviation constraint
 - **Environment Configuration**: MCP config, rollout steps, server path, and concurrency
-- **Rollout Processor**: Function to execute rollouts (e.g., `default_single_turn_rollout_processor`)
+- **Rollout Processor**: Class to execute rollouts (e.g., `SingleTurnRolloutProcessor()`)
 - **Number of Runs**: Number of times to repeat the rollout (e.g., `num_runs=1`)
-- **Mode**: Evaluation mode (`pointwise` or `batch`)
+- **Mode**: Evaluation mode (`pointwise`, `groupwise`, or `all`)
 - **Aggregation**: Aggregation method (e.g., `mean`) and optional env overrides for summaries
 
 ```python
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
+
 @evaluation_test(
     input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
     dataset_adapter=markdown_dataset_to_evaluation_row,
@@ -261,7 +422,7 @@ can be used to configure the following:
         "max_tokens": 4096,
     }],
     passed_threshold={"success": 0.5},
-    rollout_processor=default_single_turn_rollout_processor,
+    rollout_processor=SingleTurnRolloutProcessor(),
     num_runs=1,
     mode="pointwise",
 )

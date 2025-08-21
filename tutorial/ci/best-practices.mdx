@@ -1,0 +1,73 @@
+---
+title: "Running Evals in CI"
+---
+
+To ensure the quality of your AI applications do not regress, it is important to
+run evals at a regular cadence. But evals are different than regular tests since
+they are not deterministic.
+
+This page describes best practices for running evals in CI.
+
+### Before running evals in CI
+
+It's important that before you run evals in CI, you verify that your evals are
+functioning as intended. Here are a few recommended steps based on experience:
+
+1. Use [EP's UI](/tutorial/ui/getting-started) to manually review your evals.
+Manual inspection of your trajectories and eval results is often the most effective way to ensure quality. For example, EP ignores tool call errors, since some evals might require tool calls to fail. In such cases, you should manually review these errors to confirm they are expected.
+2. Run your eval with [`num_runs`](/reference/evaluation-test#multiple-runs-and-aggregation) set to a value greater than 1 to check for consistency in results. Increasing the number of runs provides better data for making assertions.
+3. If your eval does not always return the same score (e.g., a benchmark eval where most models do not achieve 100% correct responses), check that [`standard_error`](/reference/evaluation-test#threshold-configuration) is not `0` after several runs. If it is, this indicates a deterministic issue that needs debugging.
+4. Establish a [`success`](/reference/evaluation-test#threshold-configuration)
+threshold for your evals. First, choose a `num_runs > 1` that provides enough
+signal to set a reasonable `pass_threshold`. Then decide based on your
+confidence in the eval that you want to set as the `pass_threshold`.
+
+### Determining the frequency of your evals
+
+Once you have your evals running as expected, you can integrate them into your
+CI pipeline. Since EP adopts `pytest` conventions, its easy to integrate with
+CI. Based on the complexity of your evals, you will likely want to run them at
+different frequencies. In general, the more complex the eval, the more time it
+will take to run. Complexity can come in the form of many LLM calls or
+unreliable external dependencies. More complex evals can also be more expensive
+and time-consuming to run.
+
+Here are some guidelines for how often to run evals based on the complexity of
+the evals:
+
+
+| Method        | Description                                                                 | Frequency      |
+|---------------|-----------------------------------------------------------------------------|---------------|
+| Unit          | <ul><li>Single-turn evals</li><li>Simple or semi-deterministic evals</li></ul>   | Frequently    |
+| Integration   | <ul><li>Multi-turn evals</li><li>LLM-as-a-judge</li><li>Reliable external dependencies</li></ul> | Semi-frequently |
+| End-to-end    | <ul><li>Unreliable external dependencies</li></ul>                          | Infrequently  |
+
+#### Separating tests into different categories
+
+Since an eval is a pytest test, you can use best practies from `pytest` to
+separate tests into different categories. 
+
+1. You can use `pytest`'s `@pytest.mark.unit` and `@pytest.mark.integration` decorators to separate tests into different categories.
+
+```python test_unit.py
+@pytest.mark.unit
+@evaluation_test(
+    input_messages=[{"role": "user", "content": "Hello, world!"}],
+    completion_params=[{"model": "gpt-4o"}],
+    rollout_processor=SingleModelRolloutProcessor(),
+    num_runs=1,
+    mode="pointwise",
+)
+def test_unit(row: EvaluationRow):
+    score = evaluate_response(row)
+    row.evaluation_result.score = score
+    return row
+```
+
+2. You can also separate tests into different folders and run `pytest` on each folder.
+
+```bash CLI
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/end-to-end/
+```

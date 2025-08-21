@@ -4,13 +4,23 @@ description: "Overview of built-in rollout processors, their configs, and when t
 sidebarTitle: Rollout Processors
 ---
 
-Rollout processors are small async generators that take a list of `EvaluationRow`s and yield the same rows back after performing the rollout (e.g., calling a model once, running a tool-using agent loop, or interacting with an MCP gym). They all share the same signature:
+Rollout processors are classes that implement a common interface to turn input `EvaluationRow`s into completed rows (e.g., by calling a model once, running a tool-using agent loop, or interacting with an MCP “gym”). They all implement the same Python interface:
 
-```ts
-RolloutProcessor = (rows: List[EvaluationRow], config: RolloutProcessorConfig) => AsyncIterator[EvaluationRow]
+```python
+from typing import List
+import asyncio
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest.types import RolloutProcessorConfig
+
+class RolloutProcessor:
+    def __call__(self, rows: List[EvaluationRow], config: RolloutProcessorConfig) -> List[asyncio.Task[EvaluationRow]]:
+        ...  # return asyncio Tasks that resolve to completed rows
+
+    def cleanup(self) -> None:
+        ...  # optional; release external resources (servers, temp files)
 ```
 
-The config object is defined in `eval_protocol/pytest/types.py` as `RolloutProcessorConfig` and includes the most common knobs for evaluation runs.
+The config object is defined in [`eval_protocol/pytest/types.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/types.py) as `RolloutProcessorConfig` and includes the most common knobs for evaluation runs. The interface lives in [`eval_protocol/pytest/rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/rollout_processor.py). The evaluation framework awaits these tasks with per-row retries and finally calls `cleanup()` for you.
 
 ## Config: RolloutProcessorConfig
 
@@ -21,26 +31,26 @@ The config object is defined in `eval_protocol/pytest/types.py` as `RolloutProce
 - **steps**: maximum rollout steps for multi-turn processors (default 30).
 - **logger**: `DatasetLogger` to capture mid-rollout logs.
 - **kwargs**: extra, processor-specific options.
+- **exception_handler_config**: controls automatic backoff/retry for rollout errors. See ExceptionHandlerConfig in the `@evaluation_test` reference.
 
 Tip: You can override certain input parameters at runtime with the pytest plugin flags (see below), e.g., `--ep-reasoning-effort` or `--ep-input-param`.
 
 ## Built-in processors
 
-### default_no_op_rollout_processor
+### NoOpRolloutProcessor
 
-- **What it does**: Pass-through. Yields rows unchanged so you can handle rollout yourself inside the evaluation function.
+- **What it does**: Pass-through. Returns tasks that immediately resolve to the same rows, so you can handle rollout yourself inside the evaluation function.
 - **When to use**: You already have model outputs precomputed or you want to implement rollout logic in the test body.
-- **Module**: `eval_protocol/pytest/default_no_op_rollout_process.py`
+- **Module**: [`eval_protocol/pytest/default_no_op_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_no_op_rollout_processor.py)
 
 Usage with `@evaluation_test`:
 
 ```python
-from eval_protocol.pytest.evaluation_test import evaluation_test
-from eval_protocol.pytest.default_no_op_rollout_process import default_no_op_rollout_processor
+from eval_protocol.pytest import evaluation_test, NoOpRolloutProcessor
 
 @evaluation_test(
     completion_params=[{"model": "openai/gpt-4o-mini"}],
-    rollout_processor=default_no_op_rollout_processor,
+    rollout_processor=NoOpRolloutProcessor(),
 )
 def my_eval(rows):
     # rows are unchanged; compute scores here
@@ -51,8 +61,8 @@ def my_eval(rows):
 
 - **What it does**: Issues a single LiteLLM `completion` per row and appends the assistant message (and any tool_calls) to `row.messages`.
 - **When to use**: Single-turn prompts, static QA, or benchmarks that only need the model’s immediate reply.
-- **Respects**: `completion_params` including `extra_body.reasoning_effort` if provided.
-- **Module**: `eval_protocol/pytest/default_single_turn_rollout_process.py`
+- **Respects**: `completion_params` and forwards `reasoning_effort` under `extra_body` when present.
+- **Module**: [`eval_protocol/pytest/default_single_turn_rollout_process.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_single_turn_rollout_process.py)
 
 Usage:
 
@@ -72,7 +82,7 @@ def single_turn_eval(rows):
     return rows
 ```
 
-### default_agent_rollout_processor
+### AgentRolloutProcessor
 
 - **What it does**: Runs a simple multi-turn agent that can call MCP tools. The agent:
   - Calls the model with current `messages` and available tools.
@@ -81,17 +91,16 @@ def single_turn_eval(rows):
 - **When to use**: Tool-augmented tasks, function-calling, or scenarios requiring iterative reasoning via tools.
 - **Requires**: `mcp_config_path` to enumerate available tools via `MCPMultiClient`.
 - **Honors**: `max_concurrent_rollouts` for dataset-level parallelism; tool calls within a single row are also executed in parallel.
-- **Module**: `eval_protocol/pytest/default_agent_rollout_processor.py`
+- **Module**: [`eval_protocol/pytest/default_agent_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_agent_rollout_processor.py)
 
 Usage:
 
 ```python
-from eval_protocol.pytest.evaluation_test import evaluation_test
-from eval_protocol.pytest.default_agent_rollout_processor import default_agent_rollout_processor
+from eval_protocol.pytest import evaluation_test, AgentRolloutProcessor
 
 @evaluation_test(
     completion_params=[{"model": "openai/gpt-4o"}],
-    rollout_processor=default_agent_rollout_processor,
+    rollout_processor=AgentRolloutProcessor(),
     mcp_config_path="./path/to/mcp.config.json",
     max_concurrent_rollouts=8,
     steps=30,  # upper bound; the agent stops earlier if no tools are requested
@@ -105,7 +114,7 @@ def agent_eval(rows):
 - **What it does**: Spins up an MCP server (e.g., tau-bench style), creates environments, and runs rollouts through `eval_protocol.rollout(...)`.
 - **When to use**: Interactive environments or “gym” tasks exposed over MCP.
 - **Requires**: `server_script_path` to launch the MCP server. Binds `localhost:9700` by default.
-- **Module**: `eval_protocol/pytest/default_mcp_gym_rollout_processor.py`
+- **Module**: [`eval_protocol/pytest/default_mcp_gym_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_mcp_gym_rollout_processor.py)
 
 Usage:
 
@@ -124,7 +133,7 @@ def gym_eval(rows):
 
 ## Pytest plugin helpers (CLI flags)
 
-The pytest plugin in `eval_protocol/pytest/plugin.py` adds flags to make evaluations CI-friendly:
+The pytest plugin in [`eval_protocol/pytest/plugin.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/plugin.py) adds flags to make evaluations CI-friendly:
 
 - `--ep-max-rows=N|all`: limit dataset rows processed.
 - `--ep-print-summary`: print a concise summary line at end of each run.

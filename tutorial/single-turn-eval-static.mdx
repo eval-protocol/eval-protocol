@@ -76,18 +76,19 @@ Now let's start coding. First, we import the necessary modules from the EP frame
 
 ```python
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.models import EvaluateResult, EvaluationRow, InputMetadata, Message
 from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
 ```
 
 - `re`: Python's regex module for pattern matching
 - `EvaluateResult`: The result object that contains the evaluation score and reasoning
 - `EvaluationRow`: Represents a single evaluation test case with messages and ground truth
+- `InputMetadata`: Optional metadata for input rows (e.g., `row_id`)
 - `Message`: Represents a message in the conversation
 - `evaluation_test`: Decorator that configures the evaluation test
-- `default_single_turn_rollout_processor`: Function that handles the conversation flow for single-turn evaluations
+- `SingleTurnRolloutProcessor`: Handles the conversation flow for single-turn evaluations
 
 ## Step 2: Create the Dataset Adapter
 
@@ -100,8 +101,9 @@ def markdown_dataset_to_evaluation_row(data: List[Dict[str, Any]]) -> List[Evalu
     """
     return [
         EvaluationRow(
-            messages=[Message(role="user", content=row["prompt"])], 
-            ground_truth=str(row["num_highlights"])
+            messages=[Message(role="user", content=row["prompt"])],
+            ground_truth=str(row["num_highlights"]),
+            input_metadata=InputMetadata(row_id=str(row["key"]))
         )
         for row in data
     ]
@@ -123,7 +125,9 @@ evaluation with the following parameters:
 @evaluation_test(
     input_dataset=["tests/pytest/data/markdown_dataset.jsonl"],
     dataset_adapter=markdown_dataset_to_evaluation_row,
-    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct", "temperature": 0.0, "max_tokens": 4096}],
+    completion_params=[
+        {"temperature": 0.0, "max_tokens": 4096, "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b"}
+    ],
     passed_threshold=0.5,
     rollout_processor=SingleTurnRolloutProcessor(),
     num_runs=1,
@@ -135,11 +139,12 @@ def test_markdown_highlighting_evaluation(row: EvaluationRow) -> EvaluationRow:
     """
     # Extract the assistant's response from the conversation
     assistant_response = row.messages[-1].content
-    
+
     # Handle empty responses
     if not assistant_response:
-        return EvaluateResult(score=0.0, reason="❌ No assistant response found")
-    
+        row.evaluation_result = EvaluateResult(score=0.0, reason="❌ No assistant response found")
+        return row
+
     # Convert ground truth to required number of highlights
     required_highlights = int(row.ground_truth)
 ```
@@ -214,12 +219,11 @@ Finally, we compare the actual count against requirements and attach the result 
 The `@evaluation_test` decorator configures the evaluation with these parameters:
 
 **Configuration parameters:**
-- `input_dataset`: Path to the JSONL file containing test cases
-- `dataset_adapter`: Function that converts raw dataset to EvaluationRow objects
-- `model`: The model to evaluate (Fireworks Kimi model in this case)
-- `rollout_input_params`: Model parameters (temperature, max tokens)
-- `threshold_of_success`: Minimum score required to pass (0.5 = 50% success rate)
-- `rollout_processor`: Function that handles the conversation flow (default_single_turn_rollout_processor for single-turn evaluations)
+- `input_dataset`: Path(s) to the JSONL file(s) containing test cases
+- `dataset_adapter`: Function that converts raw dataset to `EvaluationRow` objects
+- `completion_params`: Model parameters (e.g., `model`, `temperature`, `max_tokens`)
+- `passed_threshold`: Minimum score required to pass (0.5 = 50% success rate)
+- `rollout_processor`: Processor handling single-turn conversation flow (`SingleTurnRolloutProcessor`)
 - `num_runs`: Number of times to run each test case
 - `mode`: Evaluation mode ("pointwise" for individual test case evaluation)
 
