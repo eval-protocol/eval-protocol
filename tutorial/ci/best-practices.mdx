@@ -52,9 +52,9 @@ separate tests into different categories.
 ```python test_unit.py
 @pytest.mark.unit
 @evaluation_test(
-    input_messages=[{"role": "user", "content": "Hello, world!"}],
-    completion_params=[{"model": "gpt-4o"}],
-    rollout_processor=SingleModelRolloutProcessor(),
+    input_messages=[[Message(role="user", content="Hello, world!")]],
+    completion_params=[{"model": "openai/gpt-4o"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
     num_runs=1,
     mode="pointwise",
 )
