@@ -18,6 +18,7 @@
   "navigation": {
     "pages": [
       "introduction",
+      "getting-started",
       "specification",
       "why",
       "principles",

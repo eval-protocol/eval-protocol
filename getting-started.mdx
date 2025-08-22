@@ -1,0 +1,100 @@
+---
+title: Getting Started with EP
+sidebarTitle: Getting Started
+---
+
+## Installation
+
+Ready to dive in? Install EP with a single command and start evaluating your models:
+
+```shell
+pip install eval-protocol
+```
+
+
+## Quick Example
+
+Here's a simple test function that checks if a model's response contains **bold** text formatting:
+
+<Note>
+
+Before running the following example, you need to setup your environment
+variable to make a LiteLLM call. This example uses [Fireworks](https://fireworks.ai) (prefix: `fireworks_ai/`) so you need to
+set the `FIREWORKS_API_KEY` environment variable by creating a `.env` file in
+the root of your project.
+
+```bash .env
+FIREWORKS_API_KEY=your_api_key
+```
+</Note>
+
+```python test_bold_format.py
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
+
+
+@evaluation_test(
+    input_messages=[
+        [
+            Message(
+                role="system", content="You are a helpful assistant. Use bold text to highlight important information."
+            ),
+            Message(
+                role="user", content="Explain why **evaluations** matter for building AI agents. Make it dramatic!"
+            ),
+        ],
+    ],
+    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/llama-v3p1-8b-instruct"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+)
+def test_bold_format(row: EvaluationRow) -> EvaluationRow:
+    """
+    Simple evaluation that checks if the model's response contains bold text.
+    """
+
+    assistant_response = row.messages[-1].content
+
+    if assistant_response is None:
+        result = EvaluateResult(score=0.0, reason="❌ No response found")
+        row.evaluation_result = result
+        return row
+
+    if isinstance(assistant_response, list):
+        assistant_response = assistant_response[0].content
+
+    # Check if response contains **bold** text
+    has_bold = "**" in assistant_response
+
+    if has_bold:
+        result = EvaluateResult(score=1.0, reason="✅ Response contains bold text")
+    else:
+        result = EvaluateResult(score=0.0, reason="❌ No bold text found")
+
+    row.evaluation_result = result
+    return row
+```
+
+## Learn More
+
+For a complete step-by-step tutorial of a slightly more complex example with
+detailed explanations, dataset examples, and configuration options, see our
+[Single-turn eval](/tutorial/single-turn-eval-static) tutorial.
+
+For a more advanced example that includes MCP and user simulation, check out our
+implementation of [𝜏²-bench](/tutorial/multi-turn-eval-user-simulation), a benchmark for evaluating conversational
+agents in a dual control environment.
+
+EP also provides a powerful web-based UI for monitoring and analyzing your evaluation results. Learn how to set up and use our Log Viewer in the [Reviewing Evals (UI)](/tutorial/ui/getting-started) section:
+
+<Frame caption={<span><a href="/tutorial/ui/getting-started">Log Viewer: Monitor your evaluation rollouts in real time.</a></span>}>
+  <img src="./assets/ui.png" />
+</Frame>
+
+### Next Steps
+
+ - [Specification](/specification)
+ - [Why Eval Protocol?](/why)
+ - [Principles](/principles)
+ - [Single-turn eval](/tutorial/single-turn-eval-static)
+ - [Multi-turn eval](/tutorial/multi-turn-eval-user-simulation)
