@@ -128,7 +128,7 @@ class MyCustomAdapter:
                 row = EvaluationRow(
                     messages=messages,
                     ground_truth=item.get("expected_output"),
-                    metadata=InputMetadata(
+                    input_metadata=InputMetadata(
                         source="my_custom_source",
                         id=item.get("id"),
                         # Add any other metadata
