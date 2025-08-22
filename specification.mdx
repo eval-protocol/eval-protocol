@@ -97,21 +97,9 @@ Structured error detail used inside `Status.details` per Google's AIP-193.
 
 ```python
 class ErrorInfo(BaseModel):
-    REASON_TERMINATION_REASON: ClassVar[str] = "TERMINATION_REASON"
-    REASON_EXTRA_INFO: ClassVar[str] = "EXTRA_INFO"
-    DOMAIN: ClassVar[str] = "evalprotocol.io"
-
     reason: str
     domain: str
     metadata: Dict[str, Any] = {}
-
-    def to_aip193_format(self) -> Dict[str, Any]:
-        return {
-            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-            "reason": self.reason,
-            "domain": self.domain,
-            "metadata": self.metadata,
-        }
 ```
 
 ### Status (AIP-193)
@@ -136,34 +124,13 @@ class Status(BaseModel):
         DATA_LOSS = 15
         UNAUTHENTICATED = 16
 
-        # Custom code used to mark a finished rollout
+        # Custom codes used by Eval Protocol
         FINISHED = 100
+        RUNNING = 101
 
     code: Code
     message: str
     details: List[Dict[str, Any]] = []
-
-    @classmethod
-    def rollout_running(cls) -> "Status":
-        return cls(code=cls.Code.OK, message="Rollout is running", details=[])
-
-    @classmethod
-    def rollout_finished(
-        cls, termination_reason: Optional[TerminationReason] = None, extra_info: Optional[Dict[str, Any]] = None
-    ) -> "Status":
-        details = []
-        if termination_reason:
-            details.append(ErrorInfo.termination_reason(termination_reason).to_aip193_format())
-        if extra_info:
-            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
-        return cls(code=cls.Code.FINISHED, message="Rollout finished", details=details)
-
-    @classmethod
-    def rollout_error(cls, error_message: str, extra_info: Optional[Dict[str, Any]] = None) -> "Status":
-        details = []
-        if extra_info:
-            details.append(ErrorInfo.extra_info(extra_info).to_aip193_format())
-        return cls(code=cls.Code.INTERNAL, message=error_message, details=details)
 ```
 
 ### TerminationReason
@@ -215,7 +182,7 @@ class EvalMetadata(BaseModel):
     name: str
     description: Optional[str]
     version: str  # PEP 440 version string (auto-populated)
-    status: Optional[Literal["running","finished","error","stopped"]]
+    status: Optional[Status]
     num_runs: int
     aggregation_method: str
     passed_threshold: Optional[EvaluationThreshold]
@@ -384,7 +351,7 @@ line is a JSON-encoded `EvaluationRow`.
     "name": "basic_addition",
     "description": "Verify simple arithmetic",
     "version": "0.1.0",
-    "status": "finished",
+    "status": { "code": 100, "message": "Evaluation finished", "details": [] },
     "num_runs": 1,
     "aggregation_method": "mean",
     "passed_threshold": { "success": 0.95 },
@@ -574,4 +541,3 @@ class Trajectory:
     conversation_history: List[Dict[str, Any]]
     usage: Dict[str, int] = field(default_factory=dict)
 ```
-
