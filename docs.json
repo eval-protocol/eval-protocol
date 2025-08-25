@@ -18,23 +18,13 @@
   "navigation": {
     "pages": [
       "introduction",
-      "getting-started",
-      "specification",
-      "why",
-      "principles",
-      "community",
-      "other-content",
       {
-        "group": "Tutorials",
+        "group": "Reference",
         "pages": [
-          "tutorial/single-turn-eval-static",
-          {
-            "group": "Multi-Turn Eval",
-            "pages": [
-              "tutorial/multi-turn-eval-user-simulation",
-              "tutorial/multi-turn-eval-per-step-rewards"
-            ]
-          },
+          "reference/evaluation-test",
+          "reference/rollout-processors",
+          "mcp-extensions",
+          "simulated-users",
           {
             "group": "Reviewing Evals (UI)",
             "pages": [
@@ -43,47 +33,7 @@
               "tutorial/ui/pivot"
             ]
           },
-          "tutorial/ci/best-practices"
-        ]
-      },
-      {
-        "group": "Examples",
-        "pages": [
-          "example/function-calling",
-          "example/json-schema",
-          "example/basic-coding",
-          "example/apps-coding",
-          "example/hallucination-detection",
-          "example/lunar-lander",
-          "example/gsm8k",
-          "example/svg-generation"
-        ]
-      },
-      {
-        "group": "Integrations",
-        "pages": [
-          "integrations/index",
-          "integrations/langfuse-adapter",
-          "integrations/huggingface-adapter",
-          "integrations/bigquery-adapter"
-        ]
-      },
-      {
-        "group": "Concepts",
-        "pages": ["mcp-extensions", "simulated-users"]
-      },
-      {
-        "group": "Reference",
-        "pages": ["reference/evaluation-test", "reference/rollout-processors"]
-      },
-      {
-        "group": "Open-Resource Benchmarks",
-        "pages": [
-          "example/aime2025",
-          "example/gpqa",
-          "example/healthbench",
-          "example/livebench-data-analysis",
-          "example/tau-bench-retail"
+          "specification"
         ]
       }
     ]
