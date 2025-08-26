@@ -62,7 +62,7 @@ Messages to send to the model. Useful when you don't have a dataset but can hard
 Paths to JSONL datasets. Provide a `dataset_adapter` to convert custom dataset formats to EvaluationRows.
 </ParamField>
 
-<ParamField path="input_rows" type="Optional[List[InputRowsParam]]">
+<ParamField path="input_rows" type="Optional[List[EvaluationRow]]">
 Pre-constructed EvaluationRow objects to use directly. Useful when you already have messages and/or metadata prepared. Will be passed as "input_dataset" to the test function.
 </ParamField>
 
@@ -136,7 +136,7 @@ Configuration for exception handling and backoff retry logic. If not provided, a
 
 ## ExceptionHandlerConfig
 
-The `ExceptionHandlerConfig` parameter allows you to customize exception handling and retry logic for your evaluation tests. This configuration is defined in [`eval_protocol.pytest.exception_config.ExceptionHandlerConfig`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/exception_config.py).
+The `ExceptionHandlerConfig` parameter allows you to customize exception handling and retry logic for your evaluation tests. This configuration is defined in [`eval_protocol/pytest/exception_config.ExceptionHandlerConfig`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/exception_config.py).
 
 ### Key Features
 
@@ -373,7 +373,7 @@ You can set thresholds for test success using the `passed_threshold` parameter:
 
 # Advanced threshold with standard error
 @evaluation_test(
-    completion_params=[CompletionParams(model="gpt-4")],
+    completion_params=[{"model": "gpt-4"}],
     passed_threshold={
         "success": 0.8,
         "standard_error": 0.05
@@ -411,6 +411,8 @@ def test_with_multiple_runs(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 The decorator supports several environment variables for configuration:
 
 - `EP_MAX_DATASET_ROWS`: Override `max_dataset_rows` parameter. Applies to both datasets and `input_messages` (slices to first N rows).
+- `EP_NUM_RUNS`: Override the number of runs for evaluation_test.
+- `EP_MAX_CONCURRENT_ROLLOUTS`: Override the maximum number of concurrent rollouts.
 - `EP_INPUT_PARAMS_JSON`: JSON object deep-merged into `completion_params`. Example: `{"temperature":0,"extra_body":{"reasoning":{"effort":"low"}}}`.
 - `EP_PRINT_SUMMARY`: Set to "1" to print a one-line evaluation summary to stdout.
 - `EP_SUMMARY_JSON`: File or directory path to write a JSON summary artifact. See "Summary artifacts" for naming behavior.
@@ -432,6 +434,7 @@ Each returned row should have:
 
 - **Datasets (`input_dataset`)**: You can pass a single path or a list of paths. When a list is provided and `combine_datasets=True` (default), files are concatenated into one dataset; when `combine_datasets=False`, each path is parameterized into separate test invocations.
 - **Input messages (`input_messages`)**: Accepts either a single row as `List[Message]` or many rows as `List[List[Message]]`. When `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
+- **Input rows (`input_rows`)**: Similar to input_messages, when `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
 - **Dataset adapter (`dataset_adapter`)**: Receives raw JSONL rows and must return `List[EvaluationRow]`.
 
 ## Error Handling
@@ -452,8 +455,8 @@ The decorator handles errors gracefully:
 
 ## Dataset combination and parameterization
 
-- Parameter combinations are generated across `input_dataset`, `completion_params`, `input_messages`, and `evaluation_test_kwargs`.
-- Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `evaluation_test_kwargs`.
+- Parameter combinations are generated across `input_dataset`, `completion_params`, `input_messages`, `input_rows`, and `evaluation_test_kwargs`.
+- Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `input_rows`, `evaluation_test_kwargs`.
 - Set `combine_datasets=False` to parameterize each dataset path separately. With `True` (default), multiple paths are combined into a single logical dataset per invocation.
 
 ## Summary artifacts
@@ -466,7 +469,7 @@ When `EP_SUMMARY_JSON` is set:
 
 ## Retries and failure policy
 
-- Rollouts are retried up to `EP_MAX_RETRY` times.
+- Rollouts are retried up to `EP_MAX_RETRY` times using the `rollout_processor_with_retry` wrapper.
 - Permanent failures are, by default, raised immediately to fail the test. Override with `EP_FAIL_ON_MAX_RETRY=false` to continue and include errored rows (you can score them as 0 in your evaluation).
 - Exception handling and retry logic can be customized via `exception_handler_config`.
 
@@ -476,6 +479,16 @@ The following environment variables control retry behavior:
 
 - `EP_MAX_RETRY`: Maximum number of retry attempts (default: 0, meaning no retries)
 - `EP_FAIL_ON_MAX_RETRY`: Whether to fail the test after max retries (default: "true")
+
+### Retry Implementation Details
+
+The retry logic is implemented in the `rollout_processor_with_retry` function which:
+
+- Wraps the rollout processor with configurable backoff retry
+- Handles both retryable and non-retryable exceptions
+- Uses the Python `backoff` library for exponential/constant backoff strategies
+- Processes rows concurrently while handling retries transparently
+- Logs all results (success or failure) through the configured logger
 
 ### Custom Retry Configuration
 
@@ -510,7 +523,10 @@ def test_with_aggressive_retries(rows: List[EvaluationRow]) -> List[EvaluationRo
 - Built-ins include:
   - `NoOpRolloutProcessor()`: passes rows through unchanged (useful for offline evaluation of pre-generated outputs).
   - `SingleTurnRolloutProcessor()`: performs a single chat completion via LiteLLM and appends the assistant message.
-  - Others (e.g., agent/MCP variants) exist in `eval_protocol.pytest`.
+  - `AgentRolloutProcessor()`: runs multi-turn agent loops with MCP tool calling.
+  - `PydanticAgentRolloutProcessor()`: runs Pydantic AI agents with structured tool calling.
+  - `MCPGymRolloutProcessor()`: runs interactive environments via MCP servers.
+- All processors are wrapped with `rollout_processor_with_retry` for automatic retry handling.
 
 ## Direct invocation (dual-mode)
 
@@ -526,7 +542,7 @@ Decorated functions can be called directly in addition to running under pytest:
 
 ```python
 @evaluation_test(
-    completion_params=[CompletionParams(model="gpt-4")],
+    completion_params=[{"model": "gpt-4"}],
     input_messages=[
         [Message(role="user", content="What is 2 + 2?")]
     ],
@@ -725,7 +741,7 @@ Decorated functions can be called directly in addition to running under pytest. 
 
 ### Common Issues
 
-- **"No combinations of parameters found"**: Ensure you provide both `completion_params` and either `input_dataset` or `input_messages`
+- **"No combinations of parameters found"**: Ensure you provide both `completion_params` and either `input_dataset`, `input_messages`, or `input_rows`
 - **"No model provided"**: Check that your `CompletionParams` includes a `model` field
 - **Signature validation errors**: Ensure your function signature matches the mode requirements:
   - Pointwise mode: `def func(row: EvaluationRow) -> EvaluationRow`
