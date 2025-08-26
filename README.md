@@ -1,9 +1,6 @@
 # Eval Protocol (EP)
 
-EP is an open specification, pytest wrapper, and suite of tools that
-standardizes how developers author evals for large language model (LLM)
-applications.
-
+**The open-source toolkit for building your internal model leaderboard.**
 
 - [Documentation](https://evalprotocol.io)
 - [Python SDK](https://github.com/eval-protocol/python-sdk)
