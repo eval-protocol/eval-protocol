@@ -21,6 +21,7 @@
       {
         "group": "Reference",
         "pages": [
+          "authoring-with-ai-agents",
           "reference/evaluation-test",
           "reference/rollout-processors",
           "mcp-extensions",

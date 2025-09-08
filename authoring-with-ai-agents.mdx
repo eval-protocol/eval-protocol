@@ -1,0 +1,128 @@
+---
+title: Set Up MCP Servers for AI Coding Agents
+description: "Give your AI coding assistants deep knowledge of Eval Protocol for better evaluation authoring"
+sidebarTitle: MCP Setup Guide
+---
+
+Modern AI coding agents like Claude Code, Cursor, and GitHub Copilot can dramatically accelerate evaluation development, but they need the right context to be effective. This guide shows you how to supercharge your AI coding assistant with Model Context Protocol (MCP) servers that provide real-time access to Eval Protocol documentation and examples.
+
+### Recommended MCP Servers
+
+- **Documentation Server**: `https://evalprotocol.io/mcp` - Complete EP documentation, tutorials, and API references
+- **Deep Wiki Server**: `https://mcp.deepwiki.com/mcp` - GitHub repository analysis and code search across EP projects
+
+## Claude Code Integration
+
+<Tabs>
+  <Tab title="Command Line Setup">
+
+```bash
+claude mcp add --transport http eval-protocol-docs https://evalprotocol.io/mcp
+
+claude mcp add --transport http eval-protocol-deep-wiki https://mcp.deepwiki.com/mcp
+```
+
+  </Tab>
+  <Tab title="Configuration File">
+
+Create an `mcp.json` file in your project root:
+
+```json
+{
+  "mcpServers": {
+    "eval-protocol-docs": {
+      "url": "https://evalprotocol.io/mcp"
+    },
+    "eval-protocol-deep-wiki": {
+      "url": "https://mcp.deepwiki.com/mcp"
+    }
+  }
+}
+```
+
+  </Tab>
+</Tabs>
+
+
+<Note>
+**Enable Web Access**: Since the prompt references GitHub URLs, enable web access in Claude Code's settings by adding the WebFetch tool permission in `.claude/settings.json`.
+</Note>
+
+## Cursor Integration
+
+<Tabs>
+  <Tab title="One-Click Install">
+
+Install both MCP servers with one click each:
+
+<CardGroup cols={2}>
+  <Card title="Documentation Server">
+    Access complete EP documentation, tutorials, and API references
+    
+    <br />
+    
+    [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=eval-protocol-docs&config=eyJ1cmwiOiJodHRwczovL2V2YWxwcm90b2NvbC5pby9tY3AifQ%3D%3D)
+  </Card>
+  <Card title="Deep Wiki Server">
+    GitHub repository analysis and code search across EP projects
+    
+    <br />
+    
+    [![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=eval-protocol-deep-wiki&config=eyJ1cmwiOiJodHRwczovL21jcC5kZWVwd2lraS5jb20vbWNwIn0%3D)
+  </Card>
+</CardGroup>
+
+<Note>
+After clicking the install button above, you'll need to press the "Install" button in Cursor to complete the setup:
+
+<img src="/assets/cursor-install.png" alt="Cursor MCP Server Install Dialog" />
+</Note>
+
+  </Tab>
+  <Tab title="Manual Configuration">
+
+Create an `mcp.json` file in your workspace root:
+
+```json
+{
+  "mcpServers": {
+    "eval-protocol-docs": {
+      "url": "https://evalprotocol.io/mcp"
+    },
+    "eval-protocol-deep-wiki": {
+      "url": "https://mcp.deepwiki.com/mcp"
+    }
+  }
+}
+```
+
+  </Tab>
+</Tabs>
+
+## Example Prompt to Develop With
+
+With your MCP environment configured, the next step is to give your AI coding agent its mission. We start with a general prompt that defines its role and how to use Eval Protocol. Below that, you append the specific instructions for your project. This "meta-prompting" approach is crucial for guiding the agent effectively.
+
+Here is a prompt template to use:
+
+```markdown
+You are an applied AI engineer whose job is to write tests called "evals" in the form of code. An "eval" helps determines whether an AI application is working as expected by programmatically assessing the output of the model. To do this, you will use a library called "eval-protocol" (aka EP) that helps you easily author, run, and review evals. Evals accept whats called an EvaluationRow and outputs an EvaluationRow (or multiple EvaluationRows depending on the mode of the @evaluation_test decorator). In the eval, a score from 0 to 1 is generated based on the output of the model. Use the provided tools to help you understand more about eval-protocol so that you can generate evals for the given task. The tools can help provide examples of evals, guide you with tutorials on how to use eval-protocol, retrieve reference documentation for the eval-protocol API, and ask questions about the source code of eval-protocol.
+
+GitHub source repos to query with the eval-protocol-deep-wiki tool:
+- for the docs, see eval-protocol/eval-protocol
+- for the Python SDK, see eval-protocol/python-sdk
+
+Please follow the below instructions to write our evals:
+{insert your prompt here}
+```
+
+## Next Steps
+
+With MCP-enhanced AI coding agents, you can:
+
+1. **Build faster**: Leverage real-time EP knowledge for accurate code generation
+2. **Reduce errors**: Get context-aware suggestions that follow EP best practices  
+3. **Learn efficiently**: Ask specific questions and get authoritative answers
+4. **Scale confidently**: Use proven patterns from the EP codebase and documentation
+
+The combination of Eval Protocol's robust framework with MCP-enhanced AI agents creates a powerful development experience. Your coding assistant becomes an expert in EP, dramatically accelerating evaluation development while maintaining code quality and best practices.
