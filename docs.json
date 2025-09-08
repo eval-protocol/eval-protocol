@@ -20,9 +20,11 @@
       "introduction",
       {
         "group": "Setup",
-        "pages": [
-          "authoring-with-ai-agents"
-        ]
+        "pages": ["authoring-with-ai-agents"]
+      },
+      {
+        "group": "Integrations",
+        "pages": ["integrations/pydantic-ai"]
       },
       {
         "group": "Reference",
