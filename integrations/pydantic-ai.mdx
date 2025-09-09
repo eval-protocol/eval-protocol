@@ -264,4 +264,81 @@ async def test_pydantic_complex_queries(row: EvaluationRow) -> EvaluationRow:
 
 This approach provides both automated scoring and human-readable explanations for why each response was scored the way it was.
 
+### Creating a Leaderboard
+
+Now that we have a scoring function, we can create a leaderboard. 
+
+#### Step 1: Add Multiple Models
+
+To compare different models, modify the `completion_params` in your `@evaluation_test` decorator to include multiple models. Set `num_runs=3` to generate multiple samples per row, providing more robust evaluation results by running each test case 3 times:
+
+```python @evaluation_test decorator changes icon="code" lines
+@evaluation_test(
+    input_rows=[collect_dataset()],
+    completion_params=[
+        {
+            "model": "accounts/fireworks/models/kimi-k2-instruct",
+            "provider": "fireworks",
+        },
+        { # [!code ++]
+            "model": "gpt-5", # [!code ++]
+            "provider": "openai", # [!code ++]
+        }, # [!code ++]
+        { # [!code ++]
+            "model": "accounts/fireworks/models/kimi-k2-instruct-0905", # [!code ++]
+            "provider": "fireworks", # [!code ++]
+        }, # [!code ++]
+        { # [!code ++]
+            "model": "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507", # [!code ++]
+            "provider": "fireworks", # [!code ++]
+        }, # [!code ++]
+        { # [!code ++]
+            "model": "accounts/fireworks/models/deepseek-v3p1", # [!code ++]
+            "provider": "fireworks", # [!code ++]
+        }, # [!code ++]
+        { # [!code ++]
+            "model": "accounts/fireworks/models/gpt-oss-120b", # [!code ++]
+            "provider": "fireworks", # [!code ++]
+        }, # [!code ++]
+        { # [!code ++]
+            "model": "accounts/fireworks/models/gpt-oss-20b", # [!code ++]
+            "provider": "fireworks", # [!code ++]
+        }, # [!code ++]
+    ],
+    num_runs=3, # [!code ++]
+    rollout_processor=PydanticAgentRolloutProcessor(agent_factory),
+)
+```
+
+#### Step 2: Run the Evaluation
+
+Execute your evaluation test to generate results across all models:
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    pytest tests/chinook/pydantic/test_pydantic_complex_queries.py -v
+    ```
+  </Tab>
+  <Tab title="VSCode">
+    - Open the test file in VSCode
+    - Click the "Run Test" button above the test function
+    - Or use the Command Palette (`Cmd+Shift+P`) and search for "Tests: Run Tests in Current File"
+  </Tab>
+</Tabs>
+
+#### Step 3: View Results in Pivot View
+
+After running the evaluation, you can analyze the results using the [Pivot View](/tutorial/ui/pivot). The pivot view allows you to:
+
+- Compare model performance across different metrics
+- Create visualizations and charts
+- Export results as images or CSV files
+- Filter and aggregate data by various dimensions
+
+<Frame caption={<span>Example leaderboard showing model performance comparison in the Pivot View.</span>}>
+![Pivot Table: avg of $.evaluation_result.score](./leaderboard.png)
+</Frame>
+
+The leaderboard shows that `kimi-k2-instruct-0905` and `kimi-k2-instruct` models perform best on the complex queries evaluation, significantly outperforming other models in the comparison.
 
