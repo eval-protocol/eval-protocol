@@ -111,18 +111,37 @@ def agent_eval(rows):
 
 ### PydanticAgentRolloutProcessor
 
-- **What it does**: Runs Pydantic AI agents. Supports both single agent and multi-agent scenarios.
-- **When to use**: **ONLY for Pydantic AI framework.**
-- **Requires**: `kwargs` must contain an `agent` field with either a Pydantic AI Agent instance or a function that returns one.
+- **What it does**: Runs Pydantic AI agents with automatic message format conversion between eval-protocol and Pydantic AI formats.
+- **When to use**: **ONLY for Pydantic AI framework.** Multi-turn conversations, tool usage scenarios, and complex agent workflows.
+- **Requires**: `agent_factory` parameter - a callable that creates a Pydantic AI `Agent` instance from `RolloutProcessorConfig`.
 - **Module**: [`eval_protocol/pytest/default_pydantic_ai_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_pydantic_ai_rollout_processor.py)
+- **See also**: [Pydantic AI integration guide](/integrations/pydantic-ai) for detailed examples and agent factory patterns.
 
-Usage with pre-configured agent:
+The processor automatically converts message formats and handles concurrency control:
+
+| Eval-Protocol Role | Pydantic AI Conversion |
+|-------------------|------------------------|
+| `user` | `UserPromptPart` |
+| `system` | `SystemPromptPart` |
+| `assistant` | `ChatCompletion` |
+| `tool` | `ToolReturnPart` |
+
+
+Example agent factory:
+
+<Note>
+The examples assume a `setup_agent` function exists that creates and configures your Pydantic AI agent.
+</Note>
 
 ```python
 from eval_protocol.pytest import evaluation_test, PydanticAgentRolloutProcessor
-from pydantic_ai import Agent
+from pydantic_ai.usage import UsageLimits
 
-agent = Agent()
+def agent_factory(config: RolloutProcessorConfig) -> Agent:
+    model_name = config.completion_params["model"]
+    provider = config.completion_params["provider"]
+    model = OpenAIModel(model_name, provider=provider)
+    return setup_agent(model)
 
 @evaluation_test(
     input_messages=[Message(role="user", content="Hello, how are you?")],
@@ -130,21 +149,25 @@ agent = Agent()
         "model": "accounts/fireworks/models/gpt-oss-120b",
         "provider": "fireworks"
     }],
-    rollout_processor=PydanticAgentRolloutProcessor(),
-    rollout_processor_kwargs={"agent": agent},
+    rollout_processor=PydanticAgentRolloutProcessor(
+        agent_factory=agent_factory,
+        usage_limits=UsageLimits(max_tokens=1000)
+    ),
     mode="pointwise"
 )
 def test_pydantic_agent(row: EvaluationRow) -> EvaluationRow:
     return row
 ```
 
-Usage with dynamic agent creation for multi-agent scenarios:
+Multi-agent scenario:
 
 ```python
 from eval_protocol.pytest import evaluation_test, PydanticAgentRolloutProcessor
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
+from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.usage import UsageLimits
+import pytest
 
 def setup_agent(joke_generation_model: Model, joke_selection_model: Model) -> Agent:
     """Setup multi-agent system with joke generation and selection."""
@@ -164,28 +187,31 @@ def setup_agent(joke_generation_model: Model, joke_selection_model: Model) -> Ag
 
     return joke_selection_agent
 
+def agent_factory(config: RolloutProcessorConfig) -> Agent:
+    joke_generation_model = OpenAIModel(
+        config.completion_params["model"]["joke_generation_model"], provider="fireworks"
+    )
+    joke_selection_model = OpenAIModel(
+        config.completion_params["model"]["joke_selection_model"], provider="fireworks"
+    )
+    return setup_agent(joke_generation_model, joke_selection_model)
+
+@pytest.mark.asyncio
 @evaluation_test(
-    input_messages=[Message(role="user", content="Tell me a joke.")],
+    input_messages=[[[Message(role="user", content="Tell me a joke.")]]],
     completion_params=[{
         "model": {
-            "joke_generation_model": {
-                "model": "accounts/fireworks/models/kimi-k2-instruct",
-                "provider": "fireworks"
-            },
-            "joke_selection_model": {
-                "model": "accounts/fireworks/models/deepseek-v3p1", 
-                "provider": "fireworks"
-            }
+            "joke_generation_model": "accounts/fireworks/models/kimi-k2-instruct",
+            "joke_selection_model": "accounts/fireworks/models/deepseek-v3p1"
         }
     }],
-    rollout_processor=PydanticAgentRolloutProcessor(),
-    rollout_processor_kwargs={
-        "agent": setup_agent,
-        "usage_limits": UsageLimits(request_limit=5, total_tokens_limit=1000)
-    },
+    rollout_processor=PydanticAgentRolloutProcessor(
+        agent_factory=agent_factory,
+        usage_limits=UsageLimits(request_limit=5, total_tokens_limit=1000)
+    ),
     mode="pointwise"
 )
-def test_pydantic_multi_agent(row: EvaluationRow) -> EvaluationRow:
+async def test_pydantic_multi_agent(row: EvaluationRow) -> EvaluationRow:
     return row
 ```
 
