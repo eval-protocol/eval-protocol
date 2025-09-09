@@ -51,7 +51,25 @@ def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 Only `completion_params` is required; all other parameters are optional.
 
 <ParamField path="completion_params" type="List[dict]" required>
-Generation parameters for the rollout. Must include a `model` field using a LiteLLM-compatible provider route (e.g., `openai/gpt-4o`, `anthropic/claude-3-sonnet`, `fireworks_ai/*`). See the LiteLLM providers list for supported prefixes and models: https://docs.litellm.ai/docs/providers
+Generation parameters for the rollout. The required fields depend on the rollout processor used:
+
+**For SingleTurnRolloutProcessor and AgentRolloutProcessor:**
+- Must include a `model` field using a LiteLLM-compatible provider route (e.g., `openai/gpt-4o`, `anthropic/claude-3-sonnet`, `fireworks_ai/*`)
+- Optional: `temperature`, `max_tokens`, `extra_body`, etc.
+- See the LiteLLM providers list for supported prefixes and models: https://docs.litellm.ai/docs/providers
+
+**For PydanticAgentRolloutProcessor:**
+- Must include `model` and `provider` fields
+- Example: `{"model": "accounts/fireworks/models/kimi-k2-instruct", "provider": "fireworks"}`
+- The `provider` field is used to create the appropriate Pydantic AI model
+
+**For MCPGymRolloutProcessor:**
+- Must include a `model` field using a LiteLLM-compatible provider route
+- Used to create the policy for environment interaction
+
+**For NoOpRolloutProcessor:**
+- Can be any value (not used for actual model calls)
+- Often set to `{"model": "not-used-offline"}` for clarity
 </ParamField>
 
 <ParamField path="input_messages" type="Optional[List[InputMessagesParam]]">
@@ -527,6 +545,167 @@ def test_with_aggressive_retries(rows: List[EvaluationRow]) -> List[EvaluationRo
   - `PydanticAgentRolloutProcessor()`: runs Pydantic AI agents with structured tool calling.
   - `MCPGymRolloutProcessor()`: runs interactive environments via MCP servers.
 - All processors are wrapped with `rollout_processor_with_retry` for automatic retry handling.
+
+## RolloutProcessorConfig
+
+The `RolloutProcessorConfig` is passed to all rollout processors and contains the configuration needed to execute rollouts. It's defined in [`eval_protocol/pytest/types.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/types.py).
+
+### Configuration Fields
+
+<ParamField path="completion_params" type="CompletionParams" required>
+Model and generation parameters for the rollout. The structure and required fields depend on the rollout processor:
+
+**SingleTurnRolloutProcessor & AgentRolloutProcessor:**
+- Must include `model` field with LiteLLM-compatible provider route
+- Supports standard LiteLLM parameters: `temperature`, `max_tokens`, `extra_body`, etc.
+
+**PydanticAgentRolloutProcessor:**
+- Must include both `model` and `provider` fields
+- Used to create Pydantic AI model instances via the agent factory
+
+**MCPGymRolloutProcessor:**
+- Must include `model` field for environment policy creation
+- Additional parameters passed to the policy constructor
+
+**NoOpRolloutProcessor:**
+- Can contain any values (not used for actual model calls)
+- Often set to placeholder values for clarity
+</ParamField>
+
+<ParamField path="mcp_config_path" type="str" required>
+Path to an MCP client configuration file that follows the MCPMultiClientConfiguration schema. Used by agent and tool-based rollout processors to enumerate available tools and capabilities.
+</ParamField>
+
+<ParamField path="semaphore" type="asyncio.Semaphore" required>
+Shared semaphore for unified concurrency control across all rollout processors. Controls the maximum number of concurrent rollouts that can run simultaneously.
+</ParamField>
+
+<ParamField path="server_script_path" type="Optional[str]">
+Path to an MCP server script to run. Used by gym-like processors (e.g., `MCPGymRolloutProcessor`) to launch interactive environments. Defaults to `None`.
+</ParamField>
+
+<ParamField path="steps" type="int">
+Maximum number of rollout steps to execute. Used by multi-turn processors to limit the length of agent conversations. Defaults to `30`.
+</ParamField>
+
+<ParamField path="logger" type="DatasetLogger">
+Logger to use for capturing mid-rollout logs and debugging information. Defaults to `default_logger`.
+</ParamField>
+
+<ParamField path="kwargs" type="dict[str, Any]">
+Additional keyword arguments specific to the rollout processor. This is where processor-specific configuration is passed, such as:
+- `usage_limits` for Pydantic AI agents
+- `agent` for pre-configured agents
+- Custom tool configurations
+- Environment-specific settings
+</ParamField>
+
+<ParamField path="exception_handler_config" type="Optional[ExceptionHandlerConfig]">
+Configuration for exception handling and backoff retry logic. If not provided, a default configuration will be used with common retryable exceptions. See the [ExceptionHandlerConfig](#exceptionhandlerconfig) section for detailed configuration options.
+</ParamField>
+
+### Usage in Custom Rollout Processors
+
+When implementing custom rollout processors, you can access these configuration values:
+
+```python
+from eval_protocol.pytest.rollout_processor import RolloutProcessor
+from eval_protocol.pytest.types import RolloutProcessorConfig
+from eval_protocol.models import EvaluationRow
+import asyncio
+
+class CustomRolloutProcessor(RolloutProcessor):
+    def __call__(self, rows: list[EvaluationRow], config: RolloutProcessorConfig) -> list[asyncio.Task[EvaluationRow]]:
+        # Access model configuration
+        model = config.completion_params.get("model")
+        temperature = config.completion_params.get("temperature", 0.0)
+        
+        # Access concurrency control
+        semaphore = config.semaphore
+        
+        # Access custom configuration
+        custom_setting = config.kwargs.get("custom_setting", "default_value")
+        
+        # Access MCP configuration
+        mcp_config_path = config.mcp_config_path
+        
+        # Access step limits
+        max_steps = config.steps
+        
+        # Access logger
+        logger = config.logger
+        
+        # Your rollout logic here
+        async def process_row(row: EvaluationRow) -> EvaluationRow:
+            async with semaphore:
+                # Process the row
+                return row
+        
+        return [asyncio.create_task(process_row(row)) for row in rows]
+```
+
+### Environment Variable Integration
+
+Several configuration values can be overridden at runtime using environment variables:
+
+- `EP_MAX_CONCURRENT_ROLLOUTS`: Overrides the semaphore limit
+- `EP_NUM_RUNS`: Affects the number of runs for evaluation_test
+- `EP_MAX_RETRY`: Controls retry behavior via exception_handler_config
+- `EP_FAIL_ON_MAX_RETRY`: Controls failure behavior after max retries
+
+### Processor-Specific Configuration
+
+Different rollout processors use the `kwargs` field for their specific needs:
+
+#### AgentRolloutProcessor
+```python
+config = RolloutProcessorConfig(
+    completion_params={
+        "model": "openai/gpt-4",
+        "temperature": 0.1,
+        "max_tokens": 1000
+    },
+    mcp_config_path="./mcp_config.json",
+    semaphore=asyncio.Semaphore(8),
+    kwargs={
+        "custom_tool_config": {...},
+        "agent_instructions": "You are a helpful assistant"
+    }
+)
+```
+
+#### PydanticAgentRolloutProcessor
+```python
+config = RolloutProcessorConfig(
+    completion_params={
+        "model": "accounts/fireworks/models/kimi-k2-instruct",
+        "provider": "fireworks"
+    },
+    mcp_config_path="./mcp_config.json", 
+    semaphore=asyncio.Semaphore(8),
+    kwargs={
+        "agent": my_pydantic_agent,
+        "usage_limits": UsageLimits(max_tokens=1000)
+    }
+)
+```
+
+#### MCPGymRolloutProcessor
+```python
+config = RolloutProcessorConfig(
+    completion_params={
+        "model": "openai/gpt-4",
+        "temperature": 0.0
+    },
+    mcp_config_path="./mcp_config.json",
+    semaphore=asyncio.Semaphore(8),
+    server_script_path="./gym_server.py",
+    kwargs={
+        "environment_config": {...},
+        "gym_timeout": 300
+    }
+)
+```
 
 ## Direct invocation (dual-mode)
 
