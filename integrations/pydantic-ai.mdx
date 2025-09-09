@@ -1,9 +1,12 @@
 ---
 title: Pydantic AI
 icon: "triangle"
+description: "How to use Pydantic AI with eval-protocol"
 ---
 
-`eval-protocol` easily works with Pydantic AI agents.
+To make it easy to build a model leaderboard for Pydantic AI agents,
+`eval-protocol` provides an out-of-the-box rollout processor for Pydantic AI
+agents.
 
 ## `PydanticAgentRolloutProcessor`
 
@@ -49,8 +52,8 @@ def agent_factory(config: RolloutProcessorConfig) -> Agent:
     return setup_agent(model)
 ```
 
-We are using the `completion_params` to get the model name and provider, and
-then creating a Pydantic AI model using the `OpenAIModel` class.
+Use the `completion_params` to get the model name and provider, and then
+creating a Pydantic AI model using the `OpenAIModel` class.
 
 
 ## Chinook Database Example
