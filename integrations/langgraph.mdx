@@ -1,0 +1,236 @@
+---
+title: LangGraph
+icon: "graph"
+description: "How to use LangGraph with eval-protocol"
+---
+
+To make it easy to build a model leaderboard for LangGraph apps,
+`eval-protocol` provides an out-of-the-box rollout processor for LangGraph.
+
+## `LangGraphRolloutProcessor`
+
+This orchestrates rollouts for LangGraph apps so you only need to pass a
+graph factory function and `eval-protocol` will handle running your experiments
+against your dataset.
+
+```python highlight={9}
+@evaluation_test(
+    input_dataset=["examples/langgraph/data/simple_prompts.jsonl"],
+    dataset_adapter=adapter,
+    completion_params=[
+        {
+            "model": "accounts/fireworks/models/kimi-k2-instruct",
+            "temperature": 0.0,
+        },
+    ],
+    rollout_processor=processor,
+)
+async def test_langgraph_pointwise(row: EvaluationRow) -> EvaluationRow:
+    ...
+```
+
+See [reference](/reference/rollout-processors#langgraphrolloutprocessor) for details.
+
+## Graph Factory
+
+To supply a LangGraph app for evaluation, you define a factory function that
+accepts a config dict and returns a compiled graph with `.ainvoke`.
+
+In this example, we assume you have a `build_simple_graph` function that creates a
+LangGraph app using a given model.
+
+```python
+from eval_protocol.pytest.types import RolloutProcessorConfig
+from examples.langgraph.simple_graph import build_simple_graph
+
+
+def build_graph_kwargs(cp: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "config": {
+            "model": cp.get("model"),
+            "temperature": cp.get("temperature", 0.0),
+        }
+    }
+
+
+def graph_factory(graph_kwargs: Dict[str, Any]) -> Any:
+    cfg = graph_kwargs.get("config", {}) if isinstance(graph_kwargs, dict) else {}
+    model = cfg.get("model") or "accounts/fireworks/models/kimi-k2-instruct"
+    temperature = cfg.get("temperature", 0.0)
+    return build_simple_graph(model=model, model_provider="fireworks", temperature=temperature)
+```
+
+Use `completion_params` to get the model name and parameters, then
+construct your LangGraph app accordingly.
+
+## Simple Graph Example
+
+<Note>
+See example code in the repository:
+[test file](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_langgraph_rollout.py`) and
+[graph](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/simple_graph.py`).
+</Note>
+
+Our simple LangGraph app uses LangChain-native messages and a single node that
+calls the configured model.
+
+```python
+from typing import Any, Dict, List
+from typing_extensions import TypedDict, Annotated
+
+
+def build_simple_graph(
+    model: str = "accounts/fireworks/models/kimi-k2-instruct",
+    *,
+    model_provider: str = "fireworks",
+    temperature: float = 0.0,
+) -> Any:
+    from langgraph.graph import StateGraph, END
+    from langgraph.graph.message import add_messages
+    from langchain_core.messages import BaseMessage
+    from langchain.chat_models import init_chat_model
+
+    class State(TypedDict):
+        messages: Annotated[List[BaseMessage], add_messages]
+
+    llm = init_chat_model(model, model_provider=model_provider, temperature=temperature)
+
+    async def call_model(state: State, **_: Any) -> Dict[str, Any]:
+        messages: List[BaseMessage] = state.get("messages", [])
+        resp = await llm.ainvoke(messages)
+        return {"messages": [resp]}
+
+    g = StateGraph(State)
+    g.add_node("call_model", call_model)
+    g.set_entry_point("call_model")
+    g.add_edge("call_model", END)
+    return g.compile()
+```
+
+### Writing the Eval
+
+Every eval in `eval-protocol` expects an input dataset of type [List[EvaluationRow]](/specification#evaluationrow).
+
+For this example, a small JSONL dataset of prompts is used and adapted into `EvaluationRow`s via
+an adapter function. The rollout processor handles converting `EvaluationRow.messages` to
+LangChain messages and applies the model output back to the row.
+
+### Generating a Score
+
+Evals in `eval-protocol` return a [score](/specification#evaluateresult) between 0.0 and 1.0. This simple
+example scores whether the assistant replied.
+
+```python
+has_reply = 1.0 if any(m.role == "assistant" for m in (row.messages or [])) else 0.0
+row.evaluation_result = EvaluateResult(
+    score=has_reply,
+    reason="assistant replied" if has_reply else "no assistant reply",
+)
+```
+
+## Reasoning Model Example
+
+You can also evaluate reasoning models like `gpt-oss-120b` and control reasoning via
+`reasoning_effort`.
+
+<Note>
+Example code:
+[test file](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_reasoning_rollout.py`) and
+[graph](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/reasoning_gpt_oss_120b_graph.py`).
+</Note>
+
+```python
+from typing import Any, Dict, List
+from typing_extensions import Annotated, TypedDict
+
+
+def build_reasoning_graph(
+    *,
+    model: str = "accounts/fireworks/models/gpt-oss-120b",
+    model_provider: str = "fireworks",
+    temperature: float = 0.0,
+    reasoning_effort: str | None = None,
+) -> Any:
+    from langgraph.graph import StateGraph, END
+    from langgraph.graph.message import add_messages
+    from langchain.chat_models import init_chat_model
+    from langchain_core.messages import BaseMessage
+
+    class State(TypedDict):
+        messages: Annotated[List[BaseMessage], add_messages]
+
+    llm = init_chat_model(
+        model,
+        model_provider=model_provider,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+    )
+
+    async def call_model(state: State) -> Dict[str, Any]:
+        response = await llm.ainvoke(state["messages"])  # type: ignore[assignment]
+        return {"messages": [response]}
+
+    g = StateGraph(State)
+    g.add_node("call_model", call_model)
+    g.set_entry_point("call_model")
+    g.add_edge("call_model", END)
+    return g.compile()
+```
+
+### Passing `reasoning_effort`
+
+Use `completion_params` and `build_graph_kwargs` to pass `reasoning_effort` values like
+"low", "medium", or "high".
+
+```python
+@evaluation_test(
+    input_dataset=["examples/langgraph/data/simple_prompts.jsonl"],
+    dataset_adapter=adapter,
+    rollout_processor=processor,
+    completion_params=[
+        {"model": "accounts/fireworks/models/gpt-oss-120b", "temperature": 0.0, "reasoning_effort": "low"}
+    ],
+    mode="pointwise",
+)
+```
+
+## Running the Evaluation
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    export FIREWORKS_API_KEY=... && \
+    pytest python-sdk/examples/langgraph/test_langgraph_rollout.py -v
+    ```
+  </Tab>
+  <Tab title="VSCode">
+    - Open the test file
+    - Click the "Run Test" button above the test function
+    - Or use the Command Palette (Cmd+Shift+P) and search for "Tests: Run Tests in Current File"
+  </Tab>
+</Tabs>
+
+## Creating a Leaderboard
+
+To compare different models, add multiple entries to `completion_params` and set `num_runs` to
+get robust evaluation across runs.
+
+```python
+@evaluation_test(
+    input_dataset=["examples/langgraph/data/simple_prompts.jsonl"],
+    dataset_adapter=adapter,
+    completion_params=[
+        {"model": "accounts/fireworks/models/kimi-k2-instruct", "temperature": 0.0},
+        {"model": "accounts/fireworks/models/kimi-k2-instruct-0905", "temperature": 0.0},
+        {"model": "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507", "temperature": 0.0},
+    ],
+    num_runs=3,
+    rollout_processor=processor,
+)
+```
+
+After running the evaluation, analyze results using the [Pivot View](/tutorial/ui/pivot).
+
+<Frame caption={<span>Example leaderboard showing model performance comparison in the Pivot View.</span>}>
+![Pivot Table: avg of $.evaluation_result.score](./leaderboard.png)
+</Frame>

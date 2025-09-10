@@ -27,6 +27,7 @@
         "group": "Integrations",
         "pages": [
           "integrations/langfuse-adapter",
+          "integrations/langgraph",
           "integrations/pydantic-ai"
         ]
       },
