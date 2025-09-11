@@ -185,6 +185,21 @@ The adapter converts Langfuse traces to EvaluationRow format with intelligent ha
     "messages": [
         {"role": "user", "content": "Hello"},
         {"role": "assistant", "content": "Hi there!"}
+    ],
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    }
+                }
+            }
+        }
     ]
 }
 
