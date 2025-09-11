@@ -24,7 +24,10 @@
       },
       {
         "group": "Integrations",
-        "pages": ["integrations/pydantic-ai"]
+        "pages": [
+          "integrations/langfuse-adapter",
+          "integrations/pydantic-ai"
+        ]
       },
       {
         "group": "Reference",
