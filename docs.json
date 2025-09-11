@@ -18,6 +18,7 @@
   "navigation": {
     "pages": [
       "introduction",
+      "quickstart",
       {
         "group": "Setup",
         "pages": ["authoring-with-ai-agents"]

@@ -1,0 +1,245 @@
+---
+title: Quickstart
+description: "Stop guessing which AI model to use. Build a data-driven model leaderboard."
+---
+
+With so many AI models available, choosing the right one is becoming a critical engineering decision. This quickstart shows you how to evaluate your production LLM traces using pairwise comparisons in under 5 minutes - no ground truth required!
+
+
+## Installation and Setup
+
+Ready to dive in? Install EP with a single command and start evaluating your models:
+
+```shell
+pip install 'eval-protocol[langfuse]'
+```
+
+```bash
+# Model API keys (choose what you need)
+export OPENAI_API_KEY="your_openai_key"
+export FIREWORKS_API_KEY="your_fireworks_key"
+export GEMINI_API_KEY="your_gemini_key"
+
+# Langfuse credentials
+export LANGFUSE_PUBLIC_KEY="your_public_key"
+export LANGFUSE_SECRET_KEY="your_secret_key"
+export LANGFUSE_HOST="https://your-deployment.com"  # Optional
+```
+
+## Run Your First Evaluation
+
+We've included this file for you to directly run, and modify as you'd like: [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py)
+
+```python expandable
+"""
+Default LLM judge for Eval Protocol. Inspired by Arena-Hard-Auto.
+"""
+
+import os
+from typing import List, Dict, Any, Optional
+from tqdm import tqdm
+
+import pytest
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, MetricResult
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnRolloutProcessor
+from eval_protocol.quickstart.utils import (
+    split_multi_turn_rows,
+    JUDGE_CONFIGS,
+    fetch_langfuse_traces_as_evaluation_rows,
+    calculate_bootstrap_scores,
+    push_scores_to_langfuse,
+    run_judgment,
+)
+
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+
+
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skip in CI")
+@pytest.mark.asyncio
+@evaluation_test(
+    input_rows=[fetch_langfuse_traces_as_evaluation_rows()],
+    completion_params=[
+        {
+            "model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507",
+        },
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        },
+    ],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=split_multi_turn_rows,
+    mode="all",
+)
+async def test_llm_judge(rows: list[EvaluationRow]) -> list[EvaluationRow]:
+    """
+    LLM Judge evaluation using Arena-Hard-Auto style pairwise comparisons.
+    
+    Compares model responses against ground truth using an LLM judge. For each row:
+    1. Extracts the question from messages[:-1] 
+    2. Compares messages[-1] (new model response) vs ground_truth (baseline response)
+    3. Runs two judgment rounds (A vs B, B vs A) to reduce position bias
+    4. Calculates bootstrap scores across all comparisons
+    5. Updates evaluation_result with final scores and confidence intervals
+    
+    Args:
+        rows: List of EvaluationRow objects with messages, ground_truth, and tools
+        
+    Returns:
+        Same rows with updated evaluation_result containing scores and judgments
+    """
+
+    judge_name = "gemini-2.5-pro"  # Edit to which judge you'd like to use. Configs are in utils.py.
+
+    if not rows:
+        print("❌ No evaluation rows provided")
+        return rows
+
+    print(f"🔄 Processing {len(rows)} evaluation rows for LLM judging...")
+
+    model_name = rows[0].input_metadata.completion_params.get("model", "unknown_model")
+
+    judgments = []
+    max_concurrency = JUDGE_CONFIGS[judge_name]["max_concurrency"]
+
+    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+        futures = [executor.submit(run_judgment, row, model_name, judge_name) for row in rows]
+
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Generating judgments"):
+            result = future.result()
+            if result and result["games"][0] and result["games"][1]:
+                judgments.append(result)
+
+    if not judgments:
+        print("❌ No valid judgments generated")
+        return rows
+
+    print(f"✅ Generated {len(judgments)} valid judgments")
+
+    # Calculate bootstrap scores
+    mean_score, lower_score, upper_score = calculate_bootstrap_scores(judgments)
+
+    if mean_score == 0.0:
+        print("❌ No valid scores extracted")
+        return rows
+
+    # Print leaderboard
+    print("\n##### LLM Judge Results (90th percentile CI) #####")
+
+    clean_model_name = model_name.split("/")[-1]  # Clean model name
+
+    print(f"{clean_model_name}: {mean_score:.1%} (CI: {lower_score:.1%} - {upper_score:.1%})")
+    print("original: 50.0% (CI: 50.0% - 50.0%)")
+
+    for row in rows:
+        if row.evaluation_result:
+            row.evaluation_result.score = mean_score
+            row.evaluation_result.standard_error = (upper_score - lower_score) / (
+                2 * 1.645
+            )  # Standard error approximation from 90% CI
+
+    # Optional, push scores back to Langfuse. Note that one score per model will be pushed back onto same trace.
+    push_scores_to_langfuse(rows, model_name, mean_score)
+
+    return rows
+```
+
+Run it:
+
+```bash
+pytest llm_judge.py -v -s
+```
+
+## Understanding the Results
+
+You'll see output like this:
+
+```
+##### LLM Judge Results (90th percentile CI) #####
+gpt-oss-120b: 67.3% (CI: 61.2% - 73.4%)
+original: 50.0% (CI: 50.0% - 50.0%)
+```
+
+**What this means:**
+- **67.3%**: gpt-oss-120b won 67.3% of pairwise comparisons against the original
+- **CI: 61.2% - 73.4%**: 90% confidence interval for the win rate
+- **original: 50.0%**: Baseline (your original model performance from the traces)
+
+## How It Works: Arena-Hard-Auto Methodology
+
+Arena-Hard-Auto is a pairwise comparison approach where:
+
+- **Two models** respond to the same prompt
+- **An LLM judge** compares the responses 
+- **Win rates** are calculated across many comparisons
+- **No ground truth** is needed - just relative quality assessment
+
+## Customization Options
+
+### Filter Your Traces
+
+```python
+# Modify the fetch_langfuse_traces_as_evaluation_rows call:
+input_rows=[fetch_langfuse_traces_as_evaluation_rows(
+    limit=100,
+    tags=["customer-service", "production"],
+    user_id="specific_user",
+    session_id="specific_session", 
+    hours_back=168,  # Last week
+    include_tool_calls=True,
+)],
+```
+
+### Try Different Models
+
+```python
+# Modify the completion_params in your @evaluation_test:
+completion_params=[
+    {"model": "gpt-5"},
+    {"model": "anthropic/claude-4"},
+    {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
+],
+```
+
+<Note>
+Note that for `completion_params`, these are passed into LiteLLM, so some models will need prefixes based on the provider.
+</Note>
+
+### Change the Judge
+
+```python
+# In your test_llm_judge function, modify:
+judge_name = "gpt-4.1"  # or "gemini-2.5-pro", or add your own
+```
+
+## Analyze Results with the EP UI
+
+EP provides a powerful web-based UI for monitoring and analyzing your evaluation results in real-time:
+
+```bash
+# Start the UI server
+ep logs
+```
+
+Then open [http://localhost:8000](http://localhost:8000) to see your evaluation results.
+
+<Frame caption="EP Log Viewer: Monitor your evaluation rollouts and analyze results with pivot tables">
+  <img src="/assets/ui.png" alt="EP UI showing evaluation results" />
+</Frame>
+
+## You've just built your first model leaderboard!
+
+**Most importantly, no ground truth or manual labeling required** - just your existing conversation traces! 
+
+Now you have objective data to choose the right model for your use case:
+
+- **Test on your real conversations** - See how models perform on your specific domain
+- **Get statistical confidence** - Win rates with confidence intervals, not gut feelings  
+- **Make cost-performance trade-offs** - Balance quality against API pricing
+- **Deploy strategically** - Use different models where they excel most
+
+Your leaderboard becomes a living tool that evolves with new models and use cases. Stop guessing. Start measuring.
