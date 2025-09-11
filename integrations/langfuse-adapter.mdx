@@ -99,6 +99,17 @@ def get_evaluation_rows_by_ids(
 - `trace_ids` - List of trace IDs to fetch
 - `include_tool_calls` - Whether to include tool calling traces
 
+
+### Factory Function
+
+For convenience, you can use the factory function:
+
+```python
+from eval_protocol.integrations.langfuse_adapter import create_langfuse_adapter
+
+adapter = create_langfuse_adapter()
+rows = adapter.get_evaluation_rows(limit=10)
+```
 ## Filtering Examples
 
 ### Filter by Tags
@@ -167,33 +178,40 @@ The adapter converts Langfuse traces to EvaluationRow format with intelligent ha
 ### Supported Trace Formats
 
 <Tabs>
-  <Tab title="OpenAI Messages">
+  <Tab title="Dict Format">
 ```python
+# OpenAI-style messages
 {
     "messages": [
         {"role": "user", "content": "Hello"},
         {"role": "assistant", "content": "Hi there!"}
     ]
 }
-```
-  </Tab>
-  <Tab title="Single Message">
-```python
+
+# Single message object
 {
     "role": "user",
     "content": "What is the weather?"
 }
-```
-  </Tab>
-  <Tab title="Simple Prompt">
-```python
+
+# Simple prompt format
 {
     "prompt": "Explain quantum computing"
 }
 ```
   </Tab>
-  <Tab title="Direct String">
+  <Tab title="List Format">
 ```python
+# Direct list of message dictionaries
+[
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi there!"}
+]
+```
+  </Tab>
+  <Tab title="String Format">
+```python
+# Direct string input
 "Tell me a joke"
 ```
   </Tab>
@@ -207,17 +225,6 @@ The adapter stores the original Langfuse trace ID in the evaluation row metadata
 for row in rows:
     trace_id = row.input_metadata.session_data.get("langfuse_trace_id")
     print(f"Processing trace: {trace_id}")
-```
-
-## Factory Function
-
-For convenience, you can use the factory function:
-
-```python
-from eval_protocol.integrations.langfuse_adapter import create_langfuse_adapter
-
-adapter = create_langfuse_adapter()
-rows = adapter.get_evaluation_rows(limit=10)
 ```
 
 ## Implementation Details
