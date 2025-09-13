@@ -11,7 +11,7 @@ To make it easy to build a model leaderboard for LangGraph apps,
 
 This orchestrates rollouts for LangGraph apps so you only need to pass a
 graph factory function and `eval-protocol` will handle running your experiments
-against your dataset.
+against your dataset. The factory accepts a typed `RolloutProcessorConfig`.
 
 ```python highlight={9}
 @evaluation_test(
@@ -33,42 +33,38 @@ See [reference](/reference/rollout-processors#langgraphrolloutprocessor) for det
 
 ## Graph Factory
 
-To supply a LangGraph app for evaluation, you define a factory function that
-accepts a config dict and returns a compiled graph with `.ainvoke`.
+To supply a LangGraph app for evaluation, define a factory function that
+accepts a `RolloutProcessorConfig` and returns a compiled graph with `.ainvoke`.
 
 In this example, we assume you have a `build_simple_graph` function that creates a
 LangGraph app using a given model.
 
 ```python
+from typing import Any
 from eval_protocol.pytest.types import RolloutProcessorConfig
+from eval_protocol.pytest.default_langchain_rollout_processor import LangGraphRolloutProcessor
 from examples.langgraph.simple_graph import build_simple_graph
 
 
-def build_graph_kwargs(cp: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "config": {
-            "model": cp.get("model"),
-            "temperature": cp.get("temperature", 0.0),
-        }
-    }
-
-
-def graph_factory(graph_kwargs: Dict[str, Any]) -> Any:
-    cfg = graph_kwargs.get("config", {}) if isinstance(graph_kwargs, dict) else {}
-    model = cfg.get("model") or "accounts/fireworks/models/kimi-k2-instruct"
-    temperature = cfg.get("temperature", 0.0)
+def graph_factory(config: RolloutProcessorConfig) -> Any:
+    cp = config.completion_params or {}
+    model = cp.get("model") or "accounts/fireworks/models/kimi-k2-instruct"
+    temperature = cp.get("temperature", 0.0)
     return build_simple_graph(model=model, model_provider="fireworks", temperature=temperature)
+
+
+processor = LangGraphRolloutProcessor(graph_factory=graph_factory)
 ```
 
-Use `completion_params` to get the model name and parameters, then
-construct your LangGraph app accordingly.
+Use `completion_params` in `RolloutProcessorConfig` to get model name and other
+parameters, then construct your LangGraph app accordingly.
 
 ## Simple Graph Example
 
 <Note>
 See example code in the repository:
-[test file](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_langgraph_rollout.py`) and
-[graph](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/simple_graph.py`).
+[test file](https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_langgraph_rollout.py) and
+[graph](https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/simple_graph.py).
 </Note>
 
 Our simple LangGraph app uses LangChain-native messages and a single node that
@@ -135,8 +131,8 @@ You can also evaluate reasoning models like `gpt-oss-120b` and control reasoning
 
 <Note>
 Example code:
-[test file](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_reasoning_rollout.py`) and
-[graph](`https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/reasoning_gpt_oss_120b_graph.py`).
+[test file](https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/test_reasoning_rollout.py) and
+[graph](https://github.com/eval-protocol/python-sdk/blob/main/examples/langgraph/reasoning_gpt_oss_120b_graph.py).
 </Note>
 
 ```python
@@ -179,7 +175,7 @@ def build_reasoning_graph(
 
 ### Passing `reasoning_effort`
 
-Use `completion_params` and `build_graph_kwargs` to pass `reasoning_effort` values like
+Use `completion_params` to pass `reasoning_effort` values like
 "low", "medium", or "high".
 
 ```python
@@ -216,6 +212,7 @@ To compare different models, add multiple entries to `completion_params` and set
 get robust evaluation across runs.
 
 ```python
+# Assuming `processor = LangGraphRolloutProcessor(graph_factory=graph_factory)` as shown above
 @evaluation_test(
     input_dataset=["examples/langgraph/data/simple_prompts.jsonl"],
     dataset_adapter=adapter,
