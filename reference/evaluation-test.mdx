@@ -78,7 +78,34 @@ Messages to send to the model. Useful when you don't have a dataset but can hard
 </ParamField>
 
 <ParamField path="input_dataset" type="Optional[List[DatasetPathParam]]">
-Paths to JSONL datasets. Provide a `dataset_adapter` to convert custom dataset formats to EvaluationRows.
+Paths to JSONL datasets that will be loaded using `load_jsonl()`. Each path can be either a local file path or an HTTP/HTTPS URL. Provide a `dataset_adapter` to convert the raw JSONL data to EvaluationRows.
+
+**Behavior:**
+- Files are loaded using `load_jsonl()` which reads JSONL format (one JSON object per line)
+- **Supports both local files and HTTP URLs**: Local file paths and HTTP/HTTPS URLs are both supported
+- **Robust parsing**: Automatically skips blank or whitespace-only lines to handle trailing newlines gracefully
+- **Error handling**: Provides detailed error messages including line numbers and row IDs when JSON parsing fails
+- **Timeout support**: HTTP requests have a 30-second timeout
+- When multiple paths are provided and `combine_datasets=True` (default), files are concatenated into one dataset
+- When `combine_datasets=False`, each path is parameterized into separate test invocations
+- Raw JSONL data is passed to the `dataset_adapter` function for conversion to `EvaluationRow` format
+
+**Supported formats:**
+- Local files: `"path/to/dataset.jsonl"`
+- HTTP URLs: `"http://example.com/dataset.jsonl"`
+- HTTPS URLs: `"https://example.com/dataset.jsonl"`
+
+**Example:**
+```python
+@evaluation_test(
+    input_dataset=[
+        "path/to/local_dataset.jsonl",
+        "https://example.com/remote_dataset.jsonl"
+    ],
+    dataset_adapter=my_adapter,
+    completion_params=[{"model": "gpt-4"}]
+)
+```
 </ParamField>
 
 <ParamField path="input_rows" type="Optional[List[EvaluationRow]]">
@@ -451,10 +478,10 @@ Each returned row should have:
 
 ## Dataset loading and input formats
 
-- **Datasets (`input_dataset`)**: You can pass a single path or a list of paths. When a list is provided and `combine_datasets=True` (default), files are concatenated into one dataset; when `combine_datasets=False`, each path is parameterized into separate test invocations.
+- **Datasets (`input_dataset`)**: You can pass a single path or a list of paths to JSONL files. Files are loaded using `load_jsonl()` which supports both local files and HTTP/HTTPS URLs. The function reads JSONL format (one JSON object per line) with robust error handling, automatically skips blank lines, and provides detailed error messages with line numbers and row IDs. When a list is provided and `combine_datasets=True` (default), files are concatenated into one dataset; when `combine_datasets=False`, each path is parameterized into separate test invocations.
 - **Input messages (`input_messages`)**: Accepts either a single row as `List[Message]` or many rows as `List[List[Message]]`. When `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
 - **Input rows (`input_rows`)**: Similar to input_messages, when `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
-- **Dataset adapter (`dataset_adapter`)**: Receives raw JSONL rows and must return `List[EvaluationRow]`.
+- **Dataset adapter (`dataset_adapter`)**: Receives raw JSONL rows (as loaded by `load_jsonl()`) and must return `List[EvaluationRow]`.
 
 ## Error Handling
 
