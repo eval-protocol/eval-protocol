@@ -139,15 +139,16 @@ from pydantic_ai.usage import UsageLimits
 
 def agent_factory(config: RolloutProcessorConfig) -> Agent:
     model_name = config.completion_params["model"]
-    provider = config.completion_params["provider"]
-    model = OpenAIModel(model_name, provider=provider)
+    # Provider is optional - defaults to "openai" if not specified
+    provider = config.completion_params.get("provider", "openai")
+    model = OpenAIChatModel(model_name, provider=provider)
     return setup_agent(model)
 
 @evaluation_test(
     input_messages=[Message(role="user", content="Hello, how are you?")],
     completion_params=[{
         "model": "accounts/fireworks/models/gpt-oss-120b",
-        "provider": "fireworks"
+        "provider": "fireworks"  # Optional: defaults to "openai"
     }],
     rollout_processor=PydanticAgentRolloutProcessor(
         agent_factory=agent_factory,
@@ -165,7 +166,7 @@ Multi-agent scenario:
 from eval_protocol.pytest import evaluation_test, PydanticAgentRolloutProcessor
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.usage import UsageLimits
 import pytest
 
@@ -188,10 +189,10 @@ def setup_agent(joke_generation_model: Model, joke_selection_model: Model) -> Ag
     return joke_selection_agent
 
 def agent_factory(config: RolloutProcessorConfig) -> Agent:
-    joke_generation_model = OpenAIModel(
+    joke_generation_model = OpenAIChatModel(
         config.completion_params["model"]["joke_generation_model"], provider="fireworks"
     )
-    joke_selection_model = OpenAIModel(
+    joke_selection_model = OpenAIChatModel(
         config.completion_params["model"]["joke_selection_model"], provider="fireworks"
     )
     return setup_agent(joke_generation_model, joke_selection_model)
