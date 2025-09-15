@@ -1,0 +1,154 @@
+---
+title: LangSmith Adapter
+icon: "link-horizontal"
+description: "Pull evaluation data from LangSmith projects and convert to EvaluationRow format for evaluation pipelines"
+---
+
+The LangSmith adapter allows you to pull data from LangSmith projects and convert it to EvaluationRow format for use in evaluation pipelines. This enables you to evaluate production conversations, tool-calling traces, and LangGraph app runs directly from your LangSmith project.
+
+## Installation
+
+```bash
+pip install 'eval-protocol[langchain]' langsmith
+```
+
+Note: `langsmith` is required to access the LangSmith API.
+
+## Basic Usage
+
+```python
+from eval_protocol.adapters.langsmith import LangSmithAdapter
+
+# Initialize the adapter (uses LangSmith client configuration)
+adapter = LangSmithAdapter()
+
+# Pull recent evaluation rows from a LangSmith project
+rows = adapter.get_evaluation_rows(project_name="ep-langgraph-examples", limit=20)
+
+# Use in your evaluation tests
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.models import EvaluationRow, EvaluateResult
+from typing import List
+
+@evaluation_test(
+    input_rows=[rows],
+    completion_params=[{"model": "gpt-4o"}],
+    mode="all"
+)
+def test_langsmith_data(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        # Your evaluation logic here
+        # Example: exact-match against ground_truth if available
+        pred = (row.last_assistant_message() or {}).content if row.last_assistant_message() else ""
+        ref = row.ground_truth or ""
+        score = float(bool(ref) and str(pred).strip().lower() == str(ref).strip().lower())
+        row.evaluation_result = EvaluateResult(score=score, reason="exact match" if score else "mismatch")
+    return rows
+```
+
+## Configuration
+
+The adapter uses the LangSmith client configuration. Set up your LangSmith credentials using environment variables:
+
+```bash
+export LANGSMITH_API_KEY="your_langsmith_api_key"
+# Optional: default project to organize traces and runs
+export LS_PROJECT="ep-langgraph-examples"
+```
+
+## How Conversion Works
+
+The adapter converts LangSmith runs to `EvaluationRow` messages using a robust set of mappings:
+
+- Inputs mapping (user-side):
+  - `inputs.messages: List[{role, content}]`
+  - `inputs.prompt`, `inputs.user_input`, `inputs.input`
+  - Raw `str` or `List` payloads
+
+- Outputs mapping (assistant/tool-side):
+  - `outputs.messages: List[{role, content, tool_calls, tool_call_id, function_call}]`
+  - `outputs.content`, `outputs.result`, `outputs.answer`, `outputs.output`
+  - Raw `str` or `List` payloads
+
+- When `outputs.messages` is present, it is preferred to avoid duplicated user prompts. If not present, the adapter merges inputs and outputs.
+
+- Tool calls and tool responses:
+  - Assistant `tool_calls` are normalized to OpenAI-typed `ChatCompletionMessageToolCall` objects when possible.
+  - `role="tool"` messages are preserved when present.
+
+- Duplicate user message handling:
+  - Consecutive identical user messages are de-duplicated using a canonical compare (whitespace/case normalized).
+  - The adapter does not remove legitimate multiple user messages or a system-first message.
+
+## Example: Evaluating a LangGraph App via LangSmith
+
+```python
+from eval_protocol.adapters.langsmith import LangSmithAdapter
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnRolloutProcessor
+from eval_protocol.quickstart.utils import split_multi_turn_rows
+from eval_protocol.models import EvaluationRow, EvaluateResult
+from typing import List
+
+adapter = LangSmithAdapter()
+
+@evaluation_test(
+    input_rows=[adapter.get_evaluation_rows(project_name="ep-langgraph-examples", limit=20)],
+    completion_params=[
+        {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
+        {"model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b", "extra_body": {"reasoning_effort": "low"}},
+    ],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=split_multi_turn_rows,
+    mode="all",
+)
+async def test_langgraph_langsmith(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    for row in rows:
+        # Simple scoring example: assistant reply observed
+        has_reply = 1.0 if row.last_assistant_message() else 0.0
+        row.evaluation_result = EvaluateResult(score=has_reply, reason="assistant replied" if has_reply else "no reply")
+    return rows
+```
+
+## Best Practices
+
+- Prefer tracing your app with `outputs.messages` populated so the adapter can use a single, canonical conversation source.
+- Include `role="tool"` messages and assistant `tool_calls` for tool-enabled flows to evaluate tool use quality.
+- For large projects, scope by `limit` and consider project filters at ingestion time.
+
+## Troubleshooting
+
+- "Duplicate user messages": ensure `outputs.messages` contains the canonical conversation. The adapter will prefer it and de-duplicate only consecutive identical user messages.
+- "Missing tool responses": verify your traces include `role="tool"` messages or that your app surfaces tool execution results in `outputs.messages`.
+- Authentication errors: check `LANGSMITH_API_KEY` and network access to LangSmith API.
+
+## API Reference
+
+### LangSmithAdapter
+
+Main adapter class for pulling LangSmith runs.
+
+#### `get_evaluation_rows()`
+
+Pull runs from LangSmith and convert to `EvaluationRow` format.
+
+```python
+def get_evaluation_rows(
+    self,
+    *,
+    project_name: str,
+    limit: int = 50,
+    include_tool_calls: bool = True,
+) -> List[EvaluationRow]
+```
+
+Parameters:
+- `project_name`: LangSmith project to read runs from
+- `limit`: Maximum number of rows to return
+- `include_tool_calls`: Whether to include tool calling information when present
+
+Returns:
+- `List[EvaluationRow]`: Converted evaluation rows ready for EP evaluations
+
+
+
