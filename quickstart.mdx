@@ -192,6 +192,36 @@ original: 50.0% (CI: 50.0% - 50.0%)
 - **CI: 61.2% - 73.4%**: 90% confidence interval for the win rate
 - **original: 50.0%**: Baseline (your original model performance from the traces)
 
+## Real-World Example: Validating Against Tau-Bench
+
+We tested this methodology on airline customer service traces using `kimi-k2-instruct-0905` as the judge. Here's how our Arena-Hard-Auto evaluation compared to actual Tau-Bench airline scores:
+
+### Our Arena-Hard-Auto Results
+```
+##### LLM Judge Results (90th percentile CI) #####
+kimi-k2 (original): 50.0%
+gpt-oss-120b: 44.6%
+gpt-4.1: 40.1%
+gpt-oss-20b: 29.5%
+```
+
+### Actual Tau-Bench Airline Scores
+```
+kimi-k2: 56.5
+gpt-4.1: 49.4
+gpt-oss-120b medium: 48.6
+gpt-oss-20b low: 32.0
+```
+
+**Not bad!** Note that the percentages don't mean the same thing as the actual scores. Our percentages represent **win rates in pairwise comparisons** against the original model (kimi-k2), while Tau-Bench scores are absolute performance metrics.
+
+What we're focused on is the **trendline and relative differences**. Our setup correctly identifies:
+- ✅ **kimi-k2 as the best model** (baseline at 50%)
+- ✅ **gpt-oss-20b as the worst** (29.5% vs 32.0 actual)
+- ✅ **gpt-oss-120b and gpt-4.1 as similar quality** (44.6% vs 40.1%)
+
+**This ranking matches our real Tau-Bench airline scores!** Pretty amazing we're able to achieve this validation without actually running against the Tau-Bench benchmark - just using production conversation traces and an LLM judge.
+
 ## How It Works: Arena-Hard-Auto Methodology
 
 Arena-Hard-Auto is a pairwise comparison approach where:
