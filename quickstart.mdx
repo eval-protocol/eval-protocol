@@ -213,14 +213,14 @@ gpt-oss-120b medium: 48.6
 gpt-oss-20b low: 32.0
 ```
 
-**Not bad!** Note that the percentages don't mean the same thing as the actual scores. Our percentages represent **win rates in pairwise comparisons** against the original model (kimi-k2), while Tau-Bench scores are absolute performance metrics.
+Note that the percentages don't mean the same thing as the actual scores. Our percentages represent **win rates in pairwise comparisons** against the original model (kimi-k2), while Tau-Bench scores are absolute performance metrics.
 
 What we're focused on is the **trendline and relative differences**. Our setup correctly identifies:
 - ✅ **kimi-k2 as the best model** (baseline at 50%)
 - ✅ **gpt-oss-20b as the worst** (29.5% vs 32.0 actual)
 - ✅ **gpt-oss-120b and gpt-4.1 as similar quality** (44.6% vs 40.1%)
 
-**This ranking matches our real Tau-Bench airline scores!** Pretty amazing we're able to achieve this validation without actually running against the Tau-Bench benchmark - just using production conversation traces and an LLM judge.
+**This ranking roughly matches our real Tau-Bench airline scores!** Pretty amazing we're able to achieve this validation without actually running against the Tau-Bench benchmark - just using production conversation traces and an LLM judge.
 
 ## How It Works: Arena-Hard-Auto Methodology
 
