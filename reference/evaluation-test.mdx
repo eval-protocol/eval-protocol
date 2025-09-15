@@ -59,9 +59,10 @@ Generation parameters for the rollout. The required fields depend on the rollout
 - See the LiteLLM providers list for supported prefixes and models: https://docs.litellm.ai/docs/providers
 
 **For PydanticAgentRolloutProcessor:**
-- Must include `model` and `provider` fields
+- Must include `model` field (the canonical way to pass model names to LLM clients)
+- Optional `provider` field (defaults to "openai" if not specified)
 - Example: `{"model": "accounts/fireworks/models/kimi-k2-instruct", "provider": "fireworks"}`
-- The `provider` field is used to create the appropriate Pydantic AI model
+- The agent factory uses the `model` field to create the appropriate Pydantic AI model
 
 **For MCPGymRolloutProcessor:**
 - Must include a `model` field using a LiteLLM-compatible provider route
@@ -560,7 +561,8 @@ Model and generation parameters for the rollout. The structure and required fiel
 - Supports standard LiteLLM parameters: `temperature`, `max_tokens`, `extra_body`, etc.
 
 **PydanticAgentRolloutProcessor:**
-- Must include both `model` and `provider` fields
+- Must include `model` field (canonical way to pass model names)
+- Optional `provider` field (defaults to "openai" if not specified)
 - Used to create Pydantic AI model instances via the agent factory
 
 **MCPGymRolloutProcessor:**
@@ -679,7 +681,7 @@ config = RolloutProcessorConfig(
 config = RolloutProcessorConfig(
     completion_params={
         "model": "accounts/fireworks/models/kimi-k2-instruct",
-        "provider": "fireworks"
+        "provider": "fireworks"  # Optional: defaults to "openai"
     },
     mcp_config_path="./mcp_config.json", 
     semaphore=asyncio.Semaphore(8),

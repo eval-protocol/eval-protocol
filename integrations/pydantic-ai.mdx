@@ -20,7 +20,7 @@ against your dataset.
     completion_params=[
         {
             "model": "accounts/fireworks/models/kimi-k2-instruct",
-            "provider": "fireworks",
+            "provider": "fireworks",  # Optional: defaults to "openai"
         },
     ],
     rollout_processor=PydanticAgentRolloutProcessor(agent_factory),
@@ -35,25 +35,27 @@ See [reference](/reference/rollout-processors#pydanticagentrolloutprocessor) for
 
 To supply an agent for evaluation, you need to define an agent factory function.
 An agent factory is a function of type `Callable[[RolloutProcessorConfig],
-Agent]`.
+Agent]`. See [reference](/reference/evaluation-test#rolloutprocessorconfig) for more details.
 
 In this example, we assume you have a `setup_agent` function that creates a
 Pydantic AI agent using a given model.
 
 ```python
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from eval_protocol.pytest.types import RolloutProcessorConfig
 
 def agent_factory(config: RolloutProcessorConfig) -> Agent:
     model_name = config.completion_params["model"]
-    provider = config.completion_params["provider"]
-    model = OpenAIModel(model_name, provider=provider)
+    # Provider is optional - defaults to "openai" if not specified
+    provider = config.completion_params.get("provider", "openai")
+    model = OpenAIChatModel(model_name, provider=provider)
     return setup_agent(model)
 ```
 
-Use the `completion_params` to get the model name and provider, and then
-creating a Pydantic AI model using the `OpenAIModel` class.
+Use the `completion_params` to get the model name. The `provider` field is optional
+and defaults to "openai" if not specified. The `model` field is the canonical way to
+pass the model name to most LLM clients.
 
 
 ## Chinook Database Example
@@ -180,8 +182,8 @@ LLM_JUDGE_PROMPT = (
 
 def agent_factory(config: RolloutProcessorConfig) -> Agent:
     model_name = config.completion_params["model"]
-    provider = config.completion_params["provider"]
-    model = OpenAIModel(model_name, provider=provider)
+    provider = config.completion_params.get("provider", "openai")
+    model = OpenAIChatModel(model_name, provider=provider)
     return setup_agent(model)
 
 @pytest.mark.skipif(
@@ -194,7 +196,7 @@ def agent_factory(config: RolloutProcessorConfig) -> Agent:
     completion_params=[
         {
             "model": "accounts/fireworks/models/kimi-k2-instruct",
-            "provider": "fireworks",
+            "provider": "fireworks",  # Optional: defaults to "openai"
         },
     ],
     rollout_processor=PydanticAgentRolloutProcessor(agent_factory),
@@ -250,7 +252,7 @@ async def test_pydantic_complex_queries(row: EvaluationRow) -> EvaluationRow:
 
 #### How the Scoring Works
 
-1. **Agent Factory**: The `agent_factory` function creates a Pydantic AI agent using the model and provider from `completion_params`
+1. **Agent Factory**: The `agent_factory` function creates a Pydantic AI agent using the model from `completion_params` (provider is optional)
 
 2. **LLM Judge**: A separate Pydantic AI agent (`comparison_agent`) is created to evaluate responses using a structured prompt
 
@@ -278,11 +280,11 @@ To compare different models, modify the `completion_params` in your `@evaluation
     completion_params=[
         {
             "model": "accounts/fireworks/models/kimi-k2-instruct",
-            "provider": "fireworks",
+            "provider": "fireworks",  # Optional
         },
         { # [!code ++]
             "model": "gpt-5", # [!code ++]
-            "provider": "openai", # [!code ++]
+            # provider defaults to "openai" # [!code ++]
         }, # [!code ++]
         { # [!code ++]
             "model": "accounts/fireworks/models/kimi-k2-instruct-0905", # [!code ++]
