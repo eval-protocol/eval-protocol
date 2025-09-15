@@ -36,6 +36,7 @@ Default LLM judge for Eval Protocol. Inspired by Arena-Hard-Auto.
 """
 
 import os
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from tqdm import tqdm
 
@@ -47,48 +48,60 @@ from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnR
 from eval_protocol.quickstart.utils import (
     split_multi_turn_rows,
     JUDGE_CONFIGS,
-    fetch_langfuse_traces_as_evaluation_rows,
     calculate_bootstrap_scores,
     push_scores_to_langfuse,
-    run_judgment,
+    run_judgment_async,
 )
+import asyncio
+from openai import AsyncOpenAI
+from eval_protocol.adapters.langfuse import create_langfuse_adapter
 
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
+adapter = create_langfuse_adapter()
 
 
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skip in CI")
 @pytest.mark.asyncio
 @evaluation_test(
-    input_rows=[fetch_langfuse_traces_as_evaluation_rows()],
+    input_rows=[
+        adapter.get_evaluation_rows(
+            to_timestamp=datetime(2025, 9, 12, 0, 11, 18),
+            limit=711,
+            sample_size=50,
+            sleep_between_gets=3.0,
+            max_retries=5,
+        )
+    ],
     completion_params=[
+        {"model": "gpt-4.1"},
         {
-            "model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507",
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "medium"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
         },
         {
             "max_tokens": 131000,
             "extra_body": {"reasoning_effort": "low"},
-            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
         },
     ],
     rollout_processor=SingleTurnRolloutProcessor(),
     preprocess_fn=split_multi_turn_rows,
+    max_concurrent_rollouts=64,
     mode="all",
 )
 async def test_llm_judge(rows: list[EvaluationRow]) -> list[EvaluationRow]:
     """
     LLM Judge evaluation using Arena-Hard-Auto style pairwise comparisons.
-    
+
     Compares model responses against ground truth using an LLM judge. For each row:
-    1. Extracts the question from messages[:-1] 
+    1. Extracts the question from messages[:-1]
     2. Compares messages[-1] (new model response) vs ground_truth (baseline response)
     3. Runs two judgment rounds (A vs B, B vs A) to reduce position bias
     4. Calculates bootstrap scores across all comparisons
     5. Updates evaluation_result with final scores and confidence intervals
-    
+
     Args:
         rows: List of EvaluationRow objects with messages, ground_truth, and tools
-        
+
     Returns:
         Same rows with updated evaluation_result containing scores and judgments
     """
@@ -106,11 +119,21 @@ async def test_llm_judge(rows: list[EvaluationRow]) -> list[EvaluationRow]:
     judgments = []
     max_concurrency = JUDGE_CONFIGS[judge_name]["max_concurrency"]
 
-    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-        futures = [executor.submit(run_judgment, row, model_name, judge_name) for row in rows]
+    judge_config = JUDGE_CONFIGS[judge_name]
 
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Generating judgments"):
-            result = future.result()
+    async with AsyncOpenAI(
+        api_key=judge_config.get("api_key"), base_url=judge_config.get("base_url")
+    ) as shared_client:
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def run_judgment(row):
+            async with semaphore:
+                return await run_judgment_async(row, model_name, judge_name, shared_client)
+
+        tasks = [run_judgment(row) for row in rows]
+
+        for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Generating judgments"):
+            result = await coro
             if result and result["games"][0] and result["games"][1]:
                 judgments.append(result)
 
@@ -212,9 +235,14 @@ Note that for `completion_params`, these are passed into LiteLLM, so some models
 ### Change the Judge
 
 ```python
-# In your test_llm_judge function, modify:
-judge_name = "gpt-4.1"  # or "gemini-2.5-pro", or add your own
+# Available judges in JUDGE_CONFIGS:
+judge_name = "gemini-2.5-pro"      # Google Gemini Pro (default)
+judge_name = "gpt-4.1"             # OpenAI GPT-4.1
+judge_name = "gemini-2.5-flash"    # Google Gemini Flash (faster)
+judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model
 ```
+
+Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
 
 ## Analyze Results with the EP UI
 

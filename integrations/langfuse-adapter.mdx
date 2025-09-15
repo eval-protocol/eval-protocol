@@ -67,21 +67,31 @@ Pull traces from Langfuse and convert to EvaluationRow format.
 def get_evaluation_rows(
     self,
     limit: int = 100,
+    sample_size: int = 50,
     tags: Optional[List[str]] = None,
     user_id: Optional[str] = None,
     session_id: Optional[str] = None,
     hours_back: Optional[int] = None,
+    from_timestamp: Optional[datetime] = None,
+    to_timestamp: Optional[datetime] = None,
     include_tool_calls: bool = True,
+    sleep_between_gets: float = 2.5,
+    max_retries: int = 3,
 ) -> List[EvaluationRow]
 ```
 
 **Parameters:**
-- `limit` - Maximum number of rows to return
+- `limit` - Max number of trace summaries to collect via pagination (pre-sampling)
+- `sample_size` - Number of traces to fetch full details for (sampled from collected summaries)
 - `tags` - Filter by specific tags
 - `user_id` - Filter by user ID  
 - `session_id` - Filter by session ID
 - `hours_back` - Filter traces from this many hours ago
+- `from_timestamp` - Explicit start time (overrides hours_back)
+- `to_timestamp` - Explicit end time (overrides hours_back)
 - `include_tool_calls` - Whether to include tool calling traces
+- `sleep_between_gets` - Sleep time between individual trace.get() calls (2.5s for 30 req/min limit)
+- `max_retries` - Maximum retries for rate limit errors
 
 #### `get_evaluation_rows_by_ids()`
 
@@ -134,20 +144,33 @@ rows = adapter.get_evaluation_rows(
 ```python
 # Get conversations from last 24 hours
 rows = adapter.get_evaluation_rows(
-    limit=50,
+    limit=200,        # Collect up to 200 trace summaries
+    sample_size=50,   # Sample 50 for full processing
     hours_back=24
+)
+
+# Or use explicit timestamps
+from datetime import datetime, timedelta
+rows = adapter.get_evaluation_rows(
+    limit=100,
+    sample_size=30,
+    from_timestamp=datetime(2024, 1, 1),
+    to_timestamp=datetime(2024, 1, 31)
 )
 ```
 
-### Combined Filters
+### Combined Filters with Rate Limiting
 ```python
-# Complex filtering
+# Complex filtering with rate limit handling
 rows = adapter.get_evaluation_rows(
-    limit=100,
+    limit=500,                    # Collect many trace summaries
+    sample_size=100,              # Sample subset for processing
     tags=["production"],
     user_id="user_123", 
     hours_back=24,
-    include_tool_calls=True
+    include_tool_calls=True,
+    sleep_between_gets=2.0,       # 2 second delay between API calls
+    max_retries=5,                # Retry up to 5 times on rate limits
 )
 ```
 
@@ -170,6 +193,39 @@ rows = adapter.get_evaluation_rows(
 ```
 
 Tool calls are preserved in the Message format with `tool_calls`, `tool_call_id`, and `function_call` fields as appropriate.
+
+## Sampling and Rate Limiting
+
+The adapter includes intelligent sampling and rate limiting to work efficiently with Langfuse's API limits:
+
+### Two-Stage Process
+1. **Collect trace summaries** - Fast pagination to gather up to `limit` trace IDs
+2. **Sample and fetch details** - Randomly sample `sample_size` traces for full processing
+
+This approach lets you:
+- **Survey large datasets** efficiently without hitting rate limits
+- **Get representative samples** from your trace population
+- **Control API usage** while still getting meaningful evaluation data
+
+### Rate Limit Handling
+```python
+# Default settings work with Langfuse free tier (30 req/min)
+rows = adapter.get_evaluation_rows(
+    limit=1000,               # Survey 1000 traces
+    sample_size=50,           # Process 50 in detail
+    sleep_between_gets=2.5,   # 2.5s delay = ~24 req/min
+    max_retries=3,            # Retry on 429 errors
+)
+```
+
+For higher rate limits, you can reduce the sleep time:
+```python
+# For paid plans with higher limits
+rows = adapter.get_evaluation_rows(
+    sleep_between_gets=0.5,   # Faster processing
+    max_retries=5,
+)
+```
 
 ## Data Conversion
 
