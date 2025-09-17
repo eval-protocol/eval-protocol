@@ -1,0 +1,234 @@
+---
+title: Braintrust Adapter
+icon: "brain"
+description: "Pull evaluation data from Braintrust deployments and convert to EvaluationRow format using BTQL queries"
+---
+
+The Braintrust adapter allows you to pull data from Braintrust deployments and convert it to EvaluationRow format for use in evaluation pipelines. This enables you to evaluate production conversations and tool calling traces directly from your Braintrust deployment using powerful BTQL queries.
+
+## Installation
+
+Install Eval Protocol with Braintrust support:
+
+```bash
+pip install 'eval-protocol[braintrust]'
+```
+
+## Basic Usage
+
+```python
+from eval_protocol.adapters.braintrust import BraintrustAdapter
+
+# Initialize the adapter
+adapter = BraintrustAdapter(
+    api_key="your_api_key",        # Or set BRAINTRUST_API_KEY env var
+    project_id="your_project_id"   # Or set BRAINTRUST_PROJECT_ID env var
+)
+
+# Pull recent evaluation rows using BTQL
+btql_query = """
+select: *
+from: project_logs('your_project_id') traces
+limit: 50
+"""
+rows = adapter.get_evaluation_rows(btql_query)
+
+# Use in your evaluation tests
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.quickstart import aha_judge
+
+@evaluation_test(
+    input_rows=rows,
+    completion_params=[{"model": "gpt-4"}],
+    mode="all"
+)
+async def test_braintrust_data(rows: list[EvaluationRow]) -> list[EvaluationRow]:
+    return await aha_judge(rows, adapter=adapter)
+```
+
+## Configuration
+
+Set up your Braintrust credentials using environment variables:
+
+```bash
+export BRAINTRUST_API_KEY="your_api_key"
+export BRAINTRUST_PROJECT_ID="your_project_id"
+export BRAINTRUST_API_URL="https://api.braintrust.dev"  # Optional, uses default
+```
+
+## API Reference
+
+### BraintrustAdapter
+
+The main adapter class for pulling data from Braintrust using BTQL queries.
+
+#### `get_evaluation_rows()`
+
+Execute a BTQL query and convert results to EvaluationRow format. See more about BTQL query syntax [here](https://www.braintrust.dev/docs/reference/btql).
+
+```python
+def get_evaluation_rows(
+    self,
+    btql_query: str,
+    include_tool_calls: bool = True,
+    converter: Optional[TraceConverter] = None,
+) -> List[EvaluationRow]
+```
+
+**Parameters:**
+- `btql_query` - The BTQL query string to execute
+- `include_tool_calls` - Whether to include tool calling information
+- `converter` - Optional custom converter implementing TraceConverter protocol
+
+#### `upload_scores()`
+
+Upload evaluation scores back to Braintrust traces.
+
+```python
+def upload_scores(
+    self,
+    rows: List[EvaluationRow], 
+    model_name: str, 
+    mean_score: float
+) -> None
+```
+
+**Parameters:**
+- `rows` - List of EvaluationRow objects with session_data containing trace IDs
+- `model_name` - Name of the model (used as the score name in Braintrust)
+- `mean_score` - The calculated mean score to push to Braintrust
+
+### Factory Function
+
+For convenience, you can use the factory function:
+
+```python
+from eval_protocol.adapters.braintrust import create_braintrust_adapter
+
+adapter = create_braintrust_adapter()
+```
+
+## Source Code
+
+The complete implementation is available on GitHub: [eval_protocol/adapters/braintrust.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/adapters/braintrust.py)
+
+## Tool Calling Support
+
+The adapter automatically handles tool calling traces from Braintrust:
+
+```python
+# Include tool calls (default behavior)
+btql_query = "select: * from: project_logs('your_project_id') traces limit: 10"
+rows = adapter.get_evaluation_rows(btql_query, include_tool_calls=True)
+
+# Exclude tool calls for simpler evaluation
+rows = adapter.get_evaluation_rows(btql_query, include_tool_calls=False)
+```
+
+Tool calls are extracted from trace metadata and preserved in the Message format.
+
+## Data Conversion
+
+The adapter converts Braintrust traces to EvaluationRow format:
+
+### Supported Trace Formats
+
+<Tabs>
+  <Tab title="Input/Output Format">
+```python
+{
+    "input": {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
+        ]
+    },
+    "output": [
+        {
+            "message": {
+                "role": "assistant", 
+                "content": "Generated response"
+            }
+        }
+    ]
+}
+```
+  </Tab>
+  <Tab title="With Tools">
+```python
+{
+    "input": {"messages": [...]},
+    "output": [...],
+    "metadata": {
+        "hidden_params": {
+            "optional_params": {
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "description": "Get current weather"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
+```
+  </Tab>
+</Tabs>
+
+### Metadata Preservation
+
+The adapter stores the original Braintrust trace ID in the evaluation row metadata:
+
+```python
+for row in rows:
+    trace_id = row.input_metadata.session_data.get("braintrust_trace_id")
+    print(f"Processing trace: {trace_id}")
+```
+
+## Advanced Features
+
+### Custom Trace Conversion
+
+Implement custom conversion logic using the `TraceConverter` protocol:
+
+```python
+from eval_protocol.adapters.braintrust import TraceConverter
+from eval_protocol.models import EvaluationRow, Message
+
+class CustomConverter:
+    def __call__(self, trace: Dict[str, Any], include_tool_calls: bool) -> Optional[EvaluationRow]:
+        # Your custom conversion logic here
+        if not self.should_process_trace(trace):
+            return None
+            
+        messages = self.extract_custom_messages(trace)
+        return EvaluationRow(
+            messages=messages,
+            input_metadata=InputMetadata(
+                session_data={"braintrust_trace_id": trace.get("id")}
+            )
+        )
+    
+    def should_process_trace(self, trace):
+        # Custom filtering logic
+        return trace.get("metadata", {}).get("agent_type") == "customer_service"
+    
+    def extract_custom_messages(self, trace):
+        # Custom message extraction
+        return [Message(role="user", content="Custom extraction logic")]
+
+# Use custom converter
+converter = CustomConverter()
+btql_query = "select: * from: project_logs('your_project_id') traces limit: 100"
+rows = adapter.get_evaluation_rows(btql_query, converter=converter)
+```
+
+## Complete Example
+
+For a production-ready example that integrates Braintrust with Arena-Hard-Auto evaluation, see: [llm_judge_braintrust.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_braintrust.py)
+
+This example demonstrates BTQL query usage, multi-model comparison, and automated Arena-Hard-Auto judging to create model leaderboards without writing custom evaluation logic.

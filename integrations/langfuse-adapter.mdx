@@ -23,7 +23,13 @@ from eval_protocol.integrations.langfuse_adapter import LangfuseAdapter
 adapter = LangfuseAdapter()
 
 # Pull recent evaluation rows
-rows = adapter.get_evaluation_rows(limit=10)
+rows = adapter.get_evaluation_rows(
+    limit=500,                # Survey up to 500 traces
+    sample_size=50,           # Process 50 in detail
+    hours_back=24,            # Last 24 hours
+    sleep_between_gets=3.0,   # Rate limit friendly
+    max_retries=5,            # Robust retry logic
+)
 
 # Use in your evaluation tests
 from eval_protocol.pytest import evaluation_test
@@ -33,14 +39,11 @@ from typing import List
 @evaluation_test(
     input_rows=rows,
     completion_params=[{"model": "gpt-4"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
     mode="all"
 )
 def test_langfuse_data(rows: List[EvaluationRow]) -> List[EvaluationRow]:
-    for row in rows:
-        # Your evaluation logic here
-        score = evaluate_conversation(row.messages)
-        row.evaluation_result = EvaluateResult(score=score)
-    return rows
+    return await aha_judge(rows)
 ```
 
 ## Configuration
@@ -67,31 +70,45 @@ Pull traces from Langfuse and convert to EvaluationRow format.
 def get_evaluation_rows(
     self,
     limit: int = 100,
-    sample_size: int = 50,
+    sample_size: Optional[int] = None,
     tags: Optional[List[str]] = None,
     user_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    name: Optional[str] = None,
+    environment: Optional[str] = None,
+    version: Optional[str] = None,
+    release: Optional[str] = None,
+    fields: Optional[str] = None,
     hours_back: Optional[int] = None,
     from_timestamp: Optional[datetime] = None,
     to_timestamp: Optional[datetime] = None,
     include_tool_calls: bool = True,
     sleep_between_gets: float = 2.5,
     max_retries: int = 3,
+    span_name: Optional[str] = None,
+    converter: Optional[TraceConverter] = None,
 ) -> List[EvaluationRow]
 ```
 
 **Parameters:**
-- `limit` - Max number of trace summaries to collect via pagination (pre-sampling)
-- `sample_size` - Number of traces to fetch full details for (sampled from collected summaries)
+- `limit` - Max number of trace summaries to collect via pagination
+- `sample_size` - Optional number of traces to randomly sample (if None, process all)
 - `tags` - Filter by specific tags
 - `user_id` - Filter by user ID  
 - `session_id` - Filter by session ID
+- `name` - Filter by trace name
+- `environment` - Filter by environment (e.g., production, staging, development)
+- `version` - Filter by trace version
+- `release` - Filter by trace release
+- `fields` - Comma-separated list of fields to include (e.g., 'core,scores,metrics')
 - `hours_back` - Filter traces from this many hours ago
 - `from_timestamp` - Explicit start time (overrides hours_back)
 - `to_timestamp` - Explicit end time (overrides hours_back)
 - `include_tool_calls` - Whether to include tool calling traces
 - `sleep_between_gets` - Sleep time between individual trace.get() calls (2.5s for 30 req/min limit)
 - `max_retries` - Maximum retries for rate limit errors
+- `span_name` - If provided, extract messages from generations within this named span
+- `converter` - Optional custom converter implementing TraceConverter protocol
 
 #### `get_evaluation_rows_by_ids()`
 
@@ -102,12 +119,34 @@ def get_evaluation_rows_by_ids(
     self,
     trace_ids: List[str],
     include_tool_calls: bool = True,
+    span_name: Optional[str] = None,
+    converter: Optional[TraceConverter] = None,
 ) -> List[EvaluationRow]
 ```
 
 **Parameters:**
 - `trace_ids` - List of trace IDs to fetch
 - `include_tool_calls` - Whether to include tool calling traces
+- `span_name` - If provided, extract messages from generations within this named span
+- `converter` - Optional custom converter implementing TraceConverter protocol
+
+#### `upload_scores()`
+
+Upload evaluation scores back to Langfuse traces.
+
+```python
+def upload_scores(
+    self,
+    rows: List[EvaluationRow], 
+    model_name: str, 
+    mean_score: float
+) -> None
+```
+
+**Parameters:**
+- `rows` - List of EvaluationRow objects with session_data containing trace IDs
+- `model_name` - Name of the model (used as the score name in Langfuse)
+- `mean_score` - The calculated mean score to push to Langfuse
 
 
 ### Factory Function
@@ -302,3 +341,71 @@ for row in rows:
     trace_id = row.input_metadata.session_data.get("langfuse_trace_id")
     print(f"Processing trace: {trace_id}")
 ```
+
+### Environment and Release Filtering
+
+Filter traces by deployment environment and release versions:
+
+```python
+# Get traces from production environment only
+rows = adapter.get_evaluation_rows(
+    limit=200,
+    environment="production",
+    version="v2.1.0",
+    release="stable"
+)
+```
+
+## Advanced Features
+
+### Span-Based Message Extraction
+
+Extract messages from specific spans within traces. Perfect for multi-agent workflows where different subagents use different LLMs - specify the span name to evaluate a particular subagent's LLM performance in isolation.
+```python
+# Extract messages from a specific span (e.g., "chat_completion")
+rows = adapter.get_evaluation_rows(
+    limit=100,
+    span_name="judge_subagent",  # Only get messages from this span
+    tags=["production"]
+)
+```
+
+### Custom Trace Conversion
+
+If you have traces in a particular pattern, you can also implement custom trace to EvaluationRow logic using the `TraceConverter` protocol:
+
+```python
+def converter(trace: TraceWithFullDetails, include_tool_calls: bool, span_name: Optional[str]) -> Optional[EvaluationRow]:
+    messages = []
+    tools = []
+
+    if trace.input:
+        for d in trace.input:
+            if d["role"] == "tool":
+                tools.append(d["content"])
+            else:
+                messages.append(dict_to_message(d, include_tool_calls))
+    if trace.output:
+        messages.append(dict_to_message(trace.output, include_tool_calls))
+    
+    return EvaluationRow(
+        messages=messages,
+        tools=tools,
+        input_metadata=InputMetadata(
+            session_data={
+                "langfuse_trace_id": trace.id,  # Store the trace ID here
+            }
+        ),
+    )
+
+rows = adapter.get_evaluation_rows(
+    limit=100,
+    converter=converter
+)
+```
+
+## Complete Example
+
+For a production-ready example that integrates Langfuse with Arena-Hard-Auto evaluation, see: [llm_judge_langfuse.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_langfuse.py)
+
+This example demonstrates large-scale data collection, rate limit handling, multi-model comparison, and automated Arena-Hard-Auto judging to create model leaderboards without writing custom evaluation logic.
