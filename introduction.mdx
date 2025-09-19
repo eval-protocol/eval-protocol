@@ -5,19 +5,25 @@ sidebarTitle: Introduction
 
 **Stop guessing which AI model to use. Build a data-driven model leaderboard.**
 
-With hundreds of AI models available, choosing the right one is becoming a critical engineering decision. Different models excel at different tasks, and what works for one use case might fail for another. You need objective data to make informed decisions about cost, quality, and performance.
+With hundreds of AI models available, choosing the right one is becoming a
+critical engineering decision. Different models excel at different tasks, and
+what works for one use case might fail for another. You need objective data to
+make informed decisions about cost, quality, and performance.
 
 <Frame caption={<span>Example quality scores across 4 different models using the AIME benchmark implemented in eval-protocol.</span>}>
 ![Pivot view after running the AIME 2025 eval](/assets/pivot-view-aime25.png)
 </Frame>
 
-Eval Protocol gives you the tools to:
-- **Write custom evaluations** that measure what matters to your business
-- **Leverage auto-evaluate** to stack-rank models using LLM as a judge (only needs model traces for your use case)
-- **Build RL environments** with MCP integration and trigger user simulations for complex use cases
-- **Run consistent tests** across all your models and configurations  
-- **Resilient & fast runtime** with automatic retries for flaky LLM APIs and concurrent execution for long-running evaluations
-- **Analyze results** with built-in pivot tables and visualizations
-- **Make data-driven decisions** about which model to deploy
+Eval Protocol provides:
+- `@evaluation_test` decorator: a pytest-compatible decorator for configuring and authoring evaluations
+- Rollout processing engine that reliably handles flaky LLM APIs and parallelism for long-running evaluations
+- Built-in integrations with LLM observability vendors such as Braintrust, Langfuse, LangSmith, and Responses API
+- Native support for agent frameworks like LangGraph and Pydantic AI
+- MCP-based frameworks for building reinforcement learning (RL) environments
+- Local UI and storage for reviewing, analyzing, and inspecting evaluations and rollouts in real time
+- Built-in benchmarks, including AIME and tau-bench
+- Built-in evaluator that enables stack-ranking of models using LLMs as judges (leveraging only model traces)
+- Built-in statistical methods for aggregating eval results
+- Unified data model for processing, running, and storing evaluations
 
 Build efficient AI systems by finding the best model for your specific use case. Start building your own model leaderboard.
