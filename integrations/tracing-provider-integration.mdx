@@ -1,0 +1,264 @@
+---
+title: Tracing Provider Integration Guide
+icon: "plug-connection"
+description: "Anatomy of a tracing integration with Eval Protocol — a practical guide for providers"
+---
+
+This guide explains how to integrate your tracing platform with Eval Protocol so users can evaluate their production traces and agent runs directly from your platform.
+
+## Who this is for
+
+- Teams who operate a tracing platform and want to expose "Evaluate with Eval Protocol" to their users.
+- You provide an SDK or HTTP API to fetch runs/traces. We provide the evaluation and reporting pipeline.
+
+## Anatomy of an Integration (high level)
+
+1) Fetch a batch of runs from your project/workspace (root runs preferred).
+2) Convert each run to Eval Protocol's `EvaluationRow`:
+   - Map conversation messages (system, user, assistant, tool)
+   - Preserve assistant `tool_calls` and any `role="tool"` messages
+   - Record your run/trace IDs into `input_metadata.session_data`
+3) Return `List[EvaluationRow]` from an adapter method: `get_evaluation_rows(...)`.
+4) Users pass your adapter output into Eval Protocol tests; we handle execution, scoring, persistence, and artifacts.
+
+## Prerequisites
+
+- Python package to access your API (e.g., `your-provider-sdk`).
+- Public docs for API auth (API key, host, etc.).
+
+## Target Data Model (what we need)
+
+- `EvaluationRow.messages: List[Message]` — the end-to-end conversation.
+- `Message` fields we rely on:
+  - `role`: `system | user | assistant | tool`
+  - `content`: string (plain text)
+  - `tool_calls` (assistant only): array of tool calls with `id`, `type='function'`, `function={name, arguments}`
+  - `tool_call_id` (tool only): links a tool result back to its initiating assistant call
+- `input_metadata.session_data`: stash your identifiers (e.g., `your_provider_run_id`).
+
+## Minimum Adapter Interface (Python)
+
+Create `eval_protocol/adapters/<your_provider>.py` exposing one class:
+
+```python
+from typing import Any, Dict, List, Optional
+import logging
+
+from eval_protocol.models import EvaluationRow, InputMetadata, Message
+
+logger = logging.getLogger(__name__)
+
+
+class YourProviderAdapter:
+    def __init__(self, client=None):
+        # Initialize provider SDK client here
+        self.client = client or self._create_client()
+
+    def _create_client(self):
+        # e.g., read API key/host from env and return SDK client
+        pass
+
+    def get_evaluation_rows(
+        self,
+        *,
+        project_name: str,
+        limit: int = 50,
+        include_tool_calls: bool = True,
+    ) -> List[EvaluationRow]:
+        rows: List[EvaluationRow] = []
+
+        runs = list(self._list_root_runs(project_name=project_name, limit=limit))
+        for run in runs:
+            try:
+                inputs = getattr(run, "inputs", None)
+                outputs = getattr(run, "outputs", None)
+
+                # Prefer outputs.messages if present to avoid duplicates
+                ep_messages: List[Message] = []
+                if isinstance(outputs, dict) and isinstance(outputs.get("messages"), list):
+                    ep_messages.extend(
+                        self._extract_messages({"messages": outputs["messages"]}, include_tool_calls, is_output=True)
+                    )
+                else:
+                    ep_messages.extend(self._extract_messages(inputs, include_tool_calls, is_output=False))
+                    ep_messages.extend(self._extract_messages(outputs, include_tool_calls, is_output=True))
+
+                # Optional: de-duplicate consecutive identical user messages
+                ep_messages = self._dedupe_consecutive_users(ep_messages)
+
+                if not ep_messages:
+                    continue
+
+                rows.append(
+                    EvaluationRow(
+                        messages=ep_messages,
+                        input_metadata=InputMetadata(
+                            session_data={
+                                "your_provider_run_id": str(getattr(run, "id", "")),
+                                "your_provider_project": project_name,
+                            }
+                        ),
+                    )
+                )
+            except Exception as e:
+                logger.warning("Failed to convert run %s: %s", getattr(run, "id", ""), e)
+                continue
+        return rows
+
+    def _list_root_runs(self, *, project_name: str, limit: int):
+        # Yield provider runs with minimal fields: id, inputs, outputs
+        # Example: return self.client.list_runs(project=project_name, root=True, limit=limit)
+        yield from []
+
+    def _extract_messages(self, payload: Any, include_tool_calls: bool, *, is_output: bool) -> List[Message]:
+        messages: List[Message] = []
+
+        def to_message(d: Dict[str, Any]) -> Message:
+            role = d.get("role")
+            if role is None:
+                t = d.get("type")
+                role = "user" if t == "human" else ("assistant" if t == "ai" else ("assistant" if is_output else "user"))
+
+            content = d.get("content")
+            if isinstance(content, list):
+                text = " ".join([p.get("text", "") for p in content if isinstance(p, dict)])
+                content = text or str(content)
+
+            tool_calls = None
+            if include_tool_calls and isinstance(d.get("tool_calls"), list):
+                tool_calls = self._normalize_tool_calls(d["tool_calls"])  # to OpenAI-compatible shape (recommended)
+
+            return Message(
+                role=str(role),
+                content=str(content or ""),
+                name=d.get("name"),
+                tool_call_id=d.get("tool_call_id"),
+                tool_calls=tool_calls,
+                function_call=d.get("function_call"),
+            )
+
+        if isinstance(payload, dict):
+            if isinstance(payload.get("messages"), list):
+                for m in payload["messages"]:
+                    messages.append(to_message(m) if isinstance(m, dict) else Message(role=("assistant" if is_output else "user"), content=str(m)))
+            elif isinstance(payload.get("prompt"), str):
+                messages.append(Message(role=("user" if not is_output else "assistant"), content=payload["prompt"]))
+            elif isinstance(payload.get("user_input"), str):
+                messages.append(Message(role=("user" if not is_output else "assistant"), content=payload["user_input"]))
+            elif isinstance(payload.get("input"), str):
+                messages.append(Message(role=("user" if not is_output else "assistant"), content=payload["input"]))
+            elif isinstance(payload.get("content"), str):
+                messages.append(Message(role="assistant", content=payload["content"]))
+            elif isinstance(payload.get("result"), str):
+                messages.append(Message(role="assistant", content=payload["result"]))
+            elif isinstance(payload.get("answer"), str):
+                messages.append(Message(role="assistant", content=payload["answer"]))
+            elif isinstance(payload.get("output"), str):
+                messages.append(Message(role="assistant", content=payload["output"]))
+            else:
+                messages.append(Message(role=("assistant" if is_output else "user"), content=str(payload)))
+        elif isinstance(payload, list):
+            for m in payload:
+                messages.append(to_message(m) if isinstance(m, dict) else Message(role=("assistant" if is_output else "user"), content=str(m)))
+        elif isinstance(payload, str):
+            messages.append(Message(role=("assistant" if is_output else "user"), content=payload))
+
+        return messages
+
+    def _normalize_tool_calls(self, tool_calls: List[Dict[str, Any]]):
+        # Return OpenAI-compatible tool_calls entries (dicts or typed objects):
+        # [{ id, type: 'function', function: { name, arguments } }]
+        return tool_calls
+
+    def _dedupe_consecutive_users(self, messages: List[Message]) -> List[Message]:
+        def canon(text: str) -> str:
+            return " ".join(str(text or "").strip().lower().split())
+
+        out: List[Message] = []
+        for m in messages:
+            if out and m.role == "user" and out[-1].role == "user" and canon(m.content) == canon(out[-1].content):
+                continue
+            out.append(m)
+        return out
+```
+
+## Data Mapping Cookbook
+
+- Inputs (user-side):
+  - Prefer `inputs.messages` if you already collect multi-turn input
+  - Else map `inputs.prompt | user_input | input` to a single `user` message
+  - Strings/lists are accepted; strings become a single `user`/`assistant` message based on direction
+
+- Outputs (assistant/tool-side):
+  - Prefer `outputs.messages` when present; it should include the final assistant and any tool results
+  - Else map `outputs.content | result | answer | output` to a single `assistant` message
+  - Preserve tool responses as `role="tool"` and link via `tool_call_id`
+
+- Tool calls (assistant):
+  - Provide `tool_calls = [{ id, type:'function', function:{ name, arguments } }]`
+  - For parallel calls, include multiple entries in the same assistant message
+
+- De-duplication:
+  - Only remove consecutive identical `user` messages (trimmed and case-normalized)
+  - Do not remove different `user` messages or a `system` message in front
+
+## Unit Tests (recommended)
+
+Create tests similar to:
+
+```python
+def test_outputs_messages_preferred_and_dedup_user():
+    # outputs.messages with duplicate user turns
+    runs = [
+        SimpleNamespace(
+            id="r1",
+            inputs={"messages": [{"role": "user", "content": "hi"}]},
+            outputs={"messages": [{"role": "user", "content": "hi"}, {"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]},
+        )
+    ]
+    adapter = YourProviderAdapter(client=FakeClient(runs))
+    rows = adapter.get_evaluation_rows(project_name="p", limit=10)
+    msgs = rows[0].messages
+    assert [m.role for m in msgs] == ["user", "assistant"]
+```
+
+Also test:
+
+- Inputs variants (`prompt`, `user_input`, `input`, raw string/list).
+- Outputs variants (`content`, `result`, `answer`, `output`, raw string/list).
+- `role="tool"` messages preserved.
+- Assistant `tool_calls` arrays (including parallel calls) normalized/preserved.
+- System-first and legitimate multiple user messages not over-deduped.
+
+## Example: Running Evaluations
+
+```python
+from eval_protocol.adapters.your_provider import YourProviderAdapter
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.models import EvaluationRow, EvaluateResult
+
+adapter = YourProviderAdapter()
+rows = adapter.get_evaluation_rows(project_name="my-project", limit=20)
+
+@evaluation_test(input_rows=[rows], completion_params=[{"model": "gpt-4o"}], mode="all")
+def test_provider_data(rows: list[EvaluationRow]) -> list[EvaluationRow]:
+    for row in rows:
+        row.evaluation_result = EvaluateResult(score=1.0 if row.last_assistant_message() else 0.0)
+    return rows
+```
+
+## Acceptance Checklist for Providers
+
+- [ ] SDK method to list root runs/traces with `id`, `inputs`, `outputs` (+ filters/pagination)
+- [ ] Adapter method `get_evaluation_rows(project_name, limit, include_tool_calls)`
+- [ ] Prefer `outputs.messages` if present; else merge inputs/outputs
+- [ ] Preserve `role="tool"` responses and normalize assistant `tool_calls`
+- [ ] De-duplicate only consecutive identical `user` messages
+- [ ] Stash provider IDs in `input_metadata.session_data`
+- [ ] Unit tests for inputs/outputs shapes, system-first, parallel tool calls
+
+## Contact
+
+When your adapter is ready, open a PR adding it under `eval_protocol/adapters/` with tests under `python-sdk/tests/adapters/`, and we’ll review promptly.
+
+
