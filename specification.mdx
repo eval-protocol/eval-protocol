@@ -192,10 +192,14 @@ class EvalMetadata(BaseModel):
 ### ExecutionMetadata
 ```python
 class ExecutionMetadata(BaseModel):
-    invocation_id: Optional[str]  
-    experiment_id: Optional[str]  
-    rollout_id: Optional[str]     
+    invocation_id: Optional[str]
+    experiment_id: Optional[str]
+    rollout_id: Optional[str]
     run_id: Optional[str]
+    usage: Optional[CompletionUsage]
+    cost_metrics: Optional[CostMetrics]
+    duration_seconds: Optional[float]
+    experiment_duration_seconds: Optional[float]
 ```
 
 ## EvaluateResult
@@ -339,12 +343,15 @@ line is a JSON-encoded `EvaluationRow`.
     "invocation_id": "ivk_abcd",
     "experiment_id": "exp_efgh",
     "rollout_id": "rll_ijkl",
-    "run_id": null
-  },
-  "usage": {
-    "prompt_tokens": 10,
-    "completion_tokens": 1,
-    "total_tokens": 11
+    "run_id": null,
+    "usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 1,
+      "total_tokens": 11
+    },
+    "cost_metrics": { "total_cost": 0.0002 },
+    "duration_seconds": 0.012,
+    "experiment_duration_seconds": 0.045
   },
   "created_at": "2025-01-01T12:00:00",
   "eval_metadata": {
