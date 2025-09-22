@@ -17,33 +17,57 @@ pip install 'eval-protocol[langfuse]'
 ## Basic Usage
 
 ```python
-from eval_protocol.integrations.langfuse_adapter import LangfuseAdapter
+"""
+Example for using Langfuse with the aha judge.
+"""
 
-# Initialize the adapter (uses Langfuse client configuration)
-adapter = LangfuseAdapter()
+from datetime import datetime
+import os
+import pytest
 
-# Pull recent evaluation rows
-rows = adapter.get_evaluation_rows(
-    limit=500,                # Survey up to 500 traces
-    sample_size=50,           # Process 50 in detail
-    hours_back=24,            # Last 24 hours
-    sleep_between_gets=3.0,   # Rate limit friendly
-    max_retries=5,            # Robust retry logic
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    multi_turn_assistant_to_ground_truth,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+    create_langfuse_adapter,
 )
 
-# Use in your evaluation tests
-from eval_protocol.pytest import evaluation_test
-from eval_protocol.models import EvaluationRow, EvaluateResult
-from typing import List
+adapter = create_langfuse_adapter()
+input_rows = adapter.get_evaluation_rows(
+    to_timestamp=datetime(2025, 9, 12, 0, 11, 18),
+    limit=711,
+    sample_size=50,
+    sleep_between_gets=3.0,
+    max_retries=5,
+)
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skip in CI")
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "gpt-4.1"},
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "medium"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        },
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
+        },
+    ],
+)
 @evaluation_test(
-    input_rows=rows,
-    completion_params=[{"model": "gpt-4"}],
+    input_rows=[input_rows],
     rollout_processor=SingleTurnRolloutProcessor(),
-    mode="all"
+    preprocess_fn=multi_turn_assistant_to_ground_truth,
+    max_concurrent_evaluations=2,
 )
-def test_langfuse_data(rows: List[EvaluationRow]) -> List[EvaluationRow]:
-    return await aha_judge(rows)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
 ```
 
 ## Configuration
@@ -109,6 +133,9 @@ def get_evaluation_rows(
 - `max_retries` - Maximum retries for rate limit errors
 - `span_name` - If provided, extract messages from generations within this named span
 - `converter` - Optional custom converter implementing TraceConverter protocol
+- `metadata` - Filter by exact metadata match (dict)
+- `requester_metadata` - Filter by exact requester metadata match (dict)
+- `requester_metadata_contains` - Filter by substring in requester metadata values
 
 #### `get_evaluation_rows_by_ids()`
 
@@ -200,6 +227,22 @@ rows = adapter.get_evaluation_rows(
     sample_size=30,
     from_timestamp=datetime(2024, 1, 1),
     to_timestamp=datetime(2024, 1, 31)
+)
+```
+
+### Filter by Metadata
+```python
+# Filter by exact metadata match
+rows = adapter.get_evaluation_rows(
+    limit=100,
+    metadata={"model": "gpt-4", "version": "v1.0"},
+    requester_metadata={"user_type": "premium"}
+)
+
+# Filter by substring in requester metadata values
+rows = adapter.get_evaluation_rows(
+    limit=100,
+    requester_metadata_contains="experiment_123"
 )
 ```
 
