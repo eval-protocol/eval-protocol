@@ -57,34 +57,40 @@ export LANGSMITH_API_KEY="your_langsmith_key"
 
 ## Run Your First Evaluation
 
-The core LLM judge function is available as a simple import from [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py). Here's a sample implementation for Langfuse:
+The core LLM judge function is available as a simple import from [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py). Here's a minimal sample for Langfuse (pointwise):
 
 ```python
+from datetime import datetime
+import pytest
+
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+    create_langfuse_adapter,
+)
+
 adapter = create_langfuse_adapter()
 
 @pytest.mark.asyncio
 @evaluation_test(
     input_rows=[
         adapter.get_evaluation_rows(
-            to_timestamp=datetime(2025, 9, 12, 0, 11, 18),
-            limit=100,
+            to_timestamp=datetime.utcnow(),
+            limit=20,
+            sample_size=5,
         )
     ],
     completion_params=[
         {"model": "gpt-4.1"},
-        {
-            "max_tokens": 131000,
-            "extra_body": {"reasoning_effort": "medium"},
-            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
-        }
+        {"model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b"},
     ],
     rollout_processor=SingleTurnRolloutProcessor(),
-    preprocess_fn=split_multi_turn_rows,
-    max_concurrent_rollouts=64,
-    mode="all",
+    aggregation_method="bootstrap",
 )
-async def test_llm_judge(rows: list[EvaluationRow]) -> list[EvaluationRow]:
-    return await aha_judge(rows)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
 ```
 
 We provide example implementations for you to run immediately. All you need to change is the parameters in `adapter.get_evaluation_rows`. See more in the Integrations section for more information on your choice of tracing.

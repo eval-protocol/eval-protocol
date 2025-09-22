@@ -17,33 +17,36 @@ pip install 'eval-protocol[langfuse]'
 ## Basic Usage
 
 ```python
-from eval_protocol.integrations.langfuse_adapter import LangfuseAdapter
+from datetime import datetime
+import pytest
 
-# Initialize the adapter (uses Langfuse client configuration)
-adapter = LangfuseAdapter()
-
-# Pull recent evaluation rows
-rows = adapter.get_evaluation_rows(
-    limit=500,                # Survey up to 500 traces
-    sample_size=50,           # Process 50 in detail
-    hours_back=24,            # Last 24 hours
-    sleep_between_gets=3.0,   # Rate limit friendly
-    max_retries=5,            # Robust retry logic
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+    create_langfuse_adapter,
 )
 
-# Use in your evaluation tests
-from eval_protocol.pytest import evaluation_test
-from eval_protocol.models import EvaluationRow, EvaluateResult
-from typing import List
+adapter = create_langfuse_adapter()
 
+@pytest.mark.asyncio
 @evaluation_test(
-    input_rows=rows,
-    completion_params=[{"model": "gpt-4"}],
+    input_rows=[
+        adapter.get_evaluation_rows(
+            to_timestamp=datetime.utcnow(),
+            limit=50,
+            sample_size=10,
+            sleep_between_gets=1.0,
+            max_retries=3,
+        )
+    ],
+    completion_params=[{"model": "gpt-4.1"}],
     rollout_processor=SingleTurnRolloutProcessor(),
-    mode="all"
+    aggregation_method="bootstrap",
 )
-def test_langfuse_data(rows: List[EvaluationRow]) -> List[EvaluationRow]:
-    return await aha_judge(rows)
+async def test_langfuse_data(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
 ```
 
 ## Configuration
