@@ -159,6 +159,33 @@ Arena-Hard-Auto is a pairwise comparison approach where:
 
 For advanced trace filtering options (by tags, users, time ranges, metadata, etc.), check out the [Integrations section](/integrations/langfuse-adapter#filtering-examples).
 
+### Try Different Models
+
+```python
+# Modify the completion_params in your @evaluation_test:
+completion_params=[
+    {"model": "gpt-5"},
+    {"model": "anthropic/claude-4"},
+    {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
+],
+```
+
+<Note>
+Note that for `completion_params`, these are passed into LiteLLM, so some models will need prefixes based on the provider.
+</Note>
+
+### Change the Judge
+
+```python
+# Available judges in JUDGE_CONFIGS:
+judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model (default)
+judge_name = "gemini-2.5-pro"         # Google Gemini Pro
+judge_name = "gpt-4.1"                # OpenAI GPT-4.1
+judge_name = "gemini-2.5-flash"       # Google Gemini Flash (faster)
+```
+
+Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
+
 ### Adjust Concurrency for Speed
 
 You can make evaluations faster by increasing concurrency, but be careful of rate limits:
@@ -203,33 +230,6 @@ from eval_protocol import multi_turn_assistant_to_ground_truth, assistant_to_gro
 - Good for evaluating conversation conclusions
 
 You can also write custom preprocessing functions to fit your specific use case.
-
-### Try Different Models
-
-```python
-# Modify the completion_params in your @evaluation_test:
-completion_params=[
-    {"model": "gpt-5"},
-    {"model": "anthropic/claude-4"},
-    {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
-],
-```
-
-<Note>
-Note that for `completion_params`, these are passed into LiteLLM, so some models will need prefixes based on the provider.
-</Note>
-
-### Change the Judge
-
-```python
-# Available judges in JUDGE_CONFIGS:
-judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model (default)
-judge_name = "gemini-2.5-pro"         # Google Gemini Pro
-judge_name = "gpt-4.1"                # OpenAI GPT-4.1
-judge_name = "gemini-2.5-flash"       # Google Gemini Flash (faster)
-```
-
-Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
 
 ## Real-World Example: Validating Against Tau-Bench
 
