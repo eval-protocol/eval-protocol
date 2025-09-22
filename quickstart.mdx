@@ -142,32 +142,7 @@ At the bottom of your pytest, you'll see a link. Clicking on it, you'll be taken
 ![Quickstart Leaderboard](/assets/quickstart-leaderboard.png)
 </Frame>
 
-Check out what else you can do in the [pivot view](/tutorial/ui/pivot).
-
-## Real-World Example: Validating Against Tau-Bench
-
-We tested this methodology on airline customer service traces using `kimi-k2-instruct-0905` as the judge. Here's how our Arena-Hard-Auto evaluation compared to actual Tau-Bench airline scores:
-
-### Actual Tau-Bench Airline Scores
-```
-kimi-k2: 56.5
-gpt-4.1: 49.4
-gpt-oss-120b medium: 48.6
-gpt-oss-20b low: 32.0
-```
-
-Note that the percentages don't mean the same thing as the actual scores. Our percentages represent **win rates in pairwise comparisons** against the original model (kimi-k2), while Tau-Bench scores are absolute performance metrics.
-
-What we're focused on is the **trendline and relative differences**. Our setup correctly identifies:
-- ✅ **kimi-k2 as the best model** (baseline at 50%)
-- ✅ **gpt-oss-20b as the worst**
-- ✅ **gpt-oss-120b and gpt-4.1 as similar quality**
-
-**This ranking roughly matches our real Tau-Bench airline scores!** Pretty amazing we're able to achieve this validation without actually running against the Tau-Bench benchmark - just using production conversation traces and an LLM judge.
-
-<Frame caption="Trendlines between our methodology and the original Tau-Bench airline scores.">
-![Quickstart Leaderboard](/assets/aha_validation.png)
-</Frame>
+Check out what else you can do in the [pivot view](/tutorial/ui/pivot#default-configurations), including analyzing cost and time metrics.
 
 ## How It Works: Arena-Hard-Auto Methodology
 
@@ -182,17 +157,52 @@ Arena-Hard-Auto is a pairwise comparison approach where:
 
 ### Filter Your Traces
 
+For advanced trace filtering options (by tags, users, time ranges, metadata, etc.), check out the [Integrations section](/integrations/langfuse-adapter#filtering-examples).
+
+### Adjust Concurrency for Speed
+
+You can make evaluations faster by increasing concurrency, but be careful of rate limits:
+
 ```python
-# Modify the fetch_langfuse_traces_as_evaluation_rows call:
-input_rows=[fetch_langfuse_traces_as_evaluation_rows(
-    limit=100,
-    tags=["customer-service", "production"],
-    user_id="specific_user",
-    session_id="specific_session", 
-    hours_back=168,  # Last week
-    include_tool_calls=True,
-)],
+@evaluation_test(
+    input_rows=[input_rows],
+    completion_params=[{"model": "gpt-4.1"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    max_concurrent_rollouts=16,      # Increase for faster candidate model responses (from completion_params)
+    max_concurrent_evaluations=4,    # Increase for faster judging (e.g. gemini-2.5-pro or kimi-k2-instruct-0905)
+)
 ```
+
+<Warning>
+Setting concurrency too high may result in 429 rate limit errors. If you encounter rate limiting, reduce these values. For more troubleshooting, see [Common Errors](/common-errors).
+</Warning>
+
+### Extract More Test Cases with Preprocessing
+
+Get more evaluation data from multi-turn conversations using built-in preprocessing functions:
+
+```python
+from eval_protocol import multi_turn_assistant_to_ground_truth, assistant_to_ground_truth
+
+@evaluation_test(
+    input_rows=[input_rows],
+    completion_params=[{"model": "gpt-4.1"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=multi_turn_assistant_to_ground_truth,  # Recommended: creates one test per assistant turn
+    # preprocess_fn=assistant_to_ground_truth,          # Alternative: only uses the last assistant turn
+)
+```
+
+**`multi_turn_assistant_to_ground_truth`** (recommended):
+- Splits each multi-turn trace into multiple evaluation rows
+- Each assistant response becomes ground truth for comparison
+- Gets more test cases from fewer traces
+
+**`assistant_to_ground_truth`**:
+- Uses only the final assistant response as ground truth
+- Good for evaluating conversation conclusions
+
+You can also write custom preprocessing functions to fit your specific use case.
 
 ### Try Different Models
 
@@ -220,6 +230,10 @@ judge_name = "gemini-2.5-flash"       # Google Gemini Flash (faster)
 ```
 
 Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
+
+## Real-World Example: Validating Against Tau-Bench
+
+To understand this method more in depth and our own validation of it, check out our blog post here! TODO: link blog.
 
 ## You've just built your first model leaderboard!
 
