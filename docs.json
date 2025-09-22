@@ -35,6 +35,7 @@
       {
         "group": "Reference",
         "pages": [
+          "common-errors",
           "reference/evaluation-test",
           "reference/rollout-processors",
           "mcp-extensions",

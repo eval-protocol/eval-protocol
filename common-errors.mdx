@@ -1,0 +1,112 @@
+---
+title: Common Errors
+description: "Quick fixes for the most frequent evaluation issues"
+icon: "triangle-exclamation"
+---
+
+## Rate Limit Errors (429)
+
+**Error**: `Error code: 429 - too_many_requests`
+
+**Cause**: Hitting API rate limits during rollout generation or LLM judging.
+
+**Solution**: Reduce concurrency in your `@evaluation_test`:
+
+```python
+@evaluation_test(
+    max_concurrent_rollouts=8,      # If error during model responses
+    max_concurrent_evaluations=2,   # If error during judging ("impartial judge" prompts)
+    # ... other parameters
+)
+```
+
+## Database Errors
+
+**Error**: `sqlite3.OperationalError: disk I/O error` or `peewee.OperationalError`
+
+**Solution**: Delete the corrupted database file:
+
+```bash
+rm .eval_protocol/logs.db
+```
+
+The database will be recreated automatically on next run.
+
+## Model Not Found
+
+**Error**: `ValueError: Model 'your-model' not found`
+
+**Solution**: Use correct LiteLLM format:
+
+```python
+completion_params=[
+    {"model": "openai/gpt-4o"},                    # OpenAI
+    {"model": "anthropic/claude-3-sonnet"},        # Anthropic  
+    {"model": "fireworks_ai/accounts/fireworks/models/llama-v3p1-8b-instruct"}, # Fireworks
+]
+```
+
+## Import Errors
+
+**Error**: `ImportError: Langfuse not installed`
+
+**Solution**: Install platform dependencies:
+
+```bash
+pip install 'eval-protocol[langfuse]'    # For Langfuse
+pip install 'eval-protocol[braintrust]'  # For Braintrust
+pip install 'eval-protocol[langsmith]'   # For LangSmith
+```
+
+## Authentication Errors
+
+**Error**: `AuthenticationError: Invalid API key`
+
+**Solution**: Set environment variables:
+
+```bash
+export OPENAI_API_KEY="your_key"
+export FIREWORKS_API_KEY="your_key"
+export LANGFUSE_PUBLIC_KEY="your_key"
+export LANGFUSE_SECRET_KEY="your_secret"
+```
+
+## No Data Found
+
+**Error**: `❌ No evaluation rows provided`
+
+**Solution**: Double check your adapter is returning the rows. You may want to debug by adding print statements around the number of rows being returned, as well as the content of the rows.
+
+```python
+# Test with minimal filters
+rows = adapter.get_evaluation_rows(limit=10, hours_back=168)
+print(f"Found {len(rows)} rows")
+for row in rows:
+    print(f"Messages: {row.messages}")
+```
+
+## Fireworks Persistence Warning
+
+**Warning**: `❌ Experiment past-story-29: No Fireworks account ID found`
+
+**Cause**: Missing `FIREWORKS_ACCOUNT_ID` environment variable.
+
+**Solution**: 
+- **To persist results to Fireworks** (easier sharing): `export FIREWORKS_ACCOUNT_ID="your_account_id"`
+- **To use locally only**: Ignore this warning - everything still works, results just stay local
+
+## UI Not Updating
+
+**Problem**: Local UI at http://localhost:8000 not showing new results
+
+**Solution**: Restart the EP logs server:
+
+```bash
+# Stop current ep logs (Ctrl+C)
+# Then restart:
+ep logs
+```
+
+## Getting Help
+
+For other issues, join the [Discord](https://discord.com/channels/1137072072808472616/1400975572405850155) for support with a Fireworks engineer.

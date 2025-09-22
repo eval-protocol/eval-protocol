@@ -44,6 +44,11 @@ The rubric implemented in the body of an `@evaluation_test`-decorated function. 
 
 ## Foundational Types
 
+### JSONType
+```python
+JSONType = Union[Dict[str, Any], List[Any], str, int, float, bool, None]
+```
+
 ### Message
 Represents a chat message with trajectory evaluation support. `content` supports either a string or OpenAI content parts.
 
@@ -55,6 +60,7 @@ class ChatCompletionContentPartTextParam(BaseModel):
 class Message(BaseModel):
     role: str  # assistant, user, system, tool
     content: Optional[Union[str, List[ChatCompletionContentPartTextParam]]] = ""
+    reasoning_content: Optional[str] = None
     name: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
@@ -154,6 +160,7 @@ class MetricResult(BaseModel):
     is_score_valid: bool = True
     score: float  # Between 0.0 and 1.0
     reason: str  # Explanation for the score
+    data: Dict[str, Any] = Field(default_factory=dict)  # Optional extra metric data
 ```
 
 ### StepOutput
@@ -189,13 +196,25 @@ class EvalMetadata(BaseModel):
     passed: Optional[bool]
 ```
 
+### CostMetrics
+```python
+class CostMetrics(BaseModel):
+    input_cost: Optional[float]
+    output_cost: Optional[float]
+    total_cost_dollar: Optional[float]
+```
+
 ### ExecutionMetadata
 ```python
 class ExecutionMetadata(BaseModel):
-    invocation_id: Optional[str]  
-    experiment_id: Optional[str]  
-    rollout_id: Optional[str]     
+    invocation_id: Optional[str]
+    experiment_id: Optional[str]
+    rollout_id: Optional[str]
     run_id: Optional[str]
+    usage: Optional[CompletionUsage]
+    cost_metrics: Optional[CostMetrics]
+    duration_seconds: Optional[float]
+    experiment_duration_seconds: Optional[float]
 ```
 
 ## EvaluateResult
@@ -254,16 +273,13 @@ class EvaluationRow(BaseModel):
     rollout_status: Status = Field(default_factory=Status.rollout_running)
 
     # Optional ground truth reference
-    ground_truth: Optional[str] = None
+    ground_truth: Optional[JSONType] = None
 
     # Unified evaluation result
     evaluation_result: Optional[EvaluateResult] = None
 
     # Correlation identifiers grouped under execution metadata
     execution_metadata: ExecutionMetadata = Field(default_factory=ExecutionMetadata)
-
-    # LLM usage statistics
-    usage: Optional[CompletionUsage] = None
 
     # Timestamps and evaluation metadata
     created_at: datetime = Field(default_factory=datetime.now)
@@ -339,12 +355,15 @@ line is a JSON-encoded `EvaluationRow`.
     "invocation_id": "ivk_abcd",
     "experiment_id": "exp_efgh",
     "rollout_id": "rll_ijkl",
-    "run_id": null
-  },
-  "usage": {
-    "prompt_tokens": 10,
-    "completion_tokens": 1,
-    "total_tokens": 11
+    "run_id": null,
+    "usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 1,
+      "total_tokens": 11
+    },
+    "cost_metrics": { "total_cost_dollar": 0.0002 },
+    "duration_seconds": 0.012,
+    "experiment_duration_seconds": 0.045
   },
   "created_at": "2025-01-01T12:00:00",
   "eval_metadata": {
