@@ -57,7 +57,7 @@ export LANGSMITH_API_KEY="your_langsmith_key"
 
 ## Run Your First Evaluation
 
-The core LLM judge function is available as a simple import from [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py). Here's a minimal sample for Langfuse (pointwise):
+The core LLM judge function is available as a simple import from [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py). Here's a minimal sample for Langfuse:
 
 ```python
 from datetime import datetime
@@ -72,22 +72,24 @@ from eval_protocol import (
 )
 
 adapter = create_langfuse_adapter()
+input_rows=[
+    adapter.get_evaluation_rows(
+        to_timestamp=datetime.utcnow(),
+        limit=20,
+        sample_size=5,
+    )
+]
 
-@pytest.mark.asyncio
-@evaluation_test(
-    input_rows=[
-        adapter.get_evaluation_rows(
-            to_timestamp=datetime.utcnow(),
-            limit=20,
-            sample_size=5,
-        )
-    ],
-    completion_params=[
+@pytest.mark.parametrize(
+    "completion_params",
+    [
         {"model": "gpt-4.1"},
         {"model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b"},
     ],
+)
+@evaluation_test(
+    input_rows=[input_rows],
     rollout_processor=SingleTurnRolloutProcessor(),
-    aggregation_method="bootstrap",
 )
 async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
     return await aha_judge(row)
@@ -122,33 +124,29 @@ pytest llm_judge_langsmith.py -v -s
   </Tab>
 </Tabs>
 
-## Understanding the Results
+## Viewing the Results
 
-You'll see output like this:
+At the bottom of your pytest, you'll see a link. Clicking on it, you'll be taken to a local leaderboard:
 
 ```
-##### LLM Judge Results (90th percentile CI) #####
-gpt-oss-120b: 67.3% (CI: 61.2% - 73.4%)
-original: 50.0% (CI: 50.0% - 50.0%)
+================================================================================
+📊 LOCAL UI EVALUATION RESULTS
+================================================================================
+📊 Invocation messy-party-41:
+  📊 Aggregate scores: http://localhost:8000/pivot?filterConfig=%5B%7B%22logic%22%3A%20%22AND%22%2C%20%22filters%22%3A%20%5B%7B%22field%22%3A%20%22%24.execution_metadata.invocation_id%22%2C%20%22operator%22%3A%20%22%3D%3D%22%2C%20%22value%22%3A%20%22messy-party-41%22%2C%20%22type%22%3A%20%22text%22%7D%5D%7D%5D
+  📋 Trajectories: http://localhost:8000/table?filterConfig=%5B%7B%22logic%22%3A%20%22AND%22%2C%20%22filters%22%3A%20%5B%7B%22field%22%3A%20%22%24.execution_metadata.invocation_id%22%2C%20%22operator%22%3A%20%22%3D%3D%22%2C%20%22value%22%3A%20%22messy-party-41%22%2C%20%22type%22%3A%20%22text%22%7D%5D%7D%5D
+================================================================================
 ```
 
-**What this means:**
-- **67.3%**: gpt-oss-120b won 67.3% of pairwise comparisons against the original
-- **CI: 61.2% - 73.4%**: 90% confidence interval for the win rate
-- **original: 50.0%**: Baseline (your original model performance from the traces)
+<Frame caption="Local leaderboard showing model comparison results">
+![Quickstart Leaderboard](/assets/quickstart-leaderboard.png)
+</Frame>
+
+Check out what else you can do in the [pivot view](/tutorial/ui/pivot).
 
 ## Real-World Example: Validating Against Tau-Bench
 
 We tested this methodology on airline customer service traces using `kimi-k2-instruct-0905` as the judge. Here's how our Arena-Hard-Auto evaluation compared to actual Tau-Bench airline scores:
-
-### Our Arena-Hard-Auto Results
-```
-##### LLM Judge Results (90th percentile CI) #####
-kimi-k2 (original): 50.0%
-gpt-oss-120b: 44.6%
-gpt-4.1: 40.1%
-gpt-oss-20b: 29.5%
-```
 
 ### Actual Tau-Bench Airline Scores
 ```
@@ -162,10 +160,14 @@ Note that the percentages don't mean the same thing as the actual scores. Our pe
 
 What we're focused on is the **trendline and relative differences**. Our setup correctly identifies:
 - ✅ **kimi-k2 as the best model** (baseline at 50%)
-- ✅ **gpt-oss-20b as the worst** (29.5% vs 32.0 actual)
-- ✅ **gpt-oss-120b and gpt-4.1 as similar quality** (44.6% vs 40.1%)
+- ✅ **gpt-oss-20b as the worst**
+- ✅ **gpt-oss-120b and gpt-4.1 as similar quality**
 
 **This ranking roughly matches our real Tau-Bench airline scores!** Pretty amazing we're able to achieve this validation without actually running against the Tau-Bench benchmark - just using production conversation traces and an LLM judge.
+
+<Frame caption="Trendlines between our methodology and the original Tau-Bench airline scores.">
+![Quickstart Leaderboard](/assets/aha_validation.png)
+</Frame>
 
 ## How It Works: Arena-Hard-Auto Methodology
 
@@ -211,28 +213,13 @@ Note that for `completion_params`, these are passed into LiteLLM, so some models
 
 ```python
 # Available judges in JUDGE_CONFIGS:
-judge_name = "gemini-2.5-pro"      # Google Gemini Pro (default)
-judge_name = "gpt-4.1"             # OpenAI GPT-4.1
-judge_name = "gemini-2.5-flash"    # Google Gemini Flash (faster)
-judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model
+judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model (default)
+judge_name = "gemini-2.5-pro"         # Google Gemini Pro
+judge_name = "gpt-4.1"                # OpenAI GPT-4.1
+judge_name = "gemini-2.5-flash"       # Google Gemini Flash (faster)
 ```
 
 Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
-
-## Analyze Results with the EP UI
-
-EP provides a powerful web-based UI for monitoring and analyzing your evaluation results in real-time:
-
-```bash
-# Start the UI server
-ep logs
-```
-
-Then open [http://localhost:8000](http://localhost:8000) to see your evaluation results.
-
-<Frame caption="EP Log Viewer: Monitor your evaluation rollouts and analyze results with pivot tables">
-  <img src="/assets/ui.png" alt="EP UI showing evaluation results" />
-</Frame>
 
 ## You've just built your first model leaderboard!
 

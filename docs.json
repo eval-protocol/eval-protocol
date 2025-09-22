@@ -24,6 +24,14 @@
         "pages": ["authoring-with-ai-agents"]
       },
       {
+        "group": "UI",
+        "pages": [
+          "tutorial/ui/getting-started",
+          "tutorial/ui/table",
+          "tutorial/ui/pivot"
+        ]
+      },
+      {
         "group": "Integrations",
         "pages": [
           "integrations/braintrust-adapter",
@@ -35,19 +43,10 @@
       {
         "group": "Reference",
         "pages": [
-          "common-errors",
           "reference/evaluation-test",
           "reference/rollout-processors",
           "mcp-extensions",
           "simulated-users",
-          {
-            "group": "Reviewing Evals (UI)",
-            "pages": [
-              "tutorial/ui/getting-started",
-              "tutorial/ui/table",
-              "tutorial/ui/pivot"
-            ]
-          },
           "specification"
         ]
       }
