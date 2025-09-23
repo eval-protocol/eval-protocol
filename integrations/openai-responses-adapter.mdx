@@ -42,7 +42,6 @@ adapter = OpenAIResponsesAdapter(
 response_ids = ["resp_123", "resp_456", "resp_789"]
 input_rows = adapter.get_evaluation_rows(response_ids=response_ids)
 
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skip in CI")
 @pytest.mark.parametrize(
     "completion_params",
     [

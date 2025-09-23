@@ -40,7 +40,6 @@ input_rows = adapter.get_evaluation_rows(
     limit=50
 )
 
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skip in CI")
 @pytest.mark.parametrize(
     "completion_params",
     [
