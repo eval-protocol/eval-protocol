@@ -36,6 +36,8 @@
         "pages": [
           "integrations/braintrust-adapter",
           "integrations/langfuse-adapter",
+          "integrations/langsmith-adapter",
+          "integrations/openai-responses-adapter",
           "integrations/langgraph",
           "integrations/pydantic-ai"
         ]
