@@ -1,0 +1,297 @@
+---
+title: OpenAI Responses Adapter
+icon: "circle"
+description: "Pull evaluation data from OpenAI Responses API and convert to EvaluationRow format for evaluation pipelines"
+---
+
+The OpenAI Responses adapter allows you to pull data from OpenAI's Responses API and convert it to EvaluationRow format for use in evaluation pipelines. This enables you to evaluate conversations and tool calling traces directly from your OpenAI Responses data.
+
+## Installation
+
+To use the OpenAI Responses adapter, you need to install the OpenAI dependencies:
+
+```bash
+pip install 'eval-protocol[openai]'
+```
+
+## Basic Usage
+
+```python
+"""
+Example for using OpenAI Responses API with the aha judge.
+"""
+
+import os
+import pytest
+
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    multi_turn_assistant_to_ground_truth,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+)
+from eval_protocol.adapters.openai_responses import OpenAIResponsesAdapter
+
+# Initialize the adapter
+adapter = OpenAIResponsesAdapter(
+    api_key="your_openai_api_key"  # Or set OPENAI_API_KEY env var
+)
+
+# Pull specific responses by ID
+response_ids = ["resp_123", "resp_456", "resp_789"]
+input_rows = adapter.get_evaluation_rows(response_ids=response_ids)
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "gpt-4"},
+        {"model": "gpt-4-turbo"},
+        {"model": "claude-3-sonnet-20240229"},
+    ],
+)
+@evaluation_test(
+    input_rows=[input_rows],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=multi_turn_assistant_to_ground_truth,
+    max_concurrent_evaluations=2,
+)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
+```
+
+## Configuration
+
+The adapter uses the OpenAI client configuration. Set up your OpenAI credentials using environment variables:
+
+```bash
+export OPENAI_API_KEY="your_api_key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # Optional, defaults to OpenAI API
+```
+
+## API Reference
+
+### OpenAIResponsesAdapter
+
+The main adapter class for pulling data from OpenAI Responses API.
+
+#### `get_evaluation_rows()`
+
+Pull responses from OpenAI Responses API and convert to EvaluationRow format.
+
+```python
+def get_evaluation_rows(
+    self,
+    response_ids: List[str],
+) -> List[EvaluationRow]
+```
+
+**Parameters:**
+- `response_ids` - List of response IDs to fetch from the OpenAI Responses API
+
+**Returns:**
+- `List[EvaluationRow]` - Converted evaluation rows with messages, tools, and metadata
+
+## Source Code
+
+The complete implementation is available on GitHub: [eval_protocol/adapters/openai_responses.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/adapters/openai_responses.py)
+
+## Tool Calling Support
+
+The adapter automatically handles tool calling from OpenAI Responses:
+
+```python
+# Tool calls are automatically included
+rows = adapter.get_evaluation_rows(response_ids=["resp_with_tools"])
+
+for row in rows:
+    # Check if tools were used
+    if row.tools:
+        print(f"Response used {len(row.tools)} tools")
+        
+    # Check messages for tool calls and responses
+    for message in row.messages:
+        if message.tool_calls:
+            print(f"Assistant made {len(message.tool_calls)} tool calls")
+        if message.role == "tool":
+            print(f"Tool response: {message.content}")
+```
+
+## Data Conversion
+
+The adapter converts OpenAI Responses API data to EvaluationRow format with comprehensive handling:
+
+### Response Structure Conversion
+
+<Tabs>
+  <Tab title="System Instructions">
+```python
+# System instructions become system messages
+{
+    "instructions": "You are a helpful assistant...",
+    # ... other response data
+}
+
+# Converts to:
+[
+    {"role": "system", "content": "You are a helpful assistant..."},
+    # ... other messages
+]
+```
+  </Tab>
+  <Tab title="Input Items">
+```python
+# Input items with messages
+{
+    "type": "message",
+    "role": "user",
+    "content": [
+        {
+            "type": "input_text",
+            "text": "Hello, how are you?"
+        }
+    ]
+}
+
+# Converts to:
+{"role": "user", "content": "Hello, how are you?"}
+```
+  </Tab>
+  <Tab title="Function Calls">
+```python
+# Function call items
+{
+    "type": "function_call",
+    "call_id": "call_123",
+    "name": "get_weather",
+    "arguments": '{"location": "San Francisco"}'
+}
+
+# Function call output items
+{
+    "type": "function_call_output", 
+    "call_id": "call_123",
+    "output": "72°F and sunny"
+}
+
+# Converts to assistant message with tool calls and tool response
+[
+    {
+        "role": "assistant",
+        "tool_calls": [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "arguments": '{"location": "San Francisco"}'
+                }
+            }
+        ]
+    },
+    {
+        "role": "tool",
+        "content": "72°F and sunny",
+        "tool_call_id": "call_123"
+    }
+]
+```
+  </Tab>
+  <Tab title="Output Text">
+```python
+# Response output becomes assistant message
+{
+    "output_text": "The weather in San Francisco is 72°F and sunny."
+}
+
+# Converts to:
+{"role": "assistant", "content": "The weather in San Francisco is 72°F and sunny."}
+```
+  </Tab>
+</Tabs>
+
+### Tools Schema Conversion
+
+The adapter converts OpenAI Responses API tools to the standard chat completion format:
+
+```python
+# OpenAI Responses API tool format
+{
+    "type": "function",
+    "name": "get_weather",
+    "description": "Get current weather for a location",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string"}
+        }
+    },
+    "strict": True
+}
+
+# Converts to chat completion tool format
+{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a location",
+        "parameters": {
+            "type": "object", 
+            "properties": {
+                "location": {"type": "string"}
+            }
+        },
+        "strict": True
+    }
+}
+```
+
+### Completion Parameters Preservation
+
+The adapter preserves all response parameters in the evaluation row metadata:
+
+```python
+# Original response parameters are stored in input_metadata
+completion_params = {
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_output_tokens": 1000,
+    "max_tool_calls": 5,
+    "parallel_tool_calls": True,
+    "reasoning": {
+        "effort": "medium",
+        "summary": "The model reasoned through the problem step by step..."
+    },
+    "top_logprobs": 5,
+    "truncation": None,
+    "top_p": 0.9
+}
+```
+
+Here's an example of how you can access to response metadata.
+
+```python
+rows = adapter.get_evaluation_rows(response_ids=["resp_123"])
+
+for row in rows:
+    completion_params = row.input_metadata.completion_params
+    
+    # Access model parameters
+    model = completion_params.get("model")
+    temperature = completion_params.get("temperature")
+    max_tokens = completion_params.get("max_output_tokens")
+    
+    # Access reasoning information (if available)
+    reasoning = completion_params.get("reasoning")
+    if reasoning:
+        effort = reasoning.get("effort")
+        summary = reasoning.get("summary")
+        
+    print(f"Model: {model}, Temperature: {temperature}")
+```
+
+## Complete Example
+
+For a production-ready example that integrates OpenAI Responses with Arena-Hard-Auto evaluation, see: [llm_judge_openai_responses.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_openai_responses.py)
+
+This example demonstrates response fetching, multi-model comparison, and automated Arena-Hard-Auto judging to create model leaderboards without writing custom evaluation logic.

@@ -1,0 +1,441 @@
+---
+title: LangSmith Adapter
+icon: "screwdriver-wrench"
+description: "Pull evaluation data from LangSmith projects and convert to EvaluationRow format for evaluation pipelines"
+---
+
+The LangSmith adapter allows you to pull data from LangSmith projects and convert it to EvaluationRow format for use in evaluation pipelines. This enables you to evaluate production conversations and tool calling traces directly from your LangSmith deployment.
+
+## Installation
+
+To use the LangSmith adapter, you need to install the LangSmith dependencies:
+
+```bash
+pip install 'eval-protocol[langsmith]'
+```
+
+## Basic Usage
+
+```python
+"""
+Example for using LangSmith with the aha judge.
+"""
+
+from datetime import datetime
+import os
+import pytest
+
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    multi_turn_assistant_to_ground_truth,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+    create_langsmith_adapter,
+)
+
+adapter = create_langsmith_adapter()
+input_rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50
+)
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        },
+    ],
+)
+@evaluation_test(
+    input_rows=[input_rows],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=multi_turn_assistant_to_ground_truth,
+    max_concurrent_evaluations=2,
+)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
+```
+
+## Configuration
+
+The adapter uses the LangSmith client configuration. Set up your LangSmith credentials using environment variables:
+
+```bash
+export LANGSMITH_API_KEY="your_api_key"
+export LANGSMITH_ENDPOINT="https://api.smith.langchain.com"  # Optional, defaults to LangSmith cloud
+export LANGSMITH_WORKSPACE_ID="workspace_id"  # Optional, only if you have keys scoped to more than one workspace
+```
+
+## API Reference
+
+### LangSmithAdapter
+
+The main adapter class for pulling data from LangSmith.
+
+#### `get_evaluation_rows()`
+
+Pull runs from LangSmith and convert to EvaluationRow format.
+
+```python
+def get_evaluation_rows(
+    self,
+    project_name: str,
+    limit: int = 50,
+    include_tool_calls: bool = True,
+    # LangSmith filtering options
+    run_id: Optional[str] = None,
+    ids: Optional[List[str]] = None,
+    run_type: Optional[str] = None,
+    execution_order: Optional[int] = None,
+    parent_run_id: Optional[str] = None,
+    trace_id: Optional[str] = None,
+    trace_ids: Optional[List[str]] = None,
+    reference_example_id: Optional[str] = None,
+    session_name: Optional[str] = None,
+    error: Optional[bool] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    filter_expr: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    feedback_keys: Optional[List[str]] = None,
+    feedback_source: Optional[str] = None,
+    tree_id: Optional[str] = None,
+    offset: Optional[int] = None,
+    order_by: Optional[str] = None,
+    select: Optional[List[str]] = None,
+    **list_runs_kwargs: Any,
+) -> List[EvaluationRow]
+```
+
+**Parameters:**
+- `project_name` - LangSmith project to read runs from
+- `limit` - Maximum number of rows to return
+- `include_tool_calls` - Whether to include tool calling information when present
+- `run_id` - Filter by specific run ID
+- `ids` - Filter by list of run IDs
+- `run_type` - Filter by run type (e.g., "llm", "chain", "tool")
+- `execution_order` - Filter by execution order
+- `parent_run_id` - Filter by parent run ID
+- `trace_id` - Filter by specific trace ID
+- `trace_ids` - Filter by list of trace IDs
+- `reference_example_id` - Filter by reference example ID
+- `session_name` - Filter by session name
+- `error` - Filter by error status (True for errors, False for success, None for all)
+- `start_time` - Start time filter (ISO format string)
+- `end_time` - End time filter (ISO format string)
+- `filter_expr` - Server-side filter expression using LangSmith's filter DSL
+- `tags` - Filter by specific tags
+- `metadata` - Filter by metadata key-value pairs
+- `feedback_keys` - Filter by feedback keys
+- `feedback_source` - Filter by feedback source
+- `tree_id` - Filter by tree ID
+- `offset` - Pagination offset
+- `order_by` - Ordering specification
+- `select` - Fields to select in the response
+- `**list_runs_kwargs` - Additional parameters passed to LangSmith's list_runs method
+
+#### `get_evaluation_rows_by_ids()`
+
+Get specific runs or traces by their IDs and convert to EvaluationRow format.
+
+```python
+def get_evaluation_rows_by_ids(
+    self,
+    run_ids: Optional[List[str]] = None,
+    trace_ids: Optional[List[str]] = None,
+    include_tool_calls: bool = True,
+    project_name: Optional[str] = None,
+) -> List[EvaluationRow]
+```
+
+**Parameters:**
+- `run_ids` - List of run IDs to fetch
+- `trace_ids` - List of trace IDs to fetch
+- `include_tool_calls` - Whether to include tool calling information
+- `project_name` - Project name (stored in metadata)
+
+### Factory Function
+
+For convenience, you can use the factory function:
+
+```python
+from eval_protocol import LangSmithAdapter
+
+# Direct instantiation
+adapter = LangSmithAdapter()
+rows = adapter.get_evaluation_rows(project_name="ep-langgraph-examples", limit=20)
+
+# Or using environment variable
+import os
+project = os.getenv("LS_PROJECT", "ep-langgraph-examples")
+rows = adapter.get_evaluation_rows(project_name=project, limit=20, include_tool_calls=True)
+```
+
+## Source Code
+
+The complete implementation is available on GitHub: [eval_protocol/adapters/langsmith.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/adapters/langsmith.py)
+
+## Filtering Examples
+
+For comprehensive documentation on LangSmith's query and filtering capabilities, see the official [LangSmith trace querying documentation](https://docs.langchain.com/langsmith/export-traces). Here are some examples:
+
+### Filter by Tags
+```python
+# Get production conversations
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50,
+    tags=["production", "experiment_v2"]
+)
+```
+
+### Filter by Run Type
+```python
+# Get only LLM runs
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50,
+    run_type="llm"
+)
+
+# Get chain runs
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50,
+    run_type="chain"
+)
+```
+
+### Filter by Time Range
+```python
+from datetime import datetime, timedelta
+
+# Get conversations from last 7 days
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=200,
+    start_time=datetime.now() - timedelta(days=7)
+)
+
+# Or use specific timestamps
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=200,
+    start_time="2025-01-01T00:00:00Z",
+    end_time="2025-01-31T23:59:59Z"
+)
+```
+
+### Filter by Session
+```python
+# Get conversations from specific session
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50,
+    session_name="user_session_123"
+)
+```
+
+### Filter by Metadata
+```python
+# Filter by metadata
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=100,
+    metadata={"model": "gpt-4", "version": "v1.0"}
+)
+```
+
+### Filter by Error Status
+```python
+# Get only successful runs
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=100,
+    error=False
+)
+
+# Get only failed runs for error analysis
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=50,
+    error=True
+)
+```
+
+### Advanced Filter Expression
+```python
+# Use LangSmith's filter DSL for complex queries
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=100,
+    filter_expr='and(eq(run_type, "llm"), gt(latency, "5s"))'
+)
+
+# Filter by feedback scores
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=100,
+    filter_expr='and(eq(feedback_key, "star_rating"), gt(feedback_score, 4))'
+)
+```
+
+## Tool Calling Support
+
+The adapter automatically handles tool calling traces from LangSmith:
+
+```python
+# Include tool calls (default behavior)
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=10,
+    include_tool_calls=True
+)
+
+# Exclude tool calls for simpler evaluation
+rows = adapter.get_evaluation_rows(
+    project_name="ep-langgraph-examples",
+    limit=10,
+    include_tool_calls=False
+)
+```
+
+Tool calls are preserved in the Message format with `tool_calls`, `tool_call_id`, and `function_call` fields as appropriate.
+
+## Data Conversion
+
+The adapter converts LangSmith runs to EvaluationRow format with intelligent handling of different input formats:
+
+### Supported Run Formats
+
+<Tabs>
+  <Tab title="Messages Format">
+```python
+# OpenAI-style messages in inputs/outputs
+{
+    "inputs": {
+        "messages": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
+        ]
+    },
+    "outputs": {
+        "messages": [
+            {"role": "assistant", "content": "Generated response"}
+        ]
+    }
+}
+```
+  </Tab>
+  <Tab title="Simple Format">
+```python
+# Simple prompt/response format
+{
+    "inputs": {
+        "prompt": "What is the weather like today?"
+    },
+    "outputs": {
+        "content": "I don't have access to current weather data..."
+    }
+}
+
+# Or user_input/result format
+{
+    "inputs": {
+        "user_input": "Tell me a joke"
+    },
+    "outputs": {
+        "result": "Why did the chicken cross the road?"
+    }
+}
+```
+  </Tab>
+  <Tab title="String Format">
+```python
+# Direct string inputs/outputs
+{
+    "inputs": "Explain quantum computing",
+    "outputs": "Quantum computing is a type of computation..."
+}
+```
+  </Tab>
+  <Tab title="LangChain Format">
+```python
+# LangChain message types
+{
+    "inputs": {
+        "messages": [
+            {"type": "human", "content": "Hello"},
+            {"type": "ai", "content": "Hi there!"}
+        ]
+    }
+}
+```
+  </Tab>
+</Tabs>
+
+### Metadata Preservation
+
+The adapter stores the original LangSmith run and trace IDs in the evaluation row metadata:
+
+```python
+for row in rows:
+    run_id = row.input_metadata.session_data.get("langsmith_run_id")
+    trace_id = row.input_metadata.session_data.get("langsmith_trace_id")
+    project = row.input_metadata.session_data.get("langsmith_project")
+    print(f"Processing run {run_id} from trace {trace_id} in project {project}")
+```
+
+## Advanced Features
+
+### Trace Deduplication
+
+The adapter automatically deduplicates traces by selecting the last run per trace ID, ensuring you get the final state of each conversation:
+
+```python
+# Automatically handles multiple runs per trace
+rows = adapter.get_evaluation_rows(
+    project_name="my-project",
+    limit=100  # May return fewer rows due to deduplication
+)
+```
+
+### Message Deduplication
+
+The adapter removes consecutive identical user messages to handle common echo patterns in LangChain integrations:
+
+```python
+# Input with duplicate user messages
+[
+    {"role": "user", "content": "Hello"},
+    {"role": "user", "content": "Hello"},  # Duplicate - will be removed
+    {"role": "assistant", "content": "Hi there!"}
+]
+
+# Output after deduplication
+[
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi there!"}
+]
+```
+
+### Conversation Reconstruction
+
+The adapter intelligently reconstructs conversations from LangSmith runs:
+
+1. **Prefers canonical conversations** from `outputs.messages` when available
+2. **Falls back to input/output mapping** for simple formats
+3. **Handles tool calls** and preserves tool calling context
+4. **Supports LangChain message types** with automatic role mapping
+
+## Complete Example
+
+For a production-ready example that integrates LangSmith with Arena-Hard-Auto evaluation, see: [llm_judge_langsmith.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_langsmith.py)
+
+This example demonstrates advanced filtering by run type, error status, time range, metadata, and automated Arena-Hard-Auto judging to create model leaderboards without writing custom evaluation logic.
