@@ -30,28 +30,33 @@ from eval_protocol import (
     multi_turn_assistant_to_ground_truth,
     EvaluationRow,
     SingleTurnRolloutProcessor,
+    DynamicDataLoader,
 )
 from eval_protocol.adapters.openai_responses import OpenAIResponsesAdapter
 
-# Initialize the adapter
-adapter = OpenAIResponsesAdapter(
-    api_key="your_openai_api_key"  # Or set OPENAI_API_KEY env var
-)
 
-# Pull specific responses by ID
-response_ids = ["resp_123", "resp_456", "resp_789"]
-input_rows = adapter.get_evaluation_rows(response_ids=response_ids)
+def openai_responses_data_generator() -> list[EvaluationRow]:
+    """Fetch specific OpenAI Responses and convert to EvaluationRow."""
+    adapter = OpenAIResponsesAdapter()  # Uses OPENAI_API_KEY from env if not provided
+    return adapter.get_evaluation_rows(
+        response_ids=[
+            "resp_123",
+            "resp_456",
+            "resp_789",
+        ]
+    )
 
 @pytest.mark.parametrize(
     "completion_params",
     [
-        {"model": "gpt-4"},
-        {"model": "gpt-4-turbo"},
-        {"model": "claude-3-sonnet-20240229"},
+        {"model": "fireworks_ai/accounts/fireworks/models/deepseek-v3p1"},
+        {"model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct-0905"},
     ],
 )
 @evaluation_test(
-    input_rows=[input_rows],
+    data_loaders=DynamicDataLoader(
+        generators=[openai_responses_data_generator],
+    ),
     rollout_processor=SingleTurnRolloutProcessor(),
     preprocess_fn=multi_turn_assistant_to_ground_truth,
     max_concurrent_evaluations=2,
@@ -102,7 +107,7 @@ The adapter automatically handles tool calling from OpenAI Responses:
 
 ```python
 # Tool calls are automatically included
-rows = adapter.get_evaluation_rows(response_ids=["resp_with_tools"])
+rows = OpenAIResponsesAdapter().get_evaluation_rows(response_ids=["resp_with_tools"]) 
 
 for row in rows:
     # Check if tools were used

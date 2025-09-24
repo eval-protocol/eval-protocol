@@ -1,0 +1,138 @@
+---
+title: Data Loader
+icon: "database"
+description: "Load evaluation data using DynamicDataLoader and InlineDataLoader for reusable, parameterized inputs"
+---
+
+The data loader module provides a standard way to feed evaluation data into tests. Use it to:
+
+- Build reusable input sources (adapters, files, generators)
+- Parameterize datasets with clear variant labeling
+- Preprocess inputs consistently (e.g., expand multi-turn data)
+
+## Components
+
+### DynamicDataLoader
+
+Uses callables that return lists of `EvaluationRow`. Each callable becomes a labeled variant.
+
+```python
+from eval_protocol import DynamicDataLoader
+from eval_protocol.models import EvaluationRow
+
+def my_generator() -> list[EvaluationRow]:
+    # Fetch or generate rows here (adapters, DB, etc.)
+    return []
+
+data_loader = DynamicDataLoader(
+    generators=[my_generator],
+)
+```
+
+### InlineDataLoader
+
+Use when you have rows or raw messages inline.
+
+```python
+from eval_protocol import InlineDataLoader
+from eval_protocol.models import EvaluationRow, Message
+
+inline_rows = [
+    EvaluationRow(messages=[
+        Message(role="user", content="Hello"),
+        Message(role="assistant", content="Hi there!"),
+    ])
+]
+
+loader = InlineDataLoader(rows=inline_rows, id="demo", description="Two-turn chat")
+```
+
+## Preprocessing
+
+All loaders support an optional `preprocess_fn` applied before returning rows. For example, expand multi-turn traces into multiple test cases:
+
+```python
+from eval_protocol import DynamicDataLoader, multi_turn_assistant_to_ground_truth
+
+DynamicDataLoader(
+    generators=[my_generator],
+    preprocess_fn=multi_turn_assistant_to_ground_truth,
+)
+```
+
+## Using with evaluation_test
+
+```python
+from eval_protocol import evaluation_test, SingleTurnRolloutProcessor
+
+@evaluation_test(
+    data_loaders=data_loader,
+    rollout_processor=SingleTurnRolloutProcessor(),
+)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
+```
+
+## Metadata and Variants
+
+Each loader emits one or more variants. For each variant, Eval Protocol stores metadata on every row under `row.input_metadata.dataset_info`:
+
+- `data_loader_type`: loader class (e.g., `DynamicDataLoader`)
+- `data_loader_variant_id`: callable name or inline id
+- `data_loader_variant_description`: docstring/description
+- `data_loader_num_rows`: original count before preprocessing
+- `data_loader_num_rows_after_preprocessing`: final count
+
+This enables clear tracking of which inputs produced which results in the UI.
+
+## Example with an Adapter
+
+```python
+from eval_protocol import evaluation_test, aha_judge, DynamicDataLoader, SingleTurnRolloutProcessor
+from eval_protocol.adapters.langfuse import create_langfuse_adapter
+
+def langfuse_data_generator():
+    adapter = create_langfuse_adapter()
+    return adapter.get_evaluation_rows(limit=50, sample_size=10)
+
+@evaluation_test(
+    data_loaders=DynamicDataLoader(generators=[langfuse_data_generator]),
+    rollout_processor=SingleTurnRolloutProcessor(),
+)
+async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
+```
+
+## API Reference
+
+### DynamicDataLoader
+
+```python
+class DynamicDataLoader(EvaluationDataLoader):
+    generators: Sequence[Callable[[], list[EvaluationRow]]]
+```
+
+### InlineDataLoader
+
+```python
+class InlineDataLoader(EvaluationDataLoader):
+    rows: list[EvaluationRow] | None
+    messages: Sequence[list[Message]] | None
+    id: str
+    description: str | None
+```
+
+### EvaluationDataLoader
+
+```python
+class EvaluationDataLoader(ABC):
+    preprocess_fn: Callable[[list[EvaluationRow]], list[EvaluationRow]] | None
+    def variants(self) -> Sequence[DataLoaderVariant]: ...
+    def load(self) -> list[DataLoaderResult]: ...
+```
+
+## Source Code
+
+See the Python source for full details: [eval_protocol/data_loader/models.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/data_loader/models.py)
+
+
