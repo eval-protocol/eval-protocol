@@ -48,6 +48,7 @@
           "common-errors",
           "reference/evaluation-test",
           "reference/rollout-processors",
+          "reference/data-loader",
           "mcp-extensions",
           "simulated-users",
           "specification"

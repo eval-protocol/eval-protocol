@@ -69,16 +69,18 @@ from eval_protocol import (
     EvaluationRow,
     SingleTurnRolloutProcessor,
     create_langfuse_adapter,
+    DynamicDataLoader,
 )
 
-adapter = create_langfuse_adapter()
-input_rows=[
-    adapter.get_evaluation_rows(
+
+def langfuse_data_generator() -> list[EvaluationRow]:
+    adapter = create_langfuse_adapter()
+    return adapter.get_evaluation_rows(
         to_timestamp=datetime.utcnow(),
         limit=20,
         sample_size=5,
     )
-]
+
 
 @pytest.mark.parametrize(
     "completion_params",
@@ -88,7 +90,9 @@ input_rows=[
     ],
 )
 @evaluation_test(
-    input_rows=[input_rows],
+    data_loaders=DynamicDataLoader(
+        generators=[langfuse_data_generator],
+    ),
     rollout_processor=SingleTurnRolloutProcessor(),
 )
 async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:

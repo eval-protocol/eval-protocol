@@ -17,33 +17,55 @@ pip install 'eval-protocol[braintrust]'
 ## Basic Usage
 
 ```python
-from eval_protocol.adapters.braintrust import BraintrustAdapter
-
-# Initialize the adapter
-adapter = BraintrustAdapter(
-    api_key="your_api_key",        # Or set BRAINTRUST_API_KEY env var
-    project_id="your_project_id"   # Or set BRAINTRUST_PROJECT_ID env var
+import pytest
+from eval_protocol import (
+    evaluation_test,
+    aha_judge,
+    multi_turn_assistant_to_ground_truth,
+    EvaluationRow,
+    SingleTurnRolloutProcessor,
+    DynamicDataLoader,
+    create_braintrust_adapter,
 )
 
-# Pull recent evaluation rows using BTQL
-btql_query = """
-select: *
-from: project_logs('your_project_id') traces
-limit: 50
-"""
-rows = adapter.get_evaluation_rows(btql_query)
 
-# Use in your evaluation tests
-from eval_protocol.pytest import evaluation_test
-from eval_protocol.quickstart import aha_judge
+def braintrust_data_generator() -> list[EvaluationRow]:
+    """Execute a BTQL query and convert results to EvaluationRow."""
+    adapter = create_braintrust_adapter()
+    btql_query = """
+    select: *
+    from: project_logs('your_project_id') traces
+    limit: 50
+    """
+    return adapter.get_evaluation_rows(btql_query)
 
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "gpt-4.1"},
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "medium"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        },
+        {
+            "max_tokens": 131000,
+            "extra_body": {"reasoning_effort": "low"},
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
+        },
+    ],
+)
 @evaluation_test(
-    input_rows=rows,
-    completion_params=[{"model": "gpt-4"}],
-    mode="all"
+    data_loaders=DynamicDataLoader(
+        generators=[braintrust_data_generator],
+    ),
+    rollout_processor=SingleTurnRolloutProcessor(),
+    preprocess_fn=multi_turn_assistant_to_ground_truth,
+    max_concurrent_evaluations=2,
 )
-async def test_braintrust_data(rows: list[EvaluationRow]) -> list[EvaluationRow]:
-    return await aha_judge(rows, adapter=adapter)
+async def test_braintrust_data(row: EvaluationRow) -> EvaluationRow:
+    return await aha_judge(row)
 ```
 
 ## Configuration
