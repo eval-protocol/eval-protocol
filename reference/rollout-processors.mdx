@@ -241,62 +241,7 @@ def gym_eval(rows):
 
 ### RemoteRolloutProcessor (HTTP)
 
-- **What it does**: Delegates rollout execution to a remote HTTP service that you control. Useful for offloading multi-turn agent loops, RL-style interactions, or using a centralized inference gateway.
-- **When to use**: You want to scale rollouts outside the pytest process, or integrate with existing batch/serving infrastructure.
-- **Module**: [`eval_protocol/pytest/remote_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py)
-
-#### Remote API contract
-
-- POST `/init`
-  - Request body:
-  ```json
-  {
-    "rollout_id": "rll_ijkl",
-    "model": "openai/gpt-4o",
-    "messages": [ { "role": "user", "content": "..." } ],
-    "tools": null,
-    "metadata": {
-      "invocation_id": "ivk_abcd",
-      "experiment_id": "exp_efgh",
-      "rollout_id": "rll_ijkl",
-      "run_id": null,
-      "row_id": "row_123"
-    },
-    "num_turns": 2
-  }
-  ```
-  - Response: `{ "ok": true }`
-
-- GET `/status?rollout_id=rll_ijkl`
-  - Response: `{ "terminated": true, "info": { ... } }`
-
-#### Metadata piggyback
-
-If your remote service calls a provider that accepts request `metadata` (e.g., LiteLLM/OpenAI), forward the identifiers for traceability:
-
-- `invocation_id`
-- `experiment_id`
-- `rollout_id`
-- `run_id`
-- `row_id`
-
-These appear in `EvaluationRow.execution_metadata` and `input_metadata.row_id` to enable end-to-end correlation across evaluations, logs, and traces.
-
-#### Usage
-
-```python
-from eval_protocol.pytest import evaluation_test
-from eval_protocol.pytest.remote_rollout_processor import RemoteRolloutProcessor
-
-@evaluation_test(
-    input_messages=[[ [Message(role="user", content="Hello")] ]],
-    completion_params=[{"model": "openai/gpt-4o"}],
-    rollout_processor=RemoteRolloutProcessor(remote_base_url="https://my-remote-evaluator.example.com", num_turns=2),
-    mode="pointwise",
-)
-def test_remote_http(row: EvaluationRow) -> EvaluationRow:
-    return row
-```
+See [Remote Rollout Processor](/reference/remote-rollout-processor) for more details.
 
 ## Pytest plugin helpers (CLI flags)
 

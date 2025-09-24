@@ -1,0 +1,419 @@
+---
+title: Running Rollouts with Your Existing Application
+icon: "network-wired"
+description: "How to integrate eval-protocol with your existing codebase"
+sidebarTitle: Evaluating Existing Applications
+---
+
+If you already have an agent, you can reuse your existing codebase by
+integrating with `eval-protocol`'s `RemoteRolloutProcessor`.
+
+`RemoteRolloutProcessor` delegates rollout execution to a remote HTTP service
+that you control. It's useful for offloading rollouts to your existing agent
+codebase by wrapping it in an HTTP service.
+
+> **Module**: [`eval_protocol/pytest/remote_rollout_processor.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py)
+
+## API Contract
+
+We expect the remote service to implement the following API contract:
+
+<Accordion title="POST /init">
+### Request Body
+
+<Tabs>
+    <Tab title="Example Request">
+    ```json request_body.json
+    {
+        "rollout_id": "rll_ijkl",
+        "model": "openai/gpt-4o",
+        "messages": [ { "role": "user", "content": "..." } ],
+        "tools": null,
+        "metadata": {
+        "invocation_id": "ivk_abcd",
+        "experiment_id": "exp_efgh",
+        "rollout_id": "rll_ijkl",
+        "run_id": "run_123",
+        "row_id": "row_123"
+        },
+        "num_turns": 2
+    }
+    ```
+    </Tab>
+    <Tab title="JSON Schema">
+    ```json request_schema.json
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://example.com/remote-rollout-init-request.schema.json",
+      "title": "Remote Rollout Init Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rollout_id",
+        "model",
+        "messages",
+        "metadata",
+        "num_turns"
+      ],
+      "properties": {
+        "rollout_id": { "type": "string" },
+        "model": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/message" }
+        },
+        "tools": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "$ref": "#/$defs/tool" } }
+          ]
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "invocation_id",
+            "experiment_id",
+            "rollout_id",
+            "run_id",
+            "row_id"
+          ],
+          "properties": {
+            "invocation_id": { "type": "string" },
+            "experiment_id": { "type": "string" },
+            "rollout_id": { "type": "string" },
+            "run_id": { "type": "string" },
+            "row_id": { "type": "string" }
+          }
+        },
+        "num_turns": { "type": "integer", "minimum": 1 }
+      },
+      "$defs": {
+        "message": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "content"],
+          "properties": {
+            "role": {
+              "type": "string",
+              "enum": ["system", "user", "assistant", "tool"]
+            },
+            "content": { "type": "string" }
+          }
+        },
+        "tool": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "function"],
+          "properties": {
+            "type": { "const": "function" },
+            "function": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]{1,64}$"
+                },
+                "description": { "type": "string" },
+                "parameters": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    }
+    ```
+    </Tab>
+    <Tab title="Pydantic (Python)">
+    ```python request_model.py
+    from __future__ import annotations
+    from typing import Any, List, Literal, Optional
+    from pydantic import BaseModel, Field, ConfigDict, ValidationError
+    import json
+
+    class Message(BaseModel):
+        role: Literal["system", "user", "assistant", "tool"]
+        content: str
+
+    class FunctionDefinition(BaseModel):
+        name: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+        description: Optional[str] = None
+        # JSON Schema for the function parameters; keep flexible
+        parameters: Optional[dict[str, Any]] = None
+
+    class Tool(BaseModel):
+        type: Literal["function"] = "function"
+        function: FunctionDefinition
+
+    class Metadata(BaseModel):
+        # allow extra metadata keys
+        model_config = ConfigDict(extra="allow")
+        invocation_id: str
+        experiment_id: str
+        rollout_id: str
+        run_id: str
+        row_id: str
+
+    class InitRequest(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        rollout_id: str
+        model: str
+        messages: List[Message]
+        tools: Optional[List[Tool]] = None
+        metadata: Metadata
+        num_turns: int = Field(ge=1)
+
+    if __name__ == "__main__":
+        payload = {
+            "rollout_id": "rll_ijkl",
+            "model": "openai/gpt-4o",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get the weather for a city",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "city": {"type": "string"},
+                                "unit": {"type": "string", "enum": ["c", "f"]}
+                            },
+                            "required": ["city"]
+                        },
+                    },
+                }
+            ],
+            "metadata": {
+                "invocation_id": "ivk_abcd",
+                "experiment_id": "exp_efgh",
+                "rollout_id": "rll_ijkl",
+                "run_id": "run_123",
+                "row_id": "row_123",
+                "any_extra": "ok"
+            },
+            "num_turns": 2,
+        }
+
+        try:
+            req = InitRequest.model_validate(payload)
+            print("Valid! num_messages=", len(req.messages))
+        except ValidationError as e:
+            print("Validation error:\n", e)
+    ```
+    </Tab>
+    <Tab title="Zod (TypeScript)">
+    ```ts requestSchema.ts
+    import { z } from "zod";
+
+    const roleSchema = z.enum(["system", "user", "assistant", "tool"]);
+    const messageSchema = z.object({
+      role: roleSchema,
+      content: z.string(),
+    });
+
+    const functionDefinitionSchema = z
+      .object({
+        name: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+        description: z.string().optional(),
+        // JSON Schema object; allow arbitrary keys
+        parameters: z.object({}).passthrough().optional(),
+      })
+      .passthrough();
+
+    const toolSchema = z.object({
+      type: z.literal("function"),
+      function: functionDefinitionSchema,
+    });
+
+    const metadataSchema = z
+      .object({
+        invocation_id: z.string(),
+        experiment_id: z.string(),
+        rollout_id: z.string(),
+        run_id: z.string(),
+        row_id: z.string(),
+      })
+      .passthrough();
+
+    export const initRequestSchema = z.object({
+      rollout_id: z.string(),
+      model: z.string(),
+      messages: z.array(messageSchema).min(1),
+      tools: z.array(toolSchema).optional().nullable(),
+      metadata: metadataSchema,
+      num_turns: z.number().int().min(1),
+    });
+
+    // Example usage
+    const payload = {
+      rollout_id: "rll_ijkl",
+      model: "openai/gpt-4o",
+      messages: [{ role: "user", content: "Hello" }],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "get_weather",
+            description: "Get the weather for a city",
+            parameters: {
+              type: "object",
+              properties: {
+                city: { type: "string" },
+                unit: { type: "string", enum: ["c", "f"] },
+              },
+              required: ["city"],
+            },
+          },
+        },
+      ],
+      metadata: {
+        invocation_id: "ivk_abcd",
+        experiment_id: "exp_efgh",
+        rollout_id: "rll_ijkl",
+        run_id: "run_123",
+        row_id: "row_123",
+      },
+      num_turns: 2,
+    };
+
+    const parsed = initRequestSchema.parse(payload);
+    console.log("Valid! num_messages=", parsed.messages.length);
+    ```
+    </Tab>
+</Tabs>
+</Accordion>
+
+<Accordion title="GET /status?rollout_id={rollout_id}">
+### Response Body
+
+<Tabs>
+    <Tab title="Example Response">
+    ```json status_response.json
+    {
+      "terminated": true,
+      "info": {
+        "reason": "completed",
+        "ended_at": "2025-09-24T12:34:56Z",
+        "num_turns": 2
+      }
+    }
+    ```
+    </Tab>
+    <Tab title="JSON Schema">
+    ```json status_response_schema.json
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://example.com/remote-rollout-status-response.schema.json",
+      "title": "Remote Rollout Status Response",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminated", "info"],
+      "properties": {
+        "terminated": { "type": "boolean" },
+        "info": { "type": "object", "additionalProperties": true }
+      }
+    }
+    ```
+    </Tab>
+    <Tab title="Pydantic (Python)">
+    ```python status_response.py
+    from __future__ import annotations
+    from typing import Any, Dict
+    from pydantic import BaseModel, ConfigDict, ValidationError
+    import json
+
+    class StatusResponse(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        terminated: bool
+        info: Dict[str, Any] = {}
+
+    if __name__ == "__main__":
+        payload = {
+            "terminated": True,
+            "info": {
+                "reason": "completed",
+                "ended_at": "2025-09-24T12:34:56Z",
+                "num_turns": 2,
+            },
+        }
+        try:
+            status = StatusResponse.model_validate(payload)
+            print("Terminated?", status.terminated, "| Keys in info:", list(status.info.keys()))
+        except ValidationError as e:
+            print("Validation error:\n", e)
+    ```
+    </Tab>
+    <Tab title="Zod (TypeScript)">
+    ```ts statusResponse.ts
+    import { z } from "zod";
+
+    export const statusResponseSchema = z.object({
+      terminated: z.boolean(),
+      info: z.object({}).passthrough(),
+    });
+
+    // Example usage
+    const payload = {
+      terminated: true,
+      info: { reason: "completed", ended_at: "2025-09-24T12:34:56Z", num_turns: 2 },
+    };
+
+    const parsed = statusResponseSchema.parse(payload);
+    console.log("Terminated?", parsed.terminated, "| Info keys:", Object.keys(parsed.info));
+    ```
+    </Tab>
+</Tabs>
+</Accordion>
+
+
+## Metadata piggyback
+
+If your remote service calls a provider that accepts request `metadata` (e.g., LiteLLM/OpenAI), forward the identifiers for traceability:
+
+- `invocation_id`
+- `experiment_id`
+- `rollout_id`
+- `run_id`
+- `row_id`
+
+These appear in `EvaluationRow.execution_metadata` and `input_metadata.row_id` to enable end-to-end correlation across evaluations, logs, and traces.
+
+## Usage
+
+Assuming you have a server that implements the above API contract running at
+`https://my-remote-evaluator.example.com`, you can use the following code to run
+rollouts:
+
+```python
+from eval_protocol import (
+    evaluation_test,
+    DynamicDataLoader,
+    RemoteRolloutProcessor,
+)
+
+def fetch_trajectories(invocation_id: str) -> list[EvaluationRow]:
+    adapter = create_langfuse_adapter()
+    return adapter.get_evaluation_rows(invocation_id=invocation_id, metadata={"agent": "web-search"})
+
+def create_output_data_loader(invocation_id: str) -> DynamicDataLoader:
+    return DynamicDataLoader(
+        generators=[lambda: fetch_trajectories(invocation_id)]
+    )
+
+@pytest.mark.parametrize("completion_params", [{"model": "openai/gpt-4o"}])
+@evaluation_test(
+    data_loaders=[InlineDataLoader(messages=[[Message(role="user", content="Hello")]])],
+    rollout_processor = RemoteRolloutProcessor(
+        remote_base_url="https://my-remote-evaluator.example.com",
+        output_data_loader=create_output_data_loader,
+    )
+)
+def test_remote_http(row: EvaluationRow) -> EvaluationRow:
+    # evaluate the row
+    return row
+```
