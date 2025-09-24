@@ -48,7 +48,7 @@ def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 
 ## Parameters
 
-Only `completion_params` is required; all other parameters are optional.
+No single parameter is strictly required. Provide `completion_params` whenever your rollout processor performs model calls (e.g., `SingleTurnRolloutProcessor`).
 
 <ParamField path="completion_params" type="List[dict]" required>
 Generation parameters for the rollout. The required fields depend on the rollout processor used:
@@ -71,6 +71,12 @@ Generation parameters for the rollout. The required fields depend on the rollout
 **For NoOpRolloutProcessor:**
 - Can be any value (not used for actual model calls)
 - Often set to `{"model": "not-used-offline"}` for clarity
+</ParamField>
+
+<ParamField path="data_loaders" type="Optional[Sequence[EvaluationDataLoader] | EvaluationDataLoader]">
+Data loaders to produce evaluation rows. Preferred for reusable, parameterized inputs. Each loader may emit multiple variants; rows inherit metadata describing the loader, variant ID, and preprocessing state. Cannot be combined with `input_dataset`, `input_messages`, or `input_rows`.
+
+See [Data Loader](/reference/data-loader) for details.
 </ParamField>
 
 <ParamField path="input_messages" type="Optional[List[InputMessagesParam]]">
@@ -110,6 +116,8 @@ Paths to JSONL datasets that will be loaded using `load_jsonl()`. Each path can 
 
 <ParamField path="input_rows" type="Optional[List[EvaluationRow]]">
 Pre-constructed EvaluationRow objects to use directly. Useful when you already have messages and/or metadata prepared. Will be passed as "input_dataset" to the test function.
+
+Note: cannot be combined with `data_loaders`.
 </ParamField>
 
 <ParamField path="dataset_adapter" type="Callable[[List[Dict[str, Any]]], Dataset]">
@@ -130,6 +138,12 @@ Additional keyword arguments for the rollout processor.
 
 <ParamField path="aggregation_method" type="AggregationMethod">
 How to aggregate scores across runs. One of: "mean", "max", "min". Defaults to "mean".
+</ParamField>
+
+<ParamField path="preprocess_fn" type="Optional[Callable[[List[EvaluationRow]], List[EvaluationRow]]]">
+Optional preprocessing function applied to rows before rollout. Use this to expand multi-turn conversations (e.g., `multi_turn_assistant_to_ground_truth`) or filter/transform rows.
+
+Note: when using `data_loaders`, pass `preprocess_fn` to the loader itself (e.g., `DynamicDataLoader(preprocess_fn=...)`). When `data_loaders` is provided, the decorator-level `preprocess_fn` is not applied to avoid double-processing.
 </ParamField>
 
 <ParamField path="passed_threshold" type="Optional[Union[EvaluationThreshold, float, dict]]">
@@ -478,6 +492,7 @@ Each returned row should have:
 
 ## Dataset loading and input formats
 
+- **Data loaders (`data_loaders`)**: Preferred for reusable and parameterized inputs. Accepts one or more `EvaluationDataLoader` instances (e.g., `DynamicDataLoader`, `InlineDataLoader`). Each loader can emit multiple variants and apply `preprocess_fn` internally. Cannot be combined with `input_dataset`, `input_messages`, or `input_rows`.
 - **Datasets (`input_dataset`)**: You can pass a single path or a list of paths to JSONL files. Files are loaded using `load_jsonl()` which supports both local files and HTTP/HTTPS URLs. The function reads JSONL format (one JSON object per line) with robust error handling, automatically skips blank lines, and provides detailed error messages with line numbers and row IDs. When a list is provided and `combine_datasets=True` (default), files are concatenated into one dataset; when `combine_datasets=False`, each path is parameterized into separate test invocations.
 - **Input messages (`input_messages`)**: Accepts either a single row as `List[Message]` or many rows as `List[List[Message]]`. When `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
 - **Input rows (`input_rows`)**: Similar to input_messages, when `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
@@ -501,8 +516,8 @@ The decorator handles errors gracefully:
 
 ## Dataset combination and parameterization
 
-- Parameter combinations are generated across `input_dataset`, `completion_params`, `input_messages`, `input_rows`, and `evaluation_test_kwargs`.
-- Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `input_rows`, `evaluation_test_kwargs`.
+- Parameter combinations are generated across `data_loaders`, `input_dataset`, `completion_params`, `input_messages`, `input_rows`, and `evaluation_test_kwargs`.
+- Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `input_rows`, `data_loaders`, `evaluation_test_kwargs`.
 - Set `combine_datasets=False` to parameterize each dataset path separately. With `True` (default), multiple paths are combined into a single logical dataset per invocation.
 
 ## Summary artifacts
@@ -744,6 +759,8 @@ Decorated functions can be called directly in addition to running under pytest:
 - Groupwise mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
 - All mode: `await test_fn(rows)` or `await test_fn(rows=[...])`
 
+When using `data_loaders`, direct invocation works the same way; the decorator resolves loaders into rows before calling your function. If a decorated function is called directly with `row`/`rows` arguments, those are used as-is.
+
 ## Examples
 
 ### Basic Math Evaluation (Pointwise Mode)
@@ -889,6 +906,26 @@ def test_offline_eval(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 ```
 
 ### Complete runnable example (single-turn online via LiteLLM)
+### Using data_loaders with DynamicDataLoader
+
+```python
+from eval_protocol import evaluation_test, DynamicDataLoader, SingleTurnRolloutProcessor
+from eval_protocol.adapters.langfuse import create_langfuse_adapter
+
+def langfuse_data_generator():
+    adapter = create_langfuse_adapter()
+    return adapter.get_evaluation_rows(limit=20, sample_size=5)
+
+@evaluation_test(
+    data_loaders=DynamicDataLoader(generators=[langfuse_data_generator]),
+    completion_params=[{"model": "openai/gpt-4o"}],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+)
+def test_with_loader(row: EvaluationRow) -> EvaluationRow:
+    # Evaluate row here
+    return row
+```
 
 Requires `pip install litellm` and provider credentials configured.
 
