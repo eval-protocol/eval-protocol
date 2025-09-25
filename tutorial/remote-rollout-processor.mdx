@@ -30,13 +30,12 @@ We expect the remote service to implement the following API contract:
         "messages": [ { "role": "user", "content": "..." } ],
         "tools": null,
         "metadata": {
-        "invocation_id": "ivk_abcd",
-        "experiment_id": "exp_efgh",
-        "rollout_id": "rll_ijkl",
-        "run_id": "run_123",
-        "row_id": "row_123"
-        },
-        "num_turns": 2
+          "invocation_id": "ivk_abcd",
+          "experiment_id": "exp_efgh",
+          "rollout_id": "rll_ijkl",
+          "run_id": "run_123",
+          "row_id": "row_123"
+        }
     }
     ```
     </Tab>
@@ -52,8 +51,7 @@ We expect the remote service to implement the following API contract:
         "rollout_id",
         "model",
         "messages",
-        "metadata",
-        "num_turns"
+        "metadata"
       ],
       "properties": {
         "rollout_id": { "type": "string" },
@@ -87,7 +85,6 @@ We expect the remote service to implement the following API contract:
             "row_id": { "type": "string" }
           }
         },
-        "num_turns": { "type": "integer", "minimum": 1 }
       },
       "$defs": {
         "message": {
@@ -164,7 +161,6 @@ We expect the remote service to implement the following API contract:
         messages: List[Message]
         tools: Optional[List[Tool]] = None
         metadata: Metadata
-        num_turns: int = Field(ge=1)
 
     if __name__ == "__main__":
         payload = {
@@ -196,7 +192,6 @@ We expect the remote service to implement the following API contract:
                 "row_id": "row_123",
                 "any_extra": "ok"
             },
-            "num_turns": 2,
         }
 
         try:
@@ -246,7 +241,6 @@ We expect the remote service to implement the following API contract:
       messages: z.array(messageSchema).min(1),
       tools: z.array(toolSchema).optional().nullable(),
       metadata: metadataSchema,
-      num_turns: z.number().int().min(1),
     });
 
     // Example usage
@@ -278,7 +272,6 @@ We expect the remote service to implement the following API contract:
         run_id: "run_123",
         row_id: "row_123",
       },
-      num_turns: 2,
     };
 
     const parsed = initRequestSchema.parse(payload);
