@@ -32,6 +32,10 @@
         ]
       },
       {
+        "group": "Tutorial",
+        "pages": ["tutorial/remote-rollout-processor"]
+      },
+      {
         "group": "Integrations",
         "pages": [
           "integrations/braintrust-adapter",

@@ -1,0 +1,101 @@
+---
+title: Running Rollouts with Your Existing Application
+icon: "network-wired"
+description: "How to integrate eval-protocol with your existing codebase"
+sidebarTitle: Evaluating Existing Applications
+---
+
+If you already have an agent, you can reuse your existing codebase by
+integrating with `eval-protocol`'s [RemoteRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py).
+
+`RemoteRolloutProcessor` delegates rollout execution to a remote HTTP service
+that you control. It's useful for implementing rollouts with your existing agent
+codebase by wrapping it in an HTTP service.
+
+## Setup
+
+Sign up for a free account at [Langfuse](https://langfuse.com) and get your API keys. Set the following environment variables:
+
+```bash
+LANGFUSE_PUBLIC_KEY="pk-lf-..."
+LANGFUSE_SECRET_KEY="sk-lf-..."
+LANGFUSE_HOST="https://cloud.langfuse.com" # US region: https://us.cloud.langfuse.com
+```
+
+## API Contract
+
+We expect the remote service to implement the following API contract:
+
+<Accordion title="POST /init">
+### Request Body
+
+```json request_body.json
+{
+    "rollout_id": "rll_ijkl",
+    "model": "openai/gpt-4o",
+    "messages": [ { "role": "user", "content": "..." } ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the weather for a city",
+          "parameters": { "type": "object", "properties": { "city": { "type": "string" } } }
+        }
+      }
+    ],
+    "metadata": {
+      "invocation_id": "ivk_abcd",
+      "experiment_id": "exp_efgh",
+      "rollout_id": "rll_ijkl",
+      "run_id": "run_123",
+      "row_id": "row_123"
+    }
+}
+```
+</Accordion>
+
+<Accordion title="GET /status?rollout_id={rollout_id}">
+### Response Body
+
+```json status_response.json
+{
+  "terminated": true,
+  "info": {
+    "reason": "completed",
+    "ended_at": "2025-09-24T12:34:56Z",
+    "num_turns": 2
+  }
+}
+```
+</Accordion>
+
+
+## Metadata Piggyback
+
+To push trajectories back to `eval-protocol`, you must include the following
+metadata along with your traces so that they can correlated with the
+`EvaluationRow`s.
+
+- `invocation_id`
+- `experiment_id`
+- `rollout_id`
+- `run_id`
+- `row_id`
+
+## Example Server Implementations
+
+See the following example server implementations for reference:
+
+ - [Python](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/remote_server.py)
+ - [TypeScript](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/typescript-server/server.ts)
+
+## Example `@evaluation_test` Usage
+
+See the example code for using `RemoteRolloutProcessor` in the
+`@evaluation_test` decorator [here](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/test_remote_langfuse.py).
+
+## Usage
+
+1. Run one of the server examples
+2. Run the example `@evaluation_test` usage
