@@ -29,10 +29,15 @@ We expect the remote service to implement the following API contract:
 <Accordion title="POST /init">
 ### Request Body
 
+- **model**: The model to use for the rollout (e.g., "openai/gpt-4o")
+- **messages**: Array of conversation messages
+- **tools**: Optional array of available tools for the model
+- **model_base_url**: Optional base URL for the remote server to make LLM calls. This is useful for configuring different endpoints during development/training.
+- **metadata**: Object containing rollout execution metadata
+
 ```json request_body.json
 {
-    "rollout_id": "rll_ijkl",
-    "model": "openai/gpt-4o",
+    "model": "accounts/fireworks/models/gpt-oss-120b",
     "messages": [ { "role": "user", "content": "..." } ],
     "tools": [
       {
@@ -44,6 +49,7 @@ We expect the remote service to implement the following API contract:
         }
       }
     ],
+    "model_base_url": "https://api.fireworks.ai/inference/v1",
     "metadata": {
       "invocation_id": "ivk_abcd",
       "experiment_id": "exp_efgh",
