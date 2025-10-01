@@ -11,7 +11,7 @@ The [`@evaluation_test`](https://github.com/eval-protocol/python-sdk/blob/main/e
 Before diving into the API, it's important to understand the terminology used in the Evaluation Protocol:
 
 - **Invocation**: A single execution of a test function that can generate 1 or more experiments
-- **Experiment**: A group of runs for a combination of parameters (multiple experiments if `num_runs > 1`)
+- **Experiment**: One per unique combination of input parameters (e.g., `completion_params`). `num_runs` creates multiple runs within the same experiment, not multiple experiments.
 - **Run**: A group of rollouts (multiple run IDs if `num_runs > 1`)
 - **Rollout**: The execution/process that produces a trajectory
 - **Trajectory**: The result produced by a rollout — a list of OpenAI Chat Completion messages
@@ -24,15 +24,19 @@ Each of these entities has a unique ID for easy grouping and identification.
 ## Basic Usage
 
 ```python
+import pytest
 from typing import List
 from eval_protocol.pytest import evaluation_test
 from eval_protocol.models import EvaluationRow
 
-@evaluation_test(
-    completion_params=[
+@pytest.mark.parametrize(
+    "completion_params",
+    [
         {"model": "openai/gpt-4o", "temperature": 0.1},
         {"model": "openai/gpt-3.5-turbo", "temperature": 0.1},
     ],
+)
+@evaluation_test(
     input_dataset=["path/to/dataset.jsonl"],
     passed_threshold=0.8,
     mode="all"
@@ -52,7 +56,7 @@ def test_math_reasoning(rows: List[EvaluationRow]) -> List[EvaluationRow]:
 No single parameter is strictly required. Provide `completion_params` whenever your rollout processor performs model calls (e.g., `SingleTurnRolloutProcessor`).
 
 <ParamField path="completion_params" type="List[dict]" required>
-Generation parameters for the rollout. The required fields depend on the rollout processor used:
+Generation parameters for the rollout. Recommended to set via `@pytest.mark.parametrize("completion_params", [...])` together with `@evaluation_test`. The required fields depend on the rollout processor used:
 
 **For SingleTurnRolloutProcessor and AgentRolloutProcessor:**
 - Must include a `model` field using a LiteLLM-compatible provider route (e.g., `openai/gpt-4o`, `anthropic/claude-3-sonnet`, `fireworks_ai/*`)
@@ -104,13 +108,15 @@ Paths to JSONL datasets that will be loaded using `load_jsonl()`. Each path can 
 
 **Example:**
 ```python
+import pytest
+
+@pytest.mark.parametrize("completion_params", [{"model": "gpt-4"}])
 @evaluation_test(
     input_dataset=[
         "path/to/local_dataset.jsonl",
         "https://example.com/remote_dataset.jsonl"
     ],
     dataset_adapter=my_adapter,
-    completion_params=[{"model": "gpt-4"}]
 )
 ```
 </ParamField>
@@ -138,7 +144,11 @@ Additional keyword arguments for the rollout processor.
 </ParamField>
 
 <ParamField path="aggregation_method" type="AggregationMethod">
-How to aggregate scores across runs. One of: "mean", "max", "min". Defaults to "mean".
+How to aggregate scores across runs. One of: "mean", "max", "min", "bootstrap". Defaults to "mean".
+
+Notes:
+- With "mean", a 95% CI and standard error are computed for valid scores.
+- With "bootstrap", a bootstrap mean score is computed (no CI output).
 </ParamField>
 
 <ParamField path="preprocess_fn" type="Optional[Callable[[List[EvaluationRow]], List[EvaluationRow]]]">
@@ -153,6 +163,10 @@ Threshold configuration for test success. Can be a float or EvaluationThreshold 
 
 <ParamField path="num_runs" type="int">
 Number of times to repeat the rollout and evaluations. Defaults to 1.
+</ParamField>
+
+<ParamField path="filtered_row_ids" type="Optional[List[str]]">
+Evaluate only rows whose `row.input_metadata.row_id` is in this list.
 </ParamField>
 
 <ParamField path="max_dataset_rows" type="Optional[int]">
@@ -475,6 +489,10 @@ The decorator supports several environment variables for configuration:
 - `EP_NUM_RUNS`: Override the number of runs for evaluation_test.
 - `EP_MAX_CONCURRENT_ROLLOUTS`: Override the maximum number of concurrent rollouts.
 - `EP_INPUT_PARAMS_JSON`: JSON object deep-merged into `completion_params`. Example: `{"temperature":0,"extra_body":{"reasoning":{"effort":"low"}}}`.
+- `EP_COMPLETION_PARAMS`: JSON array that fully replaces `completion_params` (e.g., `[{"model":"openai/gpt-4o","temperature":0}]`).
+- `EP_PASSED_THRESHOLD`: Float for success threshold (e.g., `0.8`). Equivalent to `passed_threshold=0.8`.
+- `EP_JSONL_PATH`: When set, automatically constructs a `DynamicDataLoader` that loads rows from the given JSONL path.
+- `EP_INVOCATION_ID`: Override the auto-generated invocation ID.
 - `EP_PRINT_SUMMARY`: Set to "1" to print a one-line evaluation summary to stdout.
 - `EP_SUMMARY_JSON`: File or directory path to write a JSON summary artifact. See "Summary artifacts" for naming behavior.
 - Retry-related environment variables are documented in the [Retries and failure policy](#retries-and-failure-policy) section.
@@ -490,6 +508,7 @@ Your test function must return the appropriate type based on the mode:
 Each returned row should have:
 - `evaluation_result.score`: A float between 0 and 1
 - Optional `evaluation_result.metrics`: Additional metric scores
+- Optional `execution_metadata.cost_metrics`: Automatically populated when token usage and model info are present (input, output, total costs).
 
 ## Dataset loading and input formats
 
@@ -498,6 +517,8 @@ Each returned row should have:
 - **Input messages (`input_messages`)**: Accepts either a single row as `List[Message]` or many rows as `List[List[Message]]`. When `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
 - **Input rows (`input_rows`)**: Similar to input_messages, when `EP_MAX_DATASET_ROWS` is set, the list is sliced before parameterization.
 - **Dataset adapter (`dataset_adapter`)**: Receives raw JSONL rows (as loaded by `load_jsonl()`) and must return `List[EvaluationRow]`.
+
+Important: Provide exactly one of `data_loaders`, `input_dataset`, `input_messages`, or `input_rows`. Supplying more than one will raise an error.
 
 ## Error Handling
 
@@ -521,13 +542,64 @@ The decorator handles errors gracefully:
 - Pytest parameter names (in order when present): `dataset_path`, `completion_params`, `input_messages`, `input_rows`, `data_loaders`, `evaluation_test_kwargs`.
 - Set `combine_datasets=False` to parameterize each dataset path separately. With `True` (default), multiple paths are combined into a single logical dataset per invocation.
 
+### Recommended parameterization style
+
+Use `@pytest.mark.parametrize("completion_params", [...])` with `@evaluation_test`. The decorator integrates with pytest's parameterization and will align the function signature accordingly.
+
+```python
+import pytest
+from typing import List
+from eval_protocol.models import EvaluationRow, Message
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "openai/gpt-4o", "temperature": 0.1},
+        {"model": "openai/gpt-4o-mini", "temperature": 0},
+    ],
+)
+@evaluation_test(
+    input_messages=[
+        [
+            [Message(role="user", content="What is the capital of France?")]
+        ]
+    ],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="all",
+)
+def test_parametrized_input_messages(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    return rows
+```
+
+You can use the same pattern with datasets:
+
+```python
+import pytest
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test
+
+@pytest.mark.parametrize("completion_params", [{"model": "openai/gpt-4o"}])
+@evaluation_test(
+    input_dataset=["dataset.jsonl"],
+    mode="pointwise",
+)
+def test_parametrized_dataset(row: EvaluationRow) -> EvaluationRow:
+    return row
+```
+
+Note: Passing `completion_params` inside `@evaluation_test(...)` still works; the decorator will auto-generate `pytest.mark.parametrize` under the hood. However, explicitly using `@pytest.mark.parametrize` for `completion_params` is the recommended style for clarity and IDE tooling.
+
 ## Summary artifacts
 
 When `EP_SUMMARY_JSON` is set:
 
 - If a directory or a non-`.json` path is provided, a file is written inside with the base name: `"{suite}__{model}__{mode}__runs{num_runs}.json"`, where `suite` is the test function name and `model` is a sanitized slug.
-- If a file path is provided, it writes that file. If an "effort" tag is detected in `completion_params` (e.g., `reasoning_effort`), a variant suffixed with `__{effort}` is written instead.
-- The summary includes: `suite`, `model`, `agg_score`, `num_runs`, `rows`, optional 95% CI (`agg_ci_low`, `agg_ci_high`) when `aggregation_method="mean"`, and a `timestamp`.
+- If a file path is provided, it writes that file. If an "effort" tag is detected in `completion_params` (e.g., via `extra_body.reasoning.effort` or `extra_body.reasoning_effort`), a variant suffixed with `__effort-{effort}` is written instead.
+- The summary includes: `suite`, `model`, `agg_score`, `num_runs`, `rows`, and a `timestamp`. When `aggregation_method` is `"mean"`, it also includes `standard_error` and 95% CI (`agg_ci_low`, `agg_ci_high`).
+- When per-row metric scores are present, `metrics_agg` contains per-metric mean and, when available, CI bounds.
+- In `groupwise` mode, summaries are generated per `completion_params` group.
 
 ## Retries and failure policy
 
@@ -589,6 +661,8 @@ def test_with_aggressive_retries(rows: List[EvaluationRow]) -> List[EvaluationRo
   - `PydanticAgentRolloutProcessor()`: runs Pydantic AI agents with structured tool calling.
   - `MCPGymRolloutProcessor()`: runs interactive environments via MCP servers.
 - All processors are wrapped with `rollout_processor_with_retry` for automatic retry handling.
+
+Note: With `MCPGymRolloutProcessor`, repeated runs (`num_runs > 1`) are executed sequentially to avoid port conflicts; other processors run runs in parallel with concurrency controlled by the shared semaphore.
 
 ## RolloutProcessorConfig
 
@@ -767,8 +841,10 @@ When using `data_loaders`, direct invocation works the same way; the decorator r
 ### Basic Math Evaluation (Pointwise Mode)
 
 ```python
+import pytest
+
+@pytest.mark.parametrize("completion_params", [{"model": "gpt-4"}])
 @evaluation_test(
-    completion_params=[{"model": "gpt-4"}],
     input_messages=[
         [Message(role="user", content="What is 2 + 2?")]
     ],
@@ -789,12 +865,17 @@ def test_basic_math(row: EvaluationRow) -> EvaluationRow:
 ### Multi-Model Comparison (All Mode)
 
 ```python
-@evaluation_test(
-    completion_params=[
+import pytest
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
         {"model": "gpt-4", "temperature": 0.1},
         {"model": "gpt-3.5-turbo", "temperature": 0.1},
         {"model": "claude-3-sonnet", "temperature": 0.1},
     ],
+)
+@evaluation_test(
     input_dataset=["reasoning_tasks.jsonl"],
     passed_threshold=0.7,
     num_runs=3,
@@ -818,11 +899,16 @@ def test_reasoning_capabilities(rows: List[EvaluationRow]) -> List[EvaluationRow
 ### Groupwise Evaluation for Model Comparison
 
 ```python
-@evaluation_test(
-    completion_params=[
+import pytest
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
         {"model": "gpt-4", "temperature": 0.1},
         {"model": "gpt-3.5-turbo", "temperature": 0.1},
     ],
+)
+@evaluation_test(
     input_dataset=["comparison_tasks.jsonl"],
     mode="groupwise"
 )
@@ -852,8 +938,10 @@ def custom_dataset_adapter(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
         rows.append(row)
     return rows
 
+import pytest
+
+@pytest.mark.parametrize("completion_params", [{"model": "gpt-4"}])
 @evaluation_test(
-    completion_params=[{"model": "gpt-4"}],
     input_dataset=["custom_format.jsonl"],
     dataset_adapter=custom_dataset_adapter,
     mode="pointwise"
@@ -917,9 +1005,11 @@ def langfuse_data_generator():
     adapter = create_langfuse_adapter()
     return adapter.get_evaluation_rows(limit=20, sample_size=5)
 
+import pytest
+
+@pytest.mark.parametrize("completion_params", [{"model": "openai/gpt-4o"}])
 @evaluation_test(
     data_loaders=DynamicDataLoader(generators=[langfuse_data_generator]),
-    completion_params=[{"model": "openai/gpt-4o"}],
     rollout_processor=SingleTurnRolloutProcessor(),
     mode="pointwise",
 )
@@ -931,14 +1021,15 @@ def test_with_loader(row: EvaluationRow) -> EvaluationRow:
 Requires `pip install litellm` and provider credentials configured.
 
 ```python
+import pytest
 from typing import List
 from eval_protocol.models import EvaluationRow, Message, EvaluateResult
 from eval_protocol.pytest.evaluation_test import evaluation_test
 from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnRolloutProcessor
 
+@pytest.mark.parametrize("completion_params", [{"model": "openai/gpt-4o-mini", "temperature": 0}])
 @evaluation_test(
     input_messages=[[Message(role="user", content="What is 2 + 2?")]],
-    completion_params=[{"model": "openai/gpt-4o-mini", "temperature": 0}],
     rollout_processor=SingleTurnRolloutProcessor(),
     passed_threshold=0.8,
     mode="pointwise"
@@ -964,6 +1055,8 @@ pytest test_file.py::test_math_reasoning
 # Run with specific parameters
 pytest test_file.py::test_math_reasoning[dataset_path0-completion_params0]
 ```
+
+Tip: Prefer explicit `@pytest.mark.parametrize("completion_params", [...])` together with `@evaluation_test` for clearer parameter control and readable test IDs.
 
 ## Programmatic Usage
 
@@ -1003,3 +1096,4 @@ Decorated functions can be called directly in addition to running under pytest. 
 - Check the generated pytest parameterization for complex setups
 - Use `max_dataset_rows` to limit dataset size during development
 - Monitor `max_concurrent_rollouts` and `max_concurrent_evaluations` for performance tuning
+- Set `EP_DEBUG_SERIALIZATION=1` to print compact per-row message previews (roles, lengths, tool call counts).
