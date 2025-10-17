@@ -32,16 +32,15 @@
         ]
       },
       {
-        "group": "Tutorial",
-        "pages": ["tutorial/remote-rollout-processor"]
+        "group": "Rollout Processors",
+        "pages": [
+          "tutorial/remote-rollout-processor",
+          "tutorial/github-actions-rollout"
+        ]
       },
       {
         "group": "Integrations",
         "pages": [
-          "integrations/braintrust-adapter",
-          "integrations/langfuse-adapter",
-          "integrations/langsmith-adapter",
-          "integrations/openai-responses-adapter",
           "integrations/langgraph",
           "integrations/pydantic-ai"
         ]

@@ -1,26 +1,15 @@
 ---
-title: Running Rollouts with Your Existing Application
-icon: "network-wired"
-description: "How to integrate eval-protocol with your existing codebase"
-sidebarTitle: Evaluating Existing Applications
+title: Running Rollouts with a Remote Server
+icon: "server"
+sidebarTitle: Remote Server
 ---
 
-If you already have an agent, you can reuse your existing codebase by
-integrating with `eval-protocol`'s [RemoteRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py).
+If you already have an agent, you can integrate it with Eval Protocol by
+using the [RemoteRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py).
 
 `RemoteRolloutProcessor` delegates rollout execution to a remote HTTP service
 that you control. It's useful for implementing rollouts with your existing agent
 codebase by wrapping it in an HTTP service.
-
-## Setup
-
-Sign up for a free account at [Langfuse](https://langfuse.com) and get your API keys. Set the following environment variables:
-
-```bash
-LANGFUSE_PUBLIC_KEY="pk-lf-..."
-LANGFUSE_SECRET_KEY="sk-lf-..."
-LANGFUSE_HOST="https://cloud.langfuse.com" # US region: https://us.cloud.langfuse.com
-```
 
 ## API Contract
 
@@ -89,19 +78,20 @@ metadata along with your traces so that they can correlated with the
 - `run_id`
 - `row_id`
 
-## Example Server Implementations
+## Example
 
-See the following example server implementations for reference:
+See the following example implementation:
 
- - [Python](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/remote_server.py)
- - [TypeScript](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/typescript-server/server.ts)
+- [Python Server](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/remote_server.py)
+- [TypeScript Server](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/typescript-server/server.ts)
+- [Evaluation Test](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/quickstart.py)
 
-## Example `@evaluation_test` Usage
+1. Start the example Python server:
+```bash
+python -m tests.remote_server.remote_server
+```
 
-See the example code for using `RemoteRolloutProcessor` in the
-`@evaluation_test` decorator [here](https://github.com/eval-protocol/python-sdk/blob/main/tests/remote_server/test_remote_langfuse.py).
-
-## Usage
-
-1. Run one of the server examples
-2. Run the example `@evaluation_test` usage
+2. In another terminal, run the evaluation test:
+```bash
+pytest tests/remote_server/quickstart.py -vs
+```

@@ -1,0 +1,75 @@
+---
+title: Running Rollouts with GitHub Actions
+icon: "github"
+sidebarTitle: GitHub Actions
+---
+
+If you already have an agent, you can integrate it with Eval Protocol by
+using the [GithubActionRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/github_action_rollout_processor.py).
+
+`GithubActionRolloutProcessor` delegates rollout execution to GitHub Actions workflows
+that you control. It's useful for implementing rollouts with your existing agent
+codebase by wrapping it in a GitHub Actions workflow.
+
+## Setup
+
+For the GitHub token, create a [Personal Access Token (classic)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#personal-access-tokens-classic) with permissions for `repo` and `workflow`.
+
+```bash
+GITHUB_TOKEN="ghp_..."
+```
+
+## GitHub Actions Contract
+
+We expect the GitHub Actions workflow to accept the following inputs:
+
+- **completion_params**: JSON completion parameters (model, temperature, etc.)
+- **metadata**: JSON string containing rollout execution metadata  
+- **model_base_url**: Base URL for the model API (e.g., "https://tracing.fireworks.ai")
+- **run-name**: You must add `run-name: rollout:${{ fromJSON(inputs.metadata).rollout_id }}` to your workflow. The GitHub API doesn't return the run ID when dispatching, so this allows us to find and monitor the correct workflow run.
+
+```yaml
+name: Eval Protocol Rollout
+run-name: rollout:${{ fromJSON(inputs.metadata).rollout_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      completion_params:
+        description: 'JSON completion params'
+        required: true
+        type: string
+      metadata:
+        description: 'JSON serialized metadata object'
+        required: true
+        type: string
+      model_base_url:
+        description: 'Base URL for the model API'
+        required: true
+        type: string
+```
+
+
+## Metadata Piggyback
+
+To push trajectories back to `eval-protocol`, you must include the following
+metadata along with your traces so that they can correlated with the
+`EvaluationRow`s.
+
+- `invocation_id`
+- `experiment_id`
+- `rollout_id`
+- `run_id`
+- `row_id`
+
+## Example
+
+See the following example implementation:
+
+- [Workflow YAML](https://github.com/eval-protocol/python-sdk/blob/main/.github/workflows/rollout.yml)
+- [Worker Script](https://github.com/eval-protocol/python-sdk/blob/main/tests/github_actions/rollout_worker.py)
+- [Evaluation Test](https://github.com/eval-protocol/python-sdk/blob/main/tests/github_actions/quickstart.py)
+
+```bash
+pytest tests/github_actions/quickstart.py -vs
+```

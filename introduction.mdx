@@ -4,28 +4,29 @@ icon: "circle-info"
 sidebarTitle: Introduction
 ---
 
-**Stop guessing which AI model to use. Build a data-driven model leaderboard.**
+**Eval Protocol is an open standard for connecting RL environments and evaluators to training systems.** It provides a unified, portable way to build evaluations that run on your laptop and scale to any production backend without rewrites.
 
-With hundreds of AI models available, choosing the right one is becoming a
-critical engineering decision. Different models excel at different tasks, and
-what works for one use case might fail for another. You need objective data to
-make informed decisions about cost, quality, and performance.
+Reinforcement learning development is often slowed by the gap between local experimentation and production training. Teams constantly rebuild evaluation logic, struggle with reproducibility, and find it difficult to plug their custom environments into distributed training frameworks.
 
-<Frame caption={<span>Example quality scores across 4 different models using the AIME benchmark implemented in eval-protocol.</span>}>
-![Pivot view after running the AIME 2025 eval](/assets/pivot-view-aime25.png)
-</Frame>
+Eval Protocol solves this by standardizing the most critical component: the evaluation loop. This creates a clear, iterative workflow:
 
-Eval Protocol provides:
-- `@evaluation_test` decorator: a pytest-compatible decorator for configuring and authoring evaluations
-- Rollout processing engine that reliably handles flaky LLM APIs and parallelism for long-running evaluations
-- Built-in integrations with LLM observability vendors such as Braintrust, Langfuse, LangSmith, and Responses API
-- Native support for agent frameworks like LangGraph and Pydantic AI
-- MCP-based framework for building reinforcement learning (RL) environments
-- Local UI and storage for reviewing, analyzing, and inspecting evaluations and rollouts in real time
-- Opinionated framework for separating configuration, data collection, rollout processing, and evaluation into separate concerns
-- Built-in benchmarks, including AIME and tau-bench
-- Built-in evaluator that enables stack-ranking of models using LLMs as judges (leveraging only model traces)
-- Built-in statistical methods for aggregating eval results
-- Unified data model for processing, running, and storing evaluations
+1. **Develop Locally**: Implement your evaluation logic once using a simple, standardized interface. Test and debug on your local machine with full observability.
+2. **Connect Anywhere**: Plug your portable evaluator into any compatible training backend—from cloud providers to open-source RL libraries.
+3. **Scale Confidently**: Launch distributed training jobs, knowing the reward signal and environment logic are identical to what you validated locally.
 
-Build efficient AI systems by finding the best model for your specific use case. Start building your own model leaderboard.
+This collapses reward shaping, environment interaction, and training into a single, reliable loop.
+
+## Who This Is For
+
+- **Applied Teams** who are shipping complex agents (for code-gen, tool-use, etc.) and need a reliable bridge from prototype to production.
+- **Research Engineers** who need a fast, reproducible way to test hypotheses locally before scaling up expensive experiments.
+- **MLOps Teams** who are responsible for creating stable, observable, and reusable evaluation infrastructure for their entire organization.
+
+## Getting Started
+
+If you already have an agent or application, you can connect it to the protocol without rewriting your core codebase:
+
+- **[Remote Server](/tutorial/remote-rollout-processor)** - Use the `RemoteRolloutProcessor` to delegate rollout execution to any persistent HTTP service.
+- **[GitHub Actions](/tutorial/github-actions-rollout)** - Use the `GithubActionRolloutProcessor` to trigger and manage rollouts within your existing CI/CD workflows.
+
+Check out the quickstart below to see how we built and trained an SVGAgent!
