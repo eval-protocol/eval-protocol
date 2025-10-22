@@ -11,6 +11,19 @@ using the [RemoteRolloutProcessor](https://github.com/eval-protocol/python-sdk/b
 that you control. It's useful for implementing rollouts with your existing agent
 codebase by wrapping it in an HTTP service.
 
+## High Level Flow
+
+<Frame>
+![Remote Rollout Processor flow](/assets/remote-rollout-processor.png)
+</Frame>
+
+1. **/init triggers one rollout**: Eval Protocol calls your service’s POST `/init` with the row payload and correlation metadata.
+2. **Send logs via `FireworksTracingHttpHandler`**: Your service emits structured logs tagged with the rollout’s correlation fields.
+3. **Send chat completions and store as trace**: Your agent’s calls are recorded as traces in Fireworks.
+4. **Once rollout finished, pull full trace and evaluate**: Eval Protocol polls Fireworks for a completion signal, then loads the trace and scores it.
+
+<Note>Everything inside the dotted box is handled by Eval Protocol — you only need to implement the Remote Server, more on this below.</Note>
+
 ## API Contract
 
 **POST /init:**

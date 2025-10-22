@@ -11,6 +11,19 @@ using the [GithubActionRolloutProcessor](https://github.com/eval-protocol/python
 that you control. It's useful for implementing rollouts with your existing agent
 codebase by wrapping it in a GitHub Actions workflow.
 
+## High Level Flow
+
+<Frame>
+![Github Action Rollout Processor flow](/assets/github-action-rollout-processor.png)
+</Frame>
+
+1. **/init triggers one rollout**: Eval Protocol dispatches a GitHub Actions workflow with `completion_params`, `metadata` (incl. `rollout_id`), and `model_base_url`.
+2. **Polling to check rollout status**: The processor finds the `rollout:<rollout_id>` run and polls GitHub Actions until it completes.
+3. **Send chat completions and store as trace**: The workflow executes your agent and sends completions/logs to Fireworks with the rollout’s correlation tags.
+4. **Once rollout finished, pull full trace and evaluate**: Eval Protocol fetches the Fireworks trace by `rollout_id` and scores the result.
+
+<Note>Everything inside the dotted box is handled by Eval Protocol — you only need to implement the GitHub Actions workflow, more on this below.</Note>
+
 ## Setup
 
 For the GitHub token, create a [Personal Access Token (classic)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#personal-access-tokens-classic) with permissions for `repo` and `workflow`.
