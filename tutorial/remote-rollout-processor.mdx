@@ -67,7 +67,7 @@ We expect the remote service to implement a single /init endpoint that accepts a
             }
         }
     ],
-    "model_base_url": "https://api.fireworks.ai/inference/v1",
+    "model_base_url": "https://tracing.fireworks.ai",
     "metadata": {
         "invocation_id": "ivk_abcd",
         "experiment_id": "exp_efgh",
@@ -128,6 +128,43 @@ def init(request: InitRequest):
             extra={"status": Status.rollout_error(str(e))}
         )
 ```
+
+### Alternative: Environment Variable Approach
+
+For simpler setups one rollout is processed per server instance or `/init` is single-threaded, you can use the `EP_ROLLOUT_ID` environment variable instead of manual filters:
+
+```python simple_remote_server.py highlight={13}
+import os
+import logging
+from eval_protocol import Status, InitRequest, FireworksTracingHttpHandler
+
+# Configure Fireworks tracing handler
+fireworks_handler = FireworksTracingHttpHandler()
+logging.getLogger().addHandler(fireworks_handler)
+logger = logging.getLogger(__name__)
+
+@app.post("/init") 
+def init(request: InitRequest):
+    # Set rollout ID globally for this process
+    os.environ["EP_ROLLOUT_ID"] = request.metadata.rollout_id
+    
+    try:
+        # Run your rollout here
+        
+        # Simple logging - rollout ID automatically included
+        logger.info(
+            "Rollout completed",
+            extra={"status": Status.rollout_finished()}
+        )
+            
+    except Exception as e:
+        logger.error(
+            f"Rollout failed: {e}",
+            extra={"status": Status.rollout_error(str(e))}
+        )
+```
+
+### How `RemoteRolloutProcessor` uses Fireworks Tracing
 
 1. **Remote server logs completion**: Uses `Status.rollout_finished()` or `Status.rollout_error()`
 2. **RemoteRolloutProcessor polls**: Searches logs by `rollout_id` tag until completion found
