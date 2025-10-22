@@ -113,7 +113,7 @@ def init(request: InitRequest):
     rollout_logger.addFilter(RolloutIdFilter(request.metadata.rollout_id))
     
     try:
-        # Run your rollout here
+        # Execute your rollout here
         
         # Then log successful completion with structured status
         rollout_logger.info(
@@ -131,37 +131,50 @@ def init(request: InitRequest):
 
 ### Alternative: Environment Variable Approach
 
-For simpler setups one rollout is processed per server instance or `/init` is single-threaded, you can use the `EP_ROLLOUT_ID` environment variable instead of manual filters:
+For the following setups, you can use the `EP_ROLLOUT_ID` environment variable instead of manual filters:
 
-```python simple_remote_server.py highlight={13}
+1. One rollout is processed per server instance
+
+```python remote_server.py highlight={6}
 import os
 import logging
 from eval_protocol import Status, InitRequest, FireworksTracingHttpHandler
 
 # Configure Fireworks tracing handler
+os.environ["EP_ROLLOUT_ID"] = request.metadata.rollout_id
 fireworks_handler = FireworksTracingHttpHandler()
 logging.getLogger().addHandler(fireworks_handler)
 logger = logging.getLogger(__name__)
 
 @app.post("/init") 
-def init(request: InitRequest):
-    # Set rollout ID globally for this process
-    os.environ["EP_ROLLOUT_ID"] = request.metadata.rollout_id
+def init(request: InitRequest):    
+    ...
+```
+
+2. `/init` spawns separate Python processes
+
+
+```python remote_server.py highlight={8-9}
+import os
+import logging
+import multiprocessing
+from eval_protocol import FireworksTracingHttpHandler, InitRequest
+
+def execute_rollout_step_sync(request):
+    # Set in the CHILD process
+    os.environ["EP_ROLLOUT_ID"] = rollout_id
+    logging.getLogger().addHandler(FireworksTracingHttpHandler())
     
-    try:
-        # Run your rollout here
-        
-        # Simple logging - rollout ID automatically included
-        logger.info(
-            "Rollout completed",
-            extra={"status": Status.rollout_finished()}
-        )
-            
-    except Exception as e:
-        logger.error(
-            f"Rollout failed: {e}",
-            extra={"status": Status.rollout_error(str(e))}
-        )
+    # Execute your rollout here
+
+@app.post("/init")
+async def init(request: InitRequest):
+    # Do NOT set EP_ROLLOUT_ID here; set it in the child
+    p = multiprocessing.Process(
+        target=execute_rollout_step_sync,
+        args=(request),
+    )
+    p.start()
 ```
 
 ### How `RemoteRolloutProcessor` uses Fireworks Tracing
