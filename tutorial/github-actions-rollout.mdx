@@ -23,10 +23,19 @@ GITHUB_TOKEN="ghp_..."
 
 We expect the GitHub Actions workflow to accept the following inputs:
 
-- **completion_params**: JSON completion parameters (model, temperature, etc.)
-- **metadata**: JSON string containing rollout execution metadata  
-- **model_base_url**: Base URL for the model API (e.g., "https://tracing.fireworks.ai")
-- **run-name**: You must add `run-name: rollout:${{ fromJSON(inputs.metadata).rollout_id }}` to your workflow. The GitHub API doesn't return the run ID when dispatching, so this allows us to find and monitor the correct workflow run.
+<ParamField body="completion_params" type="string" required>
+  JSON completion parameters (model, temperature, etc.)
+</ParamField>
+
+<ParamField body="metadata" type="string" required>
+  JSON string containing rollout execution metadata
+</ParamField>
+
+<ParamField body="model_base_url" type="string" required>
+  Base URL for the model API (e.g., "https://tracing.fireworks.ai")
+</ParamField>
+
+<Note>You must add `run-name: rollout:${{ fromJSON(inputs.metadata).rollout_id }}` to your workflow. The GitHub API doesn't return the run ID when dispatching, so this allows us to find and monitor the correct workflow run.</Note>
 
 ```yaml
 name: Eval Protocol Rollout
@@ -50,11 +59,13 @@ on:
 ```
 
 
-## Metadata Piggyback
+## Metadata Correlation
 
-To push trajectories back to `eval-protocol`, you must include the following
-metadata along with your traces so that they can correlated with the
-`EvaluationRow`s.
+When making model calls in your GitHub Actions workflow, include the following metadata
+in your traces and logs so that `eval-protocol` can correlate them with the
+corresponding `EvaluationRow`s during result collection. `GithubActionRolloutProcessor` 
+automatically generates this and sends it to the server, so you don't need to worry
+about wrangling metadata.
 
 - `invocation_id`
 - `experiment_id`

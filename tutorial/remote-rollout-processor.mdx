@@ -13,70 +13,125 @@ codebase by wrapping it in an HTTP service.
 
 ## API Contract
 
-We expect the remote service to implement the following API contract:
+**POST /init:**
 
-<Accordion title="POST /init">
-### Request Body
+We expect the remote service to implement a single /init endpoint that accepts an `InitRequest` with the following fields:
 
-- **model**: The model to use for the rollout (e.g., "openai/gpt-4o")
-- **messages**: Array of conversation messages
-- **tools**: Optional array of available tools for the model
-- **model_base_url**: Optional base URL for the remote server to make LLM calls. This is useful for configuring different endpoints during development/training.
-- **metadata**: Object containing rollout execution metadata
+<ParamField body="completion_params" type="object" required>
+  Dictionary containing model and optional parameters like temperature, max_tokens, etc.
+</ParamField>
 
-```json request_body.json
+<ParamField body="messages" type="array">
+  Array of conversation messages
+</ParamField>
+
+<ParamField body="tools" type="array">
+  Array of available tools for the model
+</ParamField>
+
+<ParamField body="model_base_url" type="string">
+  Base URL for the remote server to make LLM calls
+</ParamField>
+
+<ParamField body="metadata" type="object" required>
+  Rollout execution metadata for correlation
+</ParamField>
+
+<ParamField body="api_key" type="string">
+  API key to be used by the remote server
+</ParamField>
+
+<Accordion title="Request Example">
+```json init_request.json
 {
-    "model": "accounts/fireworks/models/gpt-oss-120b",
-    "messages": [ { "role": "user", "content": "..." } ],
+    "completion_params": {
+        "model": "accounts/fireworks/models/gpt-oss-120b",
+        "temperature": 0.7,
+        "max_tokens": 2048
+    },
+    "messages": [
+        { "role": "user", "content": "What is the weather in San Francisco?" }
+    ],
     "tools": [
-      {
-        "type": "function",
-        "function": {
-          "name": "get_weather",
-          "description": "Get the weather for a city",
-          "parameters": { "type": "object", "properties": { "city": { "type": "string" } } }
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the weather for a city",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": { "type": "string" }
+                    }
+                }
+            }
         }
-      }
     ],
     "model_base_url": "https://api.fireworks.ai/inference/v1",
     "metadata": {
-      "invocation_id": "ivk_abcd",
-      "experiment_id": "exp_efgh",
-      "rollout_id": "rll_ijkl",
-      "run_id": "run_123",
-      "row_id": "row_123"
-    }
+        "invocation_id": "ivk_abcd",
+        "experiment_id": "exp_efgh",
+        "rollout_id": "rll_ijkl",
+        "run_id": "run_123",
+        "row_id": "row_123"
+    },
+    "api_key": "fw_your_api_key"
 }
 ```
 </Accordion>
 
-<Accordion title="GET /status?rollout_id={rollout_id}">
-### Response Body
+## Metadata Correlation
 
-```json status_response.json
-{
-  "terminated": true,
-  "info": {
-    "reason": "completed",
-    "ended_at": "2025-09-24T12:34:56Z",
-    "num_turns": 2
-  }
-}
-```
-</Accordion>
-
-
-## Metadata Piggyback
-
-To push trajectories back to `eval-protocol`, you must include the following
-metadata along with your traces so that they can correlated with the
-`EvaluationRow`s.
+When making model calls in your remote server, include the following metadata
+in your traces and logs so that `eval-protocol` can correlate them with the
+corresponding `EvaluationRow`s during result collection. `RemoteRolloutProcessor` 
+automatically generates this and sends it to the server, so you don't need to worry
+about wrangling metadata.
 
 - `invocation_id`
 - `experiment_id`
 - `rollout_id`
 - `run_id`
 - `row_id`
+
+## Fireworks Tracing
+
+The `RemoteRolloutProcessor` detects rollout completion by polling **structured logs** sent to Fireworks Tracing. Your remote server should add `FireworksTracingHttpHandler` as the logging handler, a `RolloutIdFilter`, and log completion status using structured `Status` objects:
+
+```python remote_server.py highlight={5-6, 11-12, 18-21, 25-28}
+import logging
+from eval_protocol import Status, InitRequest, FireworksTracingHttpHandler, RolloutIdFilter
+
+# Configure Fireworks tracing handler
+fireworks_handler = FireworksTracingHttpHandler()
+logging.getLogger().addHandler(fireworks_handler)
+
+@app.post("/init") 
+def init(request: InitRequest):
+    # Create rollout-specific logger with filter
+    rollout_logger = logging.getLogger(f"eval_server.{request.metadata.rollout_id}")
+    rollout_logger.addFilter(RolloutIdFilter(request.metadata.rollout_id))
+    
+    try:
+        # Run your rollout here
+        
+        # Then log successful completion with structured status
+        rollout_logger.info(
+            f"Rollout {request.metadata.rollout_id} completed",
+            extra={"status": Status.rollout_finished()}
+        )
+            
+    except Exception as e:
+        # Log errors with structured status
+        rollout_logger.error(
+            f"Rollout {request.metadata.rollout_id} failed: {e}",
+            extra={"status": Status.rollout_error(str(e))}
+        )
+```
+
+1. **Remote server logs completion**: Uses `Status.rollout_finished()` or `Status.rollout_error()`
+2. **RemoteRolloutProcessor polls**: Searches logs by `rollout_id` tag until completion found
+3. **Status extraction**: Reads structured status fields (`code`, `message`, `details`)
 
 ## Example
 
