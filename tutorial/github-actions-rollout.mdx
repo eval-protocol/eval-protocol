@@ -48,6 +48,11 @@ We expect the GitHub Actions workflow to accept the following inputs:
   Base URL for the model API (e.g., "https://tracing.fireworks.ai")
 </ParamField>
 
+<ParamField body="api_key" type="string" required>
+  API key for the model API
+</ParamField>
+
+
 <Note>You must add `run-name: rollout:${{ fromJSON(inputs.metadata).rollout_id }}` to your workflow. The GitHub API doesn't return the run ID when dispatching, so this allows us to find and monitor the correct workflow run.</Note>
 
 ```yaml
@@ -67,6 +72,10 @@ on:
         type: string
       model_base_url:
         description: 'Base URL for the model API'
+        required: true
+        type: string
+      api_key:
+        description: 'API key for the model API'
         required: true
         type: string
 ```
