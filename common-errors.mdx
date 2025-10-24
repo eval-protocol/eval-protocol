@@ -10,6 +10,10 @@ icon: "triangle-exclamation"
 
 **Cause**: Hitting API rate limits during rollout generation or LLM judging.
 
+<Warning>
+**Provisional Rate Limits**: If you haven't added a payment method to your account, you'll have a provisional rate limit of **10 requests per minute (RPM)**. To access higher rate limits, add a payment method to your account settings.
+</Warning>
+
 **Solution**: Reduce concurrency in your `@evaluation_test`:
 
 ```python

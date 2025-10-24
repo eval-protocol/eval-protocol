@@ -208,7 +208,11 @@ You can make evaluations faster by increasing concurrency, but be careful of rat
 ```
 
 <Warning>
-Setting concurrency too high may result in 429 rate limit errors. If you encounter rate limiting, reduce these values. For more troubleshooting, see [Common Errors](/common-errors).
+Setting concurrency too high may result in 429 rate limit errors. If you encounter rate limiting, reduce these values. 
+
+**Note**: Accounts without a payment method have a provisional rate limit of 10 RPM. Add a payment method to access higher rate limits.
+
+For more troubleshooting, see [Common Errors](/common-errors).
 </Warning>
 
 ### Extract More Test Cases with Preprocessing
