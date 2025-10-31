@@ -23,6 +23,12 @@
         "pages": ["authoring-with-ai-agents"]
       },
       {
+        "group": "Tutorials",
+        "pages": [
+          "tutorial/gsm8k-finetuning-quickstart"
+        ]
+      },
+      {
         "group": "UI",
         "pages": [
           "tutorial/ui/getting-started",
@@ -40,6 +46,7 @@
       {
         "group": "Integrations",
         "pages": [
+          "integrations/index",
           "integrations/langgraph",
           "integrations/pydantic-ai"
         ]

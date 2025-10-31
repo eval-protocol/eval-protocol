@@ -1,0 +1,65 @@
+---
+title: GSM8K Fine-tuning Quickstart (Small Model)
+description: Run pytest to materialize the evaluator and dataset, then launch a local Reinforcement Fine-Tuning job on a small model.
+sidebarTitle: GSM8K Fine-tuning Quickstart
+---
+
+This guide shows how to:
+
+- Materialize a GSM8K evaluator and dataset locally with `pytest`
+- Kick off a Reinforcement Fine-Tuning (RFT) job for a small base model
+- Track accuracy improvements over time
+
+All steps run locally; no staging-specific settings are required.
+
+## Prerequisites
+
+- Repo checked out and Python deps installed
+
+
+## 1) Run the GSM8K evaluation test locally
+
+We’ll use the GSM8K evaluation defined at `tests/pytest/gsm8k/test_pytest_math_example.py`. Running it locally will:
+
+- Create (or update) the evaluator with the test’s metadata
+- Materialize a small GSM8K dataset from `development/gsm8k_sample.jsonl`
+
+```bash
+cd /Users/bennychen/Documents/eval-protocol/python-sdk
+pytest -q tests/pytest/gsm8k/test_pytest_math_example.py::test_math_dataset -s
+```
+
+You should see a local evaluation UI pop up to show you what are the evaluation results
+
+![Local Evaluation — GSM8K](/assets/gsm8k-local-eval.png)
+
+You can see that eval protocol is helping you organize each of the evaluation logs to match the rollout, so you can correlate the rollouts with the log output easily.
+
+## 2) Launch an RFT job on a small base model
+
+After the test run, create a training job that uses the evaluator and dataset just produced. Use a small base model, e.g., Qwen 0.6B:
+
+```bash
+eval-protocol create rft --base-model accounts/fireworks/models/qwen3-0p6b
+```
+
+And you will get the link to the RFT job on Fireworks.
+
+## 3) Track accuracy improvements
+
+On the Fireworks side, you will be able to monitor progress and the rollouts.
+
+![RFT Job — Final Accuracy](/assets/gsm8k-rft-final.png)
+
+## What’s happening under the hood
+
+- The pytest evaluates a small GSM8K slice with a numeric-check reward and registers an evaluator + dataset with your local API.
+
+- The `create rft` command wires those resources into a Reinforcement Fine-Tuning job for the specified base model.
+- As training progresses, evaluation scores reflect improved accuracy on the held-out set.
+
+## Next steps
+
+- Swap in your own dataset JSONL or pass `--dataset-jsonl` to `create rft` for custom training.
+- Iterate on reward shaping for different solution formats or stricter parsing.
+
