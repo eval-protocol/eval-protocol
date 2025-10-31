@@ -45,6 +45,12 @@
         ]
       },
       {
+        "group": "Examples",
+        "pages": [
+          "example/swe-bench"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
           "common-errors",

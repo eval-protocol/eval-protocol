@@ -1,0 +1,167 @@
+---
+title: SWE-bench Evaluation
+description: 'Evaluate software engineering agents end-to-end using the official SWE-bench harness with full tracing and accessible reports'
+sidebarTitle: SWE-bench Evaluation
+---
+
+SWE-bench is a public benchmark that measures how well an AI assistant can fix real issues in open-source projects. Each task provides a GitHub issue plus the repository state. Your agent must propose a patch, and the official SWE-bench harness verifies whether the project’s tests now pass. This guide walks you through running SWE-bench with Eval Protocol so you can inspect every model call, review the produced patch, and understand the results in plain language.
+
+<Note>
+The runnable example lives in the companion repository `SWEBench-Eval/` (see `server.py` and `test_swebench.py`). We will refer to that repository throughout the tutorial.
+</Note>
+
+## Who is this guide for?
+
+- Builders who want to see a full “issue ➜ patch ➜ verification” workflow without wrestling with infrastructure
+- Researchers evaluating new coding agents against a trusted benchmark
+- Teams adopting Eval Protocol for the first time and looking for a gentle, end-to-end example
+
+## What you will accomplish
+
+- Launch the SWE-bench example with Eval Protocol
+- Understand exactly what happens during each step of the evaluation
+- Learn how to interpret the output artifacts and trace the agent’s reasoning inside Eval Protocol’s UI
+
+## Before you begin
+
+- A Unix-like terminal (macOS or Linux works well; Windows with WSL is fine)
+- Python 3.11 or later
+- An Eval Protocol account and Fireworks API credentials (we’ll show you where to paste them)
+
+You do **not** need prior knowledge of containers, orchestration tools, or GPU infrastructure—the helper scripts wrap everything for you.
+
+## Run the evaluation (guided)
+
+<Steps>
+<Step title="Clone the example project">
+Open a terminal and fetch the example repository:
+
+```bash
+git clone https://github.com/eval-protocol/SWEBench-Eval
+cd SWEBench-Eval
+```
+
+You should now see files such as `server.py`, `test_swebench.py`, and a `requirements.lock` file in the directory.
+</Step>
+
+<Step title="Register your Fireworks credentials">
+Run the built-in guided setup:
+
+```bash
+mini-extra config setup
+```
+
+When the prompt appears:
+
+- **Key name**: `FIREWORKS_API_KEY`
+- **Key value**: paste the key from the Eval Protocol dashboard
+- Leave the remaining fields empty and confirm
+
+After the script exits you’ll have a local `.ini` file storing the API key securely. No additional environment knowledge is required.
+</Step>
+
+<Step title="Tell the example where to run the evaluation">
+Open `test_swebench.py` in an editor and locate the `RemoteRolloutProcessor`. Replace the placeholder with our managed URL:
+
+```python
+from eval_protocol.processors import RemoteRolloutProcessor
+
+rollout_processor = RemoteRolloutProcessor(
+    remote_base_url="https://35.209.134.123:3000",  # managed SWE-bench service
+    model_base_url="https://tracing.fireworks.ai",
+    timeout_seconds=1800,
+)
+```
+
+Why this matters: Eval Protocol will forward each SWE-bench task to the hosted processor, stream logs back to your workspace, and ensure everything is validated with the official harness.
+</Step>
+
+<Step title="Run the test suite">
+Still inside the repository root, export your credentials (they stay in this terminal session only) and start the evaluation:
+
+```bash
+export FIREWORKS_API_KEY="<your_fireworks_key>"
+export FIREWORKS_ACCOUNT_ID="<your_fireworks_account_id>"
+uv run pytest -q test_swebench.py -s
+```
+
+During the run you’ll see status lines such as `row_0 ... resolved=True`. That indicates the harness accepted the patch. Each row corresponds to a SWE-bench task.
+</Step>
+</Steps>
+
+## What happens behind the scenes?
+
+1. Eval Protocol reads a SWE-bench task (issue description + repository state).
+2. Your configured model produces a patch.
+3. The remote processor applies the patch and executes the project’s own tests.
+4. Results, traces, and artifacts stream back to your Eval Protocol dashboard in real time.
+
+You can repeat the run at any time—Eval Protocol keeps the run history so you can compare different models or prompts.
+
+## Configure the evaluation (optional tweaks)
+
+```python
+# test_swebench.py
+completion_params = [
+    {
+        "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        "temperature": 0.0,
+    }
+]
+max_concurrent_rollouts = 2
+
+def rows():
+    return create_rows_from_indices(5)
+```
+
+- `completion_params`: choose the model and generation parameters.
+- `max_concurrent_rollouts`: how many SWE-bench tasks to run at the same time.
+- `rows()`: select which benchmark instances to evaluate. The helper `create_rows_from_indices` lets you pick by index.
+
+## Understand the outputs
+
+Each invocation creates a folder `invocation-<id>/` within `artifacts/`. The Eval Protocol dashboard mirrors this structure so you can explore it visually.
+
+<Expandable title="invocation-<id>/row_0/preds.json">
+This file stores the patch exactly as your model suggested it. Scroll through the JSON to see each modified file and the proposed changes. If you open the same run in Eval Protocol’s UI, the **Patch** tab shows the same content with syntax highlighting for easier reading.
+</Expandable>
+
+<Expandable title="invocation-<id>/row_0/<repository>.traj.json">
+Every action the agent took—reading files, calling the model, deciding on edits—appears here as a timeline. In the dashboard this becomes the **Trace** view, where you can filter steps, inspect prompts, and replay the reasoning that led to the final patch.
+</Expandable>
+
+<Expandable title="invocation-<id>/row_0/logs/run_evaluation/.../report.json">
+This is the official SWE-bench verdict. Look for `"resolved": true` to confirm the repository’s own tests passed with your patch. The report also lists which tests ran and how long they took. In the UI, open **Evaluation ➜ Reports** to see the same structured summary.
+</Expandable>
+
+<Expandable title="invocation-<id>/row_0/agent_0.log">
+Plain-text console output captured while the agent worked on the issue. Use it to understand high-level progress (“cloning repo… running tests… patch applied”).
+</Expandable>
+
+### Navigate results in Eval Protocol
+
+1. Open your Eval Protocol workspace and select the SWE-bench invocation.
+2. The **Overview** tab gives a quick pass/fail summary for each row.
+3. Use **Patch** to read the generated diff, **Trace** to follow the reasoning tokens, and **Reports** to see the SWE-bench harness decision.
+4. Download any artifact directly from the sidebar if you want to archive it locally.
+
+## Troubleshooting (friendly fixes)
+
+<Accordion title="The run says 'unauthorized'">
+Double-check that you exported both `FIREWORKS_API_KEY` and `FIREWORKS_ACCOUNT_ID` in the terminal where you ran `pytest`. You can display the current values with `env | grep FIREWORKS`.
+</Accordion>
+
+<Accordion title="The evaluation stops immediately">
+Make sure you cloned the `SWEBench-Eval` repository and stayed inside that folder before running commands. Running from another directory can’t find `test_swebench.py`.
+</Accordion>
+
+<Accordion title="I can’t see the run in Eval Protocol">
+Refresh the dashboard and filter by the exact invocation ID printed in the terminal (e.g., `invocation-2024-06-12T...`). If it still doesn’t appear, confirm that your account has access to the workspace where the run is stored.
+</Accordion>
+
+## Keep exploring
+
+- Learn how to schedule recurring evaluations with <Link href="/tutorial/remote-rollout-processor">Remote Rollout Processor</Link>.
+- Dive into the <Link href="/reference/evaluation-test">Evaluation Test reference</Link> for every configuration option.
+- Join the community discussion in <Link href="/community">Eval Protocol Community</Link> to share results or ask questions.
+
