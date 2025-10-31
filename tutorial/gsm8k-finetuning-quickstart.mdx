@@ -4,62 +4,113 @@ description: Run pytest to materialize the evaluator and dataset, then launch a 
 sidebarTitle: GSM8K Fine-tuning Quickstart
 ---
 
-This guide shows how to:
+Run GSM8K locally end-to-end:
 
-- Materialize a GSM8K evaluator and dataset locally with `pytest`
+- Materialize a GSM8K evaluator and dataset with `pytest`
 - Kick off a Reinforcement Fine-Tuning (RFT) job for a small base model
-- Track accuracy improvements over time
+- Track accuracy improvements by re-running the evaluator
 
-All steps run locally; no staging-specific settings are required.
+<Note type="Tip" title="Run in Colab (Billing Required)">
+Running the GSM8K tutorial in Google Colab requires a Google account with billing enabled (credit card on file). Fireworks usage also bills against your account once you supply `FIREWORKS_API_KEY`. 👉 [Run the GSM8K Fine-tuning Colab](https://colab.research.google.com/drive/16xrb9rx6AoAEOtrDXumzo71HjhunaoPi#scrollTo=CP18QX4tgi-0)
+</Note>
 
 ## Prerequisites
 
-- Repo checked out and Python deps installed
+- Python 3.10+
+- Local Python environment with Jupyter support (VS Code, JupyterLab, or classic notebook)
+- `FIREWORKS_API_KEY` with permissions to launch RFT jobs (stored in your shell or `.env`)
+- Basic familiarity with GSM8K-style math reasoning tasks
 
-
-## 1) Run the GSM8K evaluation test locally
-
-We’ll use the GSM8K evaluation defined at `tests/pytest/gsm8k/test_pytest_math_example.py`. Running it locally will:
-
-- Create (or update) the evaluator with the test’s metadata
-- Materialize a small GSM8K dataset from `development/gsm8k_sample.jsonl`
+<Steps>
+  <Step title="Install dependencies">
+    Install the latest `eval-protocol` SDK directly from the main branch and make sure `pytest` is on the path. Upgrade `pip` first to avoid resolver issues.
 
 ```bash
-cd /Users/bennychen/Documents/eval-protocol/python-sdk
+python -m pip install --upgrade pip
+python -m pip install pytest git+https://github.com/eval-protocol/python-sdk.git
+```
+  </Step>
+  <Step title="Download evaluation assets">
+    Download the evaluation assets we will use to kick off the job. Copy the GSM8K pytest script and sample dataset into a working directory (here `gsm8k_artifacts/`). The snippet below is safe to run inside a notebook cell or standalone script and ensures the files land where later steps expect them.
+
+```python tutorial/download_gsm8k_assets.py
+from pathlib import Path
+import requests
+
+ARTIFACT_ROOT = Path("gsm8k_artifacts")
+TEST_PATH = ARTIFACT_ROOT / "tests" / "pytest" / "gsm8k" / "test_pytest_math_example.py"
+DATASET_PATH = ARTIFACT_ROOT / "development" / "gsm8k_sample.jsonl"
+
+files_to_download = {
+    TEST_PATH: "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/tests/pytest/gsm8k/test_pytest_math_example.py",
+    DATASET_PATH: "https://raw.githubusercontent.com/eval-protocol/python-sdk/main/development/gsm8k_sample.jsonl",
+}
+
+for local_path, url in files_to_download.items():
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    local_path.write_bytes(response.content)
+    print(f"Saved {url} -> {local_path}")
+```
+
+Expected output:
+
+```
+Saved https://raw.githubusercontent.com/.../test_pytest_math_example.py -> gsm8k_artifacts/tests/pytest/gsm8k/test_pytest_math_example.py
+Saved https://raw.githubusercontent.com/.../gsm8k_sample.jsonl -> gsm8k_artifacts/development/gsm8k_sample.jsonl
+```
+  </Step>
+  <Step title="Run the GSM8K evaluation locally">
+    Execute the pytest that materializes the evaluator and dataset. Point `pytest` at the artifacts folder you created in the previous step.
+
+```bash
+cd gsm8k_artifacts
 pytest -q tests/pytest/gsm8k/test_pytest_math_example.py::test_math_dataset -s
 ```
 
-You should see a local evaluation UI pop up to show you what are the evaluation results
+You should see log output for each rollout and a local evaluation UI link such as `http://localhost:8000/pivot` to inspect results.
 
-![Local Evaluation — GSM8K](/assets/gsm8k-local-eval.png)
-
-You can see that eval protocol is helping you organize each of the evaluation logs to match the rollout, so you can correlate the rollouts with the log output easily.
-
-## 2) Launch an RFT job on a small base model
-
-After the test run, create a training job that uses the evaluator and dataset just produced. Use a small base model, e.g., Qwen 0.6B:
+![Screenshot of the local GSM8K evaluation UI showing aggregate scores and trajectories panels.](/assets/gsm8k-local-eval.png)
+  </Step>
+  <Step title="Set FIREWORKS_API_KEY">
+    Store your Fireworks API key in the environment so the CLI can authenticate. The command below keeps the key confined to the current shell session.
 
 ```bash
+export FIREWORKS_API_KEY="<your-fireworks-key>"
+```
+
+Alternatively, load it from a secrets manager or `.env` file if your workflow already manages credentials securely.
+  </Step>
+  <Step title="Launch the RFT job">
+    Trigger the `eval-protocol` CLI to start a Reinforcement Fine-Tuning job using the evaluator and dataset registered above. Replace the base model to experiment with other policies.
+
+```bash
+cd ..
 eval-protocol create rft --base-model accounts/fireworks/models/qwen3-0p6b
 ```
 
-And you will get the link to the RFT job on Fireworks.
+The CLI reports dashboard links for the evaluator, dataset, and RFT job so you can monitor rollouts.
 
-## 3) Track accuracy improvements
+![Screenshot of the Fireworks RFT dashboard highlighting final accuracy metrics for the GSM8K job.](/assets/gsm8k-rft-final.png)
+  </Step>
+</Steps>
 
-On the Fireworks side, you will be able to monitor progress and the rollouts.
+## Track accuracy over time
 
-![RFT Job — Final Accuracy](/assets/gsm8k-rft-final.png)
+- Re-run the pytest command periodically to evaluate the latest checkpoint against the GSM8K slice.
+- Adjust reward shaping or parsing logic inside `test_pytest_math_example.py` to fit your formatting expectations.
+- Swap in a custom dataset JSONL by editing the local artifact or passing `--dataset-jsonl` when creating the RFT job.
 
 ## What’s happening under the hood
 
-- The pytest evaluates a small GSM8K slice with a numeric-check reward and registers an evaluator + dataset with your local API.
-
+- The pytest evaluates a small GSM8K slice with a numeric-check reward and registers an evaluator plus dataset with your local API.
 - The `create rft` command wires those resources into a Reinforcement Fine-Tuning job for the specified base model.
-- As training progresses, evaluation scores reflect improved accuracy on the held-out set.
+- As training progresses, evaluation scores reflect improved accuracy on the held-out set, letting you iterate quickly before scaling up.
 
 ## Next steps
 
-- Swap in your own dataset JSONL or pass `--dataset-jsonl` to `create rft` for custom training.
-- Iterate on reward shaping for different solution formats or stricter parsing.
+- Parameterize base models and dataset paths in scripts or notebooks to make repeated experiments easier.
+- Automate the evaluation loop in CI so new policies are validated before deployment.
+- Promote successful evaluators and datasets to shared registries once the workflow is stable.
 
