@@ -1,267 +1,222 @@
 ---
-title: Quickstart
+title: Fine Tuning an SVGAgent with Eval Protocol
+description: 'Train and improve an SVG generation agent using reinforcement fine tuning with Eval Protocol'
 icon: "rocket"
-description: "No hand-written evals required. Build a data-driven model leaderboard from your existing traces."
+sidebarTitle: Quickstart
 ---
 
-With so many AI models available, choosing the right one is becoming a critical engineering decision. This quickstart shows you how to evaluate your production LLM traces using pairwise comparisons in under 5 minutes - no ground truth required!
-
-
-## Installation and Setup
-
-Ready to dive in? Install EP with your preferred observability platform:
-
-<Tabs>
-  <Tab title="Langfuse">
-```shell
-pip install 'eval-protocol[langfuse]'
-
-# Model API keys (choose what you need)
-export OPENAI_API_KEY="your_openai_key"
-export FIREWORKS_API_KEY="your_fireworks_key"
-export GEMINI_API_KEY="your_gemini_key"
-
-# Platform keys
-export LANGFUSE_PUBLIC_KEY="your_public_key"
-export LANGFUSE_SECRET_KEY="your_secret_key"
-export LANGFUSE_HOST="https://your-deployment.com"  # Optional
-```
-  </Tab>
-  <Tab title="Braintrust">
-```shell
-pip install 'eval-protocol[braintrust]'
-
-# Model API keys (choose what you need)
-export OPENAI_API_KEY="your_openai_key"
-export FIREWORKS_API_KEY="your_fireworks_key"
-export GEMINI_API_KEY="your_gemini_key"
-
-# Platform keys
-export BRAINTRUST_API_KEY="your_braintrust_key"
-export BRAINTRUST_PROJECT_ID="your_project_id"
-```
-  </Tab>
-  <Tab title="LangSmith">
-```shell
-pip install 'eval-protocol[langsmith]'
-
-# Model API keys (choose what you need)
-export OPENAI_API_KEY="your_openai_key"
-export FIREWORKS_API_KEY="your_fireworks_key"
-export GEMINI_API_KEY="your_gemini_key"
-
-# Platform keys
-export LANGSMITH_API_KEY="your_langsmith_key"
-```
-  </Tab>
-</Tabs>
-
-## Run Your First Evaluation
-
-The core LLM judge function is available as a simple import from [llm_judge.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge.py). Here's a minimal sample for Langfuse:
-
-```python
-from datetime import datetime
-import pytest
-
-from eval_protocol import (
-    evaluation_test,
-    aha_judge,
-    EvaluationRow,
-    SingleTurnRolloutProcessor,
-    create_langfuse_adapter,
-    DynamicDataLoader,
-)
-
-
-def langfuse_data_generator() -> list[EvaluationRow]:
-    adapter = create_langfuse_adapter()
-    return adapter.get_evaluation_rows(
-        to_timestamp=datetime.utcnow(),
-        limit=20,
-        sample_size=5,
-    )
-
-
-@pytest.mark.parametrize(
-    "completion_params",
-    [
-        {"model": "gpt-4.1"},
-        {"model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b"},
-    ],
-)
-@evaluation_test(
-    data_loaders=DynamicDataLoader(
-        generators=[langfuse_data_generator],
-    ),
-    rollout_processor=SingleTurnRolloutProcessor(),
-)
-async def test_llm_judge(row: EvaluationRow) -> EvaluationRow:
-    return await aha_judge(row)
-```
-
-We provide example implementations for you to run immediately. All you need to change is the parameters in `adapter.get_evaluation_rows`. See more in the Integrations section for more information on your choice of tracing.
-
-<Tabs>
-  <Tab title="Langfuse">    
-    Full example at [llm_judge_langfuse.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_langfuse.py).
-    
-    Run it using the command:
-    ```bash
-pytest llm_judge_langfuse.py -v -s
-```
-  </Tab>
-  <Tab title="Braintrust">    
-    Full example at [llm_judge_braintrust.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_braintrust.py)
-    
-    Run it using the command:
-    ```bash
-pytest llm_judge_braintrust.py -v -s
-```
-  </Tab>
-  <Tab title="LangSmith">    
-    Full example at [llm_judge_langsmith.py](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/quickstart/llm_judge_langsmith.py)
-    
-    Run it using the command:
-    ```bash
-pytest llm_judge_langsmith.py -v -s
-```
-  </Tab>
-</Tabs>
-
-## Viewing the Results
-
-At the bottom of your pytest, you'll see a link. Clicking on it, you'll be taken to a local leaderboard:
-
-```
-================================================================================
-📊 LOCAL UI EVALUATION RESULTS
-================================================================================
-📊 Invocation messy-party-41:
-  📊 Aggregate scores: http://localhost:8000/pivot?filterConfig=%5B%7B%22logic%22%3A%20%22AND%22%2C%20%22filters%22%3A%20%5B%7B%22field%22%3A%20%22%24.execution_metadata.invocation_id%22%2C%20%22operator%22%3A%20%22%3D%3D%22%2C%20%22value%22%3A%20%22messy-party-41%22%2C%20%22type%22%3A%20%22text%22%7D%5D%7D%5D
-  📋 Trajectories: http://localhost:8000/table?filterConfig=%5B%7B%22logic%22%3A%20%22AND%22%2C%20%22filters%22%3A%20%5B%7B%22field%22%3A%20%22%24.execution_metadata.invocation_id%22%2C%20%22operator%22%3A%20%22%3D%3D%22%2C%20%22value%22%3A%20%22messy-party-41%22%2C%20%22type%22%3A%20%22text%22%7D%5D%7D%5D
-================================================================================
-```
-
-<Frame caption="Local leaderboard showing model comparison results">
-![Quickstart Leaderboard](/assets/quickstart-leaderboard.png)
+<Frame>
+  <img alt="SVG Agent Training Overview" src="assets/overview.png" />
 </Frame>
 
-Check out what else you can do in the [pivot view](/tutorial/ui/pivot#default-configurations), including analyzing cost and time metrics.
+Train and improve an SVG generation agent using reinforcement fine tuning with Eval Protocol.
 
-## How It Works: Arena-Hard-Auto Methodology
+## Introduction
 
-Arena-Hard-Auto is a pairwise comparison approach where:
+This repo demonstrates building an SVG generation agent using reinforcement fine tuning, with the parts:
 
-- **Two models** respond to the same prompt
-- **An LLM judge** compares the responses 
-- **Win rates** are calculated across many comparisons
-- **No ground truth** is needed - just relative quality assessment
+- **Eval Protocol** - Orchestrates the rollout execution and evaluation framework
+- **Vercel Typescript Server** - Remote server that handles SVG code generation rollouts
+- **Fireworks RFT** - Reinforcement fine tuning trainer
 
-## Customization Options
+A big thank you to [SVGBench](https://github.com/johnbean393/SVGBench) for the dataset. SVGBench is a comprehensive benchmark that evaluates language models on their ability to generate SVG code that meets specific visual requirements. Each prompt includes detailed criteria (like "draw a red circle in the top-left corner") that the generated SVG must fulfill.
 
-### Filter Your Traces
+**The Evaluation Process**: The model generates SVG code from text prompts, we render the SVGs to images, and then use GPT-4.1 as a visual judge to count how many requirements were fulfilled. This gives us concrete scores to measure improvement and lets you see dramatic before/after visual comparisons as your model gets better through training.
 
-For advanced trace filtering options (by tags, users, time ranges, metadata, etc.), check out the [Integrations section](/integrations/langfuse-adapter#filtering-examples).
+## Quick Start
 
-### Try Different Models
+### Installation
 
+1. **Create a Fireworks account**: [https://app.fireworks.ai/account/home](https://app.fireworks.ai/account/home)
+
+2. **Install Eval Protocol**:
+```bash
+pip install "eval-protocol[svgbench]"
+```
+
+3. **Environment Setup for Local Dry Run**:
+
+Make a copy of `env.example`, name it `.env`, and fill in the keys for `FIREWORKS_API_KEY` and `OPENAI_API_KEY`.
+
+<Note>Make sure `.env` is under the `/evaluator` folder!</Note>
+
+## Running Locally
+
+**Terminal 1** - Start the local UI server to view results:
+
+```bash
+ep logs
+```
+
+### Option A: Using our Vercel Remote Server (Recommended)
+
+```bash
+pytest evaluator/test_svgagent.py -vs
+```
+
+The test automatically uses the remote server:
 ```python
-# Modify the completion_params in your @evaluation_test:
-completion_params=[
-    {"model": "gpt-5"},
-    {"model": "anthropic/claude-4"},
-    {"model": "fireworks_ai/accounts/fireworks/models/qwen3-235b-a22b-instruct-2507"},
-],
+rollout_processor=RemoteRolloutProcessor(
+    remote_base_url="https://vercel-svg-server-ts.vercel.app",
+)
+```
+
+### Option B: Local Development Server
+
+In a second terminal:
+
+```bash
+cd vercel_svg_server_ts
+vercel dev
+```
+
+Then swap out the `remote_base_url` to point to the local server you just started:
+```python
+rollout_processor=RemoteRolloutProcessor(
+    remote_base_url="http://localhost:3000",
+)
+```
+
+And in a third terminal, run the evaluation:
+```bash
+pytest evaluator/test_svgagent.py -vs
+```
+
+<Note>See [Vercel CLI documentation](https://vercel.com/docs/cli/dev) for more information on local development.</Note>
+
+### Expected Test Output (for both options):
+
+The test should automatically open a browser page to view results. If it doesn't, navigate to http://localhost:8000.
+
+```
+INFO:eval_protocol.pytest.remote_rollout_processor:Found status log for rollout democratic-way-12: Rollout democratic-way-12 completed
+INFO:eval_protocol.pytest.remote_rollout_processor:Found Fireworks log for rollout democratic-way-12 with status code 100.0
+INFO:eval_protocol.adapters.fireworks_tracing:Successfully converted 1 traces to evaluation rows | 3/8 [00:19<00:22, 4.52s/rollout]
+...
+Runs (Parallel): 100%|████████████████████████████████████████████| 1/1 [00:31<00:00, 31.07s/run]
+PASSED
+```
+
+<Frame>
+  <img alt="Eval Protocol Logs Interface" src="assets/ep_logs.png" />
+</Frame>
+
+### Aside: How Remote Rollout Processing Works
+
+Eval Protocol enables **reinforcement learning that meets you where you are**. Instead of forcing you to rewrite your agent in a specific framework, you can implement a lightweight remote server wherever your codebase and infrastructure already live.
+
+Your remote server is only responsible for:
+- **Executing rollouts** - Run your agent logic (in this case, SVG generation from text prompts)
+- **Logging to tracing** - Send structured logs to `tracing.fireworks.ai` for evaluation (see the below linked docs for more information)
+
+In this example, we showcase a **Vercel TypeScript server** that executes single-turn SVG code generation.
+
+<Note>**📖 Learn More**: For a complete deep-dive into Remote Rollout Processing, see the [Remote Rollout Processor Tutorial](https://evalprotocol.io/tutorial/remote-rollout-processor).</Note>
+
+## Training Pipeline
+
+### 1. Upload Evaluator
+
+Deploy your evaluation logic:
+
+```bash
+cd evaluator
+eval-protocol upload --entry "test_svgagent::test_svg_generation_evaluation"
+cd ..
+```
+
+Monitor the evaluator build status at: https://app.fireworks.ai/dashboard/evaluators/test-svgagent-test-svg-generation-evaluation
+
+<Note>Wait for the evaluator status to change from "Building" to "Active" before proceeding (typically takes a few minutes).</Note>
+
+### 2. Launch Reinforcement Fine Tuning
+
+Start the RFT training job:
+
+```bash
+eval-protocol create rft \
+  --base-model accounts/fireworks/models/qwen3-0p6b
 ```
 
 <Note>
-Note that for `completion_params`, these are passed into LiteLLM, so some models will need prefixes based on the provider.
+**Training Parameters**: We use Eval Protocol's default values for training parameters (batch size, epochs, learning rate, LoRA rank, accelerator count, etc.). For a complete list of available RFT flags you can customize, see [Fireworks RFT Command Documentation](https://docs.fireworks.ai/tools-sdks/firectl/commands/create-reinforcement-fine-tuning-job).
+
+**Dataset Upload**: The dataset is automatically uploaded from the `svgbench_dataset.jsonl` file referenced in your evaluator. You can confirm the dataset upload at: https://app.fireworks.ai/dashboard/datasets
 </Note>
 
-### Change the Judge
+### 3. Monitor Training Progress
 
-```python
-# Available judges in JUDGE_CONFIGS:
-judge_name = "kimi-k2-instruct-0905"  # Fireworks Kimi model (default)
-judge_name = "gemini-2.5-pro"         # Google Gemini Pro
-judge_name = "gpt-4.1"                # OpenAI GPT-4.1
-judge_name = "gemini-2.5-flash"       # Google Gemini Flash (faster)
+After successful job creation, you'll see:
+
+```
+✅ Created Reinforcement Fine-tuning Job
+   name: accounts/pyroworks/reinforcementFineTuningJobs/sdnld4yn
+
+📊 Dashboard Links:
+   Evaluator: https://app.fireworks.ai/dashboard/evaluators/test-svgagent-test-svg-generation-evaluation
+   Dataset:   https://app.fireworks.ai/dashboard/datasets/svgbench-dataset
+   RFT Job:   https://app.fireworks.ai/dashboard/fine-tuning/reinforcement/sdnld4yn
 ```
 
-Each judge has optimized settings for temperature, token limits, and concurrency based on Arena-Hard-Auto research.
+Click on the **RFT Job** link to view real-time training progress, epoch counts, and rollout data.
 
-### Adjust Concurrency for Speed
+### Training Results
 
-You can make evaluations faster by increasing concurrency, but be careful of rate limits:
+After successful training, you should see performance improvements reflected in the training metrics:
 
-```python
-@evaluation_test(
-    data_loaders=DynamicDataLoader(
-        generators=[langfuse_data_generator],
-    ),
-    completion_params=[{"model": "gpt-4.1"}],
-    rollout_processor=SingleTurnRolloutProcessor(),
-    max_concurrent_rollouts=16,      # Increase for faster candidate model responses (from completion_params)
-    max_concurrent_evaluations=4,    # Increase for faster judging (e.g. gemini-2.5-pro or kimi-k2-instruct-0905)
-)
-```
+<Frame>
+  <img alt="SVG Agent Training Progress" src="assets/graph.png" />
+</Frame>
 
-<Warning>
-Setting concurrency too high may result in 429 rate limit errors. If you encounter rate limiting, reduce these values. For more troubleshooting, see [Common Errors](/common-errors).
-</Warning>
+### SVG Quality Improvement
 
-### Extract More Test Cases with Preprocessing
+You can inspect individual rollouts to see the dramatic improvement in SVG generation quality. Below is a comparison between the first epoch and the final 8th epoch:
 
-Get more evaluation data from multi-turn conversations using built-in preprocessing functions:
+**Before (1st Epoch):**
 
-```python
-from eval_protocol import multi_turn_assistant_to_ground_truth, assistant_to_ground_truth
+<Frame>
+  <img alt="SVG Generation - Before Training" src="assets/before.png" />
+</Frame>
 
-@evaluation_test(
-    data_loaders=DynamicDataLoader(
-        generators=[langfuse_data_generator],
-        preprocess_fn=multi_turn_assistant_to_ground_truth,  # Recommended: creates one test per assistant turn
-        # preprocess_fn=assistant_to_ground_truth,          # Alternative: only uses the last assistant turn
-    ),
-    completion_params=[{"model": "gpt-4.1"}],
-    rollout_processor=SingleTurnRolloutProcessor(),
-)
-```
+**After (8th Epoch):**
 
-**`multi_turn_assistant_to_ground_truth`** (recommended):
-- Splits each multi-turn trace into multiple evaluation rows
-- Each assistant response becomes ground truth for comparison
-- Gets more test cases from fewer traces
+<Frame>
+  <img alt="SVG Generation - After Training" src="assets/after.png" />
+</Frame>
 
-**`assistant_to_ground_truth`**:
-- Uses only the final assistant response as ground truth
-- Good for evaluating conversation conclusions
+The reinforcement fine tuning process significantly improves the model's ability to generate accurate, detailed SVG graphics that better match the input descriptions.
 
-You can also write custom preprocessing functions to fit your specific use case.
+## Debugging Tips
 
-## Real-World Example: Validating Against Tau-Bench
+When your training is running, you have several powerful tools to debug and monitor your rollouts:
 
-To understand this method more in depth and our own validation of it, check out our blog post here! TODO: link blog.
+### Rollout Overview
 
-## You've just built your first model leaderboard!
+Clicking on any **Epoch** or **Step** in the training dashboard, then clicking the **table icon** to the right, will show you a comprehensive table of all rollouts. It's a good high-level overview to see if any rollouts failed and for what reason.
 
-**Most importantly, no ground truth or manual labeling required** - just your existing conversation traces! 
+<Frame>
+  <img alt="Rollout Overview Table" src="assets/rollouts.png" />
+</Frame>
 
-Now you have objective data to choose the right model for your use case:
+### Individual Rollout Details
 
-- **Test on your real conversations** - See how models perform on your specific domain
-- **Get statistical confidence** - Win rates with confidence intervals, not gut feelings  
-- **Make cost-performance trade-offs** - Balance quality against API pricing
-- **Deploy strategically** - Use different models where they excel most
+If you click on a specific row in the rollout table, you can see exactly what the prompt was and how the model responded. You can even copy and paste out the SVG code generated and render it yourself to see what the model did. This is how we got the results above in the before and after comparison.
 
-Your leaderboard becomes a living tool that evolves with new models and use cases. Stop guessing. Start measuring.
+<Frame>
+  <img alt="Individual Rollout Details" src="assets/rollout_details.png" />
+</Frame>
 
+### Live Log Streaming
 
-{/* TODO: link out to other examples, plus:
+Clicking on **View Logs** takes you to a page of logs being streamed in. Here, you can see precisely what errors are happening to the rollouts. This is useful to debug and fix any issues with your rollouts.
 
-If you already have an agent or application, you can connect it to the protocol without rewriting your core codebase:
+<Frame>
+  <img alt="Live Log Streaming" src="assets/logs.png" />
+</Frame>
 
-- **[Remote Server](/tutorial/remote-rollout-processor)** - Use the `RemoteRolloutProcessor` to delegate rollout execution to any persistent HTTP service.
-- **[GitHub Actions](/tutorial/github-actions-rollout)** - Use the `GithubActionRolloutProcessor` to trigger and manage rollouts within your existing CI/CD workflows.
-*/}
+## Contact Us / Learn More
+- [Discord Server](https://discord.gg/mMqQxvFD9A). Come talk to us in the #eval-protocol channel!
+- [Eval Protocol Documentation](https://evalprotocol.io/introduction)
+- [Remote Rollout Processor Tutorial](https://evalprotocol.io/tutorial/remote-rollout-processor)
+- [SVGBench Dataset](https://github.com/johnbean393/SVGBench) - The original benchmark this project is based on
+- [Fireworks AI Platform](https://fireworks.ai)
