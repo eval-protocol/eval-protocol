@@ -1,0 +1,153 @@
+# Transformers Reinforcement Learning (TRL)
+Use eval-protocol to plug any environment and reward into TRL’s training loops
+
+### TRL Integration
+eval-protocol makes it easy to connect any complex environment to TRL. It handles inference, rollouts, retries, and environment I/O through rollout processors (via LiteLLM or your own), while you keep using TRL for training (logprobs, advantages, losses, backprop, checkpoints).
+
+### Why use eval-protocol with TRL
+- Bring your own environment: wrap any simulator/API/tool as messages and run it via rollout processors
+- Pluggable rewards: author Python callables that score completions; reuse built-in rewards (e.g., math)
+- Production-aligned sampling: generate from live deployments/providers while training locally
+- Robust orchestration: async batching, backoff/retries, provider abstraction (LiteLLM)
+
+# TRL x eval-protocol (Minimal Flow)
+
+This guide shows the simplest way to use eval-protocol with TRL:
+- Write a training script that instantiates `FireworksGRPOTrainer`.
+- Write a single eval-protocol `@evaluation_test` file that defines your environment (rollouts) and reward.
+
+## 1) Training script (FireworksGRPOTrainer)
+
+Key points:
+- You keep using TRL for training; generation is externalized.
+- The trainer auto-creates a generator and hot-load callback from args (no manual wiring).
+- Optionally, set `ep_test_entry` to point to your eval-protocol test (module::function) to drive rollouts via eval-protocol’s engine.
+
+Example skeleton:
+
+```python
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from trl import GRPOTrainer
+from datasets import load_dataset
+from fireworks_grpo_trainer import FireworksGRPOTrainer
+
+# Load model/tokenizer (local model is for logprobs/training)
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen3-8B", device_map="auto", trust_remote_code=True)
+
+# Dataset -> provide 'prompt' and any reference fields you need for rewards
+ds = load_dataset("openai/gsm8k", "main", split="train").map(lambda x: {"prompt": x["question"], "reference_answer": x["answer"]})
+
+# TRL args (pseudo)
+class Args:
+    model_name_or_path = "Qwen/Qwen3-8B"
+    max_prompt_length = 1024
+    max_completion_length = 256
+    lite_llm_prefix = "fireworks_ai/"
+    fireworks_account_id = "accounts/your-account"
+    fireworks_deployment_id = "your-deployment"
+    fireworks_base_model = "accounts/fireworks/models/qwen3-8b"
+    hotload_every_n_steps = 50
+    # Optional: point to your eval-protocol test file entry
+    ep_test_entry = "my_pkg.tests.gsm8k_test::test_math_dataset"
+
+args = Args()
+
+trainer = FireworksGRPOTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    args=args,
+    train_dataset=ds,
+    ep_test_entry="my_pkg.tests.gsm8k_test::test_math_dataset",
+)
+
+trainer.train()
+```
+
+## 2) Eval-protocol test file (@evaluation_test)
+
+Write a single test function that:
+- Chooses the rollout processor (e.g., `SingleTurnRolloutProcessor`) and its config.
+- Defines how to adapt your dataset to `EvaluationRow`s (or use a data loader).
+- Computes rewards (sets `row.evaluation_result`).
+
+### Walkthrough: GSM8K sample evaluation
+
+In the repository we ship a complete example at `python-sdk/tests/pytest/gsm8k/test_pytest_math_example.py`. It loads five GSM8K problems from `development/gsm8k_sample.jsonl`, calls into a deployed model, and checks whether the model returns the correct answer inside `<answer>...</answer>` tags.
+
+Key points in that file:
+- `@evaluation_test` wires the dataset, completion parameters, and `SingleTurnRolloutProcessor` together.
+- The evaluation body extracts the numeric answer from the assistant message and compares it against the ground truth.
+- Detailed logging shows when each rollout starts and ends.
+
+```python
+import logging
+import os
+import re
+from typing import Optional
+
+from eval_protocol.models import EvaluateResult, EvaluationRow, Message
+from eval_protocol.pytest import SingleTurnRolloutProcessor, evaluation_test
+
+logger = logging.getLogger(__name__)
+
+JSONL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../../development/gsm8k_sample.jsonl")
+)
+
+def extract_answer_digits(ground_truth: str) -> Optional[str]:
+    match = re.search(r"<answer>(.*?)</answer>", ground_truth, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    digits_match = re.search(r"(\d+)", match.group(1))
+    return digits_match.group(1) if digits_match else None
+
+
+@evaluation_test(
+    input_dataset=[JSONL_PATH],
+    completion_params=[
+        {
+            "temperature": 0.0,
+            "model": "fireworks_ai/accounts/fireworks/models/gpt-oss-120b",
+        }
+    ],
+    max_dataset_rows=5,
+    passed_threshold=0.0,
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+    evaluation_test_kwargs=[
+        {"math_reward_kwargs": {"tolerance": 0.001, "absolute_tolerance": 1e-8, "require_units": False}}
+    ],
+)
+def test_math_dataset(row: EvaluationRow, **_kwargs) -> EvaluationRow:
+    """Score each rollout by checking the <answer> tag against the gold solution."""
+
+    logger.info("Starting GSM8K rollout %s", row.execution_metadata.rollout_id)
+
+    prediction = extract_answer_digits(str(row.messages[-1].content))
+    ground_truth = extract_answer_digits(str(row.ground_truth))
+
+    if prediction is None or ground_truth is None:
+        score = 0.0
+        reason = "Missing <answer> tags in prediction or ground truth."
+    elif prediction == ground_truth:
+        score = 1.0
+        reason = "Model answer is correct."
+    else:
+        score = 0.0
+        reason = "Model answer is incorrect."
+
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        is_score_valid=True,
+        reason=f"{reason} Prediction={prediction}, GroundTruth={ground_truth}",
+    )
+
+    logger.info("Completed GSM8K rollout %s", row.execution_metadata.rollout_id)
+    return row
+```
+
+Point TRL’s `ep_test_entry` to the fully qualified name (`python_sdk.tests.pytest.gsm8k.test_pytest_math_example::test_math_dataset`) and the trainer will run this evaluation during training or validation. Customize the reward logic to match your own task, but the pattern—load rows, run rollouts, set `row.evaluation_result`—remains the same.
+
+
+
