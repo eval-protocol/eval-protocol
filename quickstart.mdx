@@ -6,10 +6,15 @@ sidebarTitle: Quickstart
 ---
 
 <Frame>
-  <img alt="SVG Agent Training Overview" src="assets/overview.png" />
+  <iframe
+    src="https://www.loom.com/embed/24ba433601de45ba8b63d9fb34c31fd5"
+    width="100%"
+    height="420"
+    frameBorder="0"
+    allow="autoplay; fullscreen"
+    allowFullScreen
+  />
 </Frame>
-
-Train and improve an SVG generation agent using reinforcement fine tuning with Eval Protocol.
 
 ## Introduction
 
@@ -22,6 +27,10 @@ This repo demonstrates building an SVG generation agent using reinforcement fine
 A big thank you to [SVGBench](https://github.com/johnbean393/SVGBench) for the dataset. SVGBench is a comprehensive benchmark that evaluates language models on their ability to generate SVG code that meets specific visual requirements. Each prompt includes detailed criteria (like "draw a red circle in the top-left corner") that the generated SVG must fulfill.
 
 **The Evaluation Process**: The model generates SVG code from text prompts, we render the SVGs to images, and then use GPT-4.1 as a visual judge to count how many requirements were fulfilled. This gives us concrete scores to measure improvement and lets you see dramatic before/after visual comparisons as your model gets better through training.
+
+<Frame>
+  <img alt="SVG Agent Training Overview" src="assets/overview.png" />
+</Frame>
 
 ## Quick Start
 
