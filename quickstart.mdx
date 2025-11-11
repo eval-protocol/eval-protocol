@@ -117,7 +117,8 @@ To kickoff training, simply do:
 ```bash
 cd evaluator
 eval-protocol create rft \
-  --base-model accounts/fireworks/models/qwen3-0p6b
+  --base-model accounts/fireworks/models/qwen3-0p6b \
+  --epochs 8
 ```
 
 This command:
@@ -136,6 +137,7 @@ This command:
 ```bash
 eval-protocol create rft \
   --base-model accounts/fireworks/models/qwen3-0p6b \
+  --epochs 8 \
   --force
 ```
 
