@@ -75,10 +75,11 @@ The create process below automatically reads and uploads these secrets to Firewo
 ep logs
 ```
 
-**Terminal 2** - Kick off the test:
+**Terminal 2** - Test locally:
 
 ```bash
-python evaluator/svgagent.py
+cd evaluator
+ep local-test
 ```
 
 The test automatically uses our Vercel remote server:
@@ -91,9 +92,15 @@ rollout_processor=RemoteRolloutProcessor(
 
 If you want to use a local development Vercel server instead, see [Local Development Server](#local-development-server)
 
+**Note:**
+- If your evaluation setup has custom dependencies, for example Chromium, you will need containerize it using `Dockerfile`
+  - Then, when you run `ep local-test`, we will build an image and run pytest inside Docker
+- If not, `ep local-test` will just run pytest on your host machine
+  - You can also ignore the `Dockerfile` and run on the host Python env using `ep local-test --ignore-docker`
+
 ### Expected Test Output:
 
-The test should automatically open a browser page to view results. If it doesn't, navigate to http://localhost:8000.
+Navigate to http://localhost:8000 to see the Eval Protocol UI.
 
 ```
 INFO:eval_protocol.pytest.remote_rollout_processor:Found status log for rollout democratic-way-12: Rollout democratic-way-12 completed
@@ -115,7 +122,6 @@ If you're interested in understanding how Remote Rollout Processing works and ho
 To kickoff training, simply do:
 
 ```bash
-cd evaluator
 eval-protocol create rft \
   --base-model accounts/fireworks/models/qwen3-0p6b \
   --epochs 8
@@ -260,7 +266,7 @@ rollout_processor=RemoteRolloutProcessor(
 
 And in a third terminal, run the evaluation:
 ```bash
-python evaluator/svgagent.py
+ep local-test
 ```
 
 <Note>See [Vercel CLI documentation](https://vercel.com/docs/cli/dev) for more information on local development.</Note>
