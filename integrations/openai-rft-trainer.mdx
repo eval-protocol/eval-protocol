@@ -4,7 +4,7 @@ icon: "circle"
 description: "Reuse Eval Protocol evaluation tests as Python graders for OpenAI Reinforcement Fine-Tuning (RFT)"
 ---
 
-The OpenAI RFT adapter lets you **reuse Eval Protocol evaluation tests as Python graders** for OpenAI Reinforcement Fine-Tuning (RFT).
+The OpenAI RFT adapter lets you **reuse Eval Protocol evaluation tests as Python graders** for OpenAI Reinforcement Fine-Tuning (RFT). Because your grading logic lives in an Eval Protocol `@evaluation_test`, you can reuse the exact same code as an OpenAI Python grader—making it easy to start with OpenAI RFT and later move to other Eval-Protocol supported training workflows (or vice versa) without rewriting your evals.
 
 For a minimal working example, clone the [`openai-rft-quickstart`](https://github.com/eval-protocol/openai-rft-quickstart) repository, which contains the `example_rapidfuzz.py` and `test_openai_grader.py` files used in the examples below.
 
@@ -28,6 +28,10 @@ Under the hood, `build_python_grader_from_evaluation_test`:
 - **Normalizes** whatever your evaluation returns (e.g., `EvaluateResult`, `EvaluationRow` with `.evaluation_result`, or a bare number) into a single float score.
 
 You can inspect the full implementation in [`eval_protocol/integrations/openai_rft.py`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/integrations/openai_rft.py). 
+
+## Grader Constraints
+
+When you convert an `@evaluation_test` into an OpenAI Python grader, it must satisfy OpenAI’s runtime limits, i.e. no network access, fixed set of packages (e.g., `numpy`, `pandas`, `rapidfuzz`, etc.). For more details, see [OpenAI graders documentation](https://platform.openai.com/docs/guides/graders#technical-constraints).
 
 ## Basic Usage
 
