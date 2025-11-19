@@ -47,9 +47,9 @@
       {
         "group": "Integrations",
         "pages": [
-          "integrations/index",
           "integrations/rllm-trainer",
-          "integrations/openai-rft-trainer"
+          "integrations/openai-rft-trainer",
+          "integrations/klavis-mcp"
         ]
       },
       {

@@ -1,17 +1,18 @@
 ---
-title: Klavis MCP Integration
-description: "How to use Klavis MCP with eval-protocol"
+title: Klavis MCP Environments
+icon: "k"
+description: "How to use Klavis MCP with Eval Protocol"
 ---
 
-[Klavis AI](https://klavis.ai/) provides hosted Model Context Protocol (MCP) servers that can be easily integrated with eval-protocol. It allows you to leverage MCP to connect to external applications(like Gmail, Notion, Outlook etc.) This guide will walk you through the steps to set up and use Klavis MCP with eval-protocol.
+[Klavis AI](https://klavis.ai/) provides hosted Model Context Protocol (MCP) servers that can be easily integrated with Eval Protocol. It allows you to leverage MCP to connect to external applications(like Gmail, Notion, Outlook etc.) This guide will walk you through the steps to set up and use Klavis MCP with Eval Protocol.
 
 ## Setting Up Klavis MCP
 
-Login to your Klavis AI accounts, then find the applications you want to connect with eval-protocol and enable MCP for those applications. Follow the auth flow to authorize Klavis MCP to access those applications on your behalf. You can follow the Klavis quickstart guide [here](https://www.klavis.ai/docs/quickstart) to set up your MCP.
+Login to your Klavis AI accounts, then find the applications you want to connect with Eval Protocol and enable MCP for those applications. Follow the auth flow to authorize Klavis MCP to access those applications on your behalf. You can follow the Klavis quickstart guide [here](https://www.klavis.ai/docs/quickstart) to set up your MCP.
 
 In the Klavis dashboard, click **Add to Other Clients**, and generate the access token. Save the access token in `.env` file as KLAVIS_API_KEY.
 
-The Klavis MCP is defined as follows in eval-protocol configuration:
+The Klavis MCP is defined as follows in Eval Protocol configuration:
 
 ```json
 {
@@ -24,9 +25,9 @@ The Klavis MCP is defined as follows in eval-protocol configuration:
 }
 ```
 
-## Using Klavis MCP in eval-protocol
+## Using Klavis MCP in Eval Protocol
 
-We've set up an example in eval-protocol to use Klavis MCP. You can also use it to connect to more applications and add more use cases.
+We've set up an example in Eval Protocol to use Klavis MCP. You can also use it to connect to more applications and add more use cases.
 
 Here is the example [test file](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_klavis_mcp.py). In this example, we connect to Gmail, Notion and Outlook Calendar using Klavis MCP, and have a few example test cases. To run this example RL workflow, you need to set up the test cases in those applications.
 
