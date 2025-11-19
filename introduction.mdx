@@ -4,26 +4,29 @@ icon: "circle-info"
 sidebarTitle: Introduction
 ---
 
-**Eval Protocol is an open standard for connecting RL environments and evaluators to training systems.**
+**Eval Protocol (EP) is an open solution for doing reinforcement learning fine-tuning on existing agents — across any language, container, or framework.**
 
 <Frame>
-  <img src="./assets/intro.png" />
+  <img src="./assets/high-level.png" />
 </Frame>
 
-Teams struggle to connect local evals and environments (tool calls, containers, artifacts) to production training systems without duplication. This release standardizes the flow:
+Most teams already have complex agents running in production — often across remote services with heavy dependencies, Docker containers, or TypeScript backends deployed on Vercel. When they try to train or fine-tune these agents with reinforcement learning, connecting them to a trainer quickly becomes painful.
 
-1. **Develop Locally**: Implement your evaluation logic once using Eval Protocol's interface. Test and debug on your local machine with full observability.
-2. **Connect Anywhere**: Plug your portable evaluator into any compatible training backend—from cloud providers to open-source RL libraries.
-3. **Scale Confidently**: Launch distributed training jobs, knowing the reward signal and environment logic are identical to what you validated locally.
+Eval Protocol makes this possible in two ways:
 
-This collapses reward shaping, environment interaction, and training into a single, reliable loop.
+1. **Expose Your Agent Through a Simple API**
+   Wrap your existing agent (Python, TypeScript, Docker, etc.) in a simple HTTP service using EP’s rollout interface. EP handles the rollout orchestration, metadata passing, and trace storage automatically.
+2. **Connect With Any Trainer**
+   Once your agent speaks the EP standard, it can be fine-tuned or evaluated with any supported trainer — Fireworks RFT, TRL, Unsloth, or your own — with no environment rewrites.
+
+The result: RL that works out-of-the-box for existing production agents.
 
 ## Who This Is For
 
-- **Applied Teams** who are shipping complex agents (for code-gen, tool-use, etc.) and need a reliable bridge from prototype to production.
-- **Research Engineers** who need a fast, reproducible way to test hypotheses locally before scaling up expensive experiments.
-- **MLOps Teams** who are responsible for creating stable, observable, and reusable evaluation infrastructure for their entire organization.
+- **Applied AI teams** adding RL to existing production agents.
+- **Research engineers** experimenting with fine-tuning complex, multi-turn or tool-using agents.
+- **MLOps teams** building reproducible, language-agnostic rollout pipelines.
 
 ## Getting Started
 
-Check out our Quickstart on the next page to see how we built and trained an SVGAgent end-to-end!
+Try our Quickstart to see how we built and trained an SVGAgent end-to-end using the RemoteRolloutProcessor — including full Fireworks Tracing integration.

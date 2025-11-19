@@ -1,19 +1,23 @@
 ---
-title: Training with TRL + OpenEnv
+title: Training with TRL
 icon: "brain"
-description: "Train language models on OpenEnv environments using TRL and eval-protocol"
+description: "Connect environments to TRL to train language models"
+sidebarTitle: TRL Trainer
 ---
 
-Want to train language models on interactive environments like web navigation, text games, or custom tasks? Use **eval-protocol** to handle rollouts with any [OpenEnv](https://meta-pytorch.org/OpenEnv/) (PyTorch) environment while [TRL](https://huggingface.co/docs/trl/en/index) (Hugging Face) handles the training.
+Eval Protocol makes it easy to connect your environments to open‑source trainers like [TRL](https://huggingface.co/docs/trl/en/index) and train language models on interactive environments such as web navigation, text games, and custom simulators. Our TRL integration lets Eval Protocol handle rollouts with any [OpenEnv](https://github.com/meta-pytorch/OpenEnv/tree/main) environment (and other Eval Protocol rollout processors), while TRL handles optimization, gradients, and checkpoints.
 
-**What is OpenEnv?** OpenEnv is PyTorch's framework for creating isolated, Docker-based execution environments for agentic RL training. It provides a standard Gymnasium-style API (`reset()`, `step()`, `state()`) that works across different environment types—web browsers, text games, Atari, coding tasks, and more. Each environment runs in its own Docker container with HTTP-based communication.
+**Supported environments today:**
 
-## Why Use eval-protocol for TRL Training?
+- **OpenEnv environments** via `OpenEnvRolloutProcessor` (BrowserGym, Echo, TextArena, Atari-style games, coding envs, and more).
+- **Other Eval Protocol tests** that expose token IDs and rewards through a rollout processor (for example `SingleTurnRolloutProcessor`), with more trainers and environments added over time.
+
+## Why Use Eval Protocol for TRL Training?
 
 **Eval Protocol handles the rollouts:**
 - Environment management (Docker containers, lifecycle)
 - Rollout execution (observation → LLM → action → environment)
-- Task rotation for balanced training
+- Task Rotation
 - Reward collection and formatting
 - Concurrency control
 
@@ -30,23 +34,18 @@ Want to train language models on interactive environments like web navigation, t
 
 ## Architecture
 
-```
-┌─────────────────┐
-│  TRL Trainer    │ ← Handles training & optimization
-└────────┬────────┘
-         │ calls rollout_func
-         ▼
-┌─────────────────────────────┐
-│ eval-protocol Integration   │ ← Handles rollouts & environments
-│ (create_openenv_vllm_rollout)│
-└────────┬────────────────────┘
-         │
-         ▼
-┌──────────────────────┐      ┌─────────────────┐
-│ OpenEnv Environments │ ◄──► │  vLLM Server    │
-│  (Docker containers) │      └─────────────────┘
-└──────────────────────┘
-```
+At a high level, TRL and Eval Protocol split responsibilities:
+
+- **TRL (GRPOTrainer)** owns the training loop: it calls a `rollout_func`, computes losses and gradients, and updates the model.
+- **Eval Protocol** owns the rollout loop: it turns TRL prompts into `EvaluationRow`s, runs environments (for example via `OpenEnvRolloutProcessor`), calls your model through vLLM, and returns token IDs and rewards.
+- **Environments** (OpenEnv or other Eval Protocol tests) are configured once in a `@evaluation_test` file, which Eval Protocol reuses both for offline evals and for TRL training.
+
+When you pass a `rollout_func` created by `create_openenv_vllm_rollout_func` into `GRPOTrainer`, each training step looks like:
+
+1. TRL calls `rollout_func(prompts, trainer)`.
+2. Eval Protocol builds `EvaluationRow`s and runs rollouts using the configured rollout processor.
+3. The `@evaluation_test` is executed to compute `evaluation_result.score` for each row.
+4. Eval Protocol returns token IDs and scores to TRL, which computes gradients and updates the model.
 
 ## Prerequisites
 
@@ -107,86 +106,153 @@ export MINIWOB_URL="http://host.docker.internal:8888/miniwob/"  # macOS
 export MINIWOB_URL="http://172.17.0.1:8888/miniwob/"  # Linux
 ```
 
-## Quick Start
+## Reusing Eval Protocol tests with TRL
 
-Here's a minimal example training on BrowserGym MiniWoB++ tasks:
+The biggest value of this integration is that you can **reuse your existing `@evaluation_test` files** for training:
 
-```python train_browsergym.py
+- The Eval Protocol test owns the **environment wiring** (for example `OpenEnvRolloutProcessor` + BrowserGym/Echo/TextArena config).
+- The test body owns the **reward logic** (it sets `row.evaluation_result`).
+- TRL just points at that test by module path and reuses both environment and scoring.
+
+Eval Protocol’s `create_openenv_vllm_rollout_func` helper:
+
+- Looks up your `@evaluation_test` via its `env_path` (for example `"tests.pytest.test_openenv_browsergym_eval"`).
+- Reuses the attached `OpenEnvRolloutProcessor` configuration (env client, tasks, env vars, timeouts, etc.).
+- Runs the test function itself to populate `row.evaluation_result`.
+- Returns a `rollout_func` that produces token IDs and rewards in the format TRL expects.
+
+This means you can:
+
+- Add a new environment by writing a **single `@evaluation_test`**.
+- Use the same test in:
+  - Offline evals and dashboards (`ep logs`).
+  - TRL training, by pointing `env_path` at that test.
+
+## Inspecting TRL rollouts in the Logs UI
+
+Because all rollouts go through Eval Protocol, every TRL training step that uses this integration is also visible in the **Eval Protocol Logs UI**:
+
+- Each call to `rollout_func` creates one or more `EvaluationRow`s, just like a normal eval run.
+- Those rows are logged with `EvalMetadata` so you can filter by eval name, time, and status.
+- You can inspect the full message history, actions, rewards, and token usage for each rollout.
+
+![TRL rollouts in Eval Protocol logs](/assets/trl-rollouts.png)
+
+## Quick Start: BrowserGym + TRL (reusing an eval test)
+
+Below is a minimal example that trains on BrowserGym MiniWoB++ tasks by reusing an existing Eval Protocol test (`tests.pytest.test_openenv_browsergym_eval`) that already configures `OpenEnvRolloutProcessor` and reward logic.
+
+```python train_browsergym_trl.py
+from typing import Any, List
+
 from datasets import Dataset
 from transformers import AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 from peft import LoraConfig
 
 from eval_protocol.pytest.integrations.openenv_trl_vllm import create_openenv_vllm_rollout_func
-from envs.browsergym_env import BrowserGymEnv, BrowserGymAction
+from envs.browsergym_env import BrowserGymAction
+
 
 MODEL = "Qwen/Qwen2.5-7B-Instruct"
 VLLM_URL = "http://localhost:8000"
 
-# 1. Define prompt builder (observation → text for LLM)
-def build_prompt(obs, step, history):
-    return f"""Step {step}
-Goal: {obs.goal}
-URL: {obs.url}
-Page: {obs.text[:1000]}
+# Module path to the Eval Protocol @evaluation_test we want to reuse.
+EVAL_ENV_PATH = "tests.pytest.test_openenv_browsergym_eval"
 
-Reply with a BrowserGym action like click('id') or noop().
-"""
+
+# 1. Define prompt builder (observation → text for LLM)
+def build_prompt(obs: Any, step: int, history: List[str]) -> str:
+    goal = getattr(obs, "goal", "") or ""
+    url = getattr(obs, "url", "") or "(unknown)"
+    text = (getattr(obs, "text", "") or "")[:1500]
+    history_block = "\n".join(history[-4:]) if history else "None"
+    return (
+        f"Step {step}\n"
+        f"Goal: {goal}\n"
+        f"URL: {url}\n"
+        f"Previous steps:\n{history_block}\n\n"
+        f"Page excerpt:\n{text}\n\n"
+        "Reply with a single BrowserGym action, e.g., click('13') or noop()."
+    )
+
 
 # 2. Define action parser (LLM text → environment action)
 def parse_action(text: str) -> BrowserGymAction:
     import re
-    match = re.search(r"[A-Za-z_]+\s*\(.*\)", text)
+
+    match = re.search(r"[A-Za-z_]+\\s*\\(.*\\)", text)
     if match:
         return BrowserGymAction(action_str=match.group(0))
     return BrowserGymAction(action_str="noop()")
 
-# 3. Define reward function
-def reward_func(completions, **kwargs):
-    return kwargs.get("step_rewards", [0.0] * len(completions))
 
-# 4. Create rollout function (eval-protocol handles everything!)
+# 3. Define reward function (uses eval_protocol evaluation scores)
+def reward_func(completions, **kwargs):
+    """
+    Reward per episode taken from eval_protocol's evaluation_result.score.
+    The rollout_func runs the @evaluation_test for each EvaluationRow and
+    exposes the score as `eval_score`.
+    """
+    eval_scores = kwargs.get("eval_score") or []
+    if eval_scores:
+        return [float(s) for s in eval_scores]
+    return [0.0] * len(completions)
+
+
+# 4. Create rollout function (Eval Protocol handles OpenEnv + vLLM)
 rollout_func = create_openenv_vllm_rollout_func(
-    env_client_cls=BrowserGymEnv,
+    env_factory=None,
+    env_client_cls=None,          # taken from the @evaluation_test
     prompt_builder=build_prompt,
     action_parser=parse_action,
     vllm_base_url=VLLM_URL,
     vllm_model=MODEL,
-    tasks=["click-test", "click-button"],
-    task_var="BROWSERGYM_TASK_NAME",
-    docker_image="browsergym-env:latest",
-    env_vars={
-        "BROWSERGYM_BENCHMARK": "miniwob",
-        "BROWSERGYM_HEADLESS": "true",
-        "MINIWOB_URL": "http://host.docker.internal:8888/miniwob/",
+    env_path=EVAL_ENV_PATH,       # reuse OpenEnvRolloutProcessor config + rewards
+    max_steps=6,
+    completion_params={
+        "temperature": 0.7,
+        "max_tokens": 1024,
     },
-    max_steps=8,
+    concurrency=2,
 )
+
 
 # 5. Setup TRL trainer
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
-dataset = Dataset.from_dict({"prompt": ["Start task"] * 8})
+dataset = Dataset.from_dict({"prompt": ["Start task"] * 6})
+
+training_args = GRPOConfig(
+    output_dir="outputs/browsergym",
+    per_device_train_batch_size=2,
+    num_generations=2,
+    num_train_epochs=1,
+    learning_rate=5e-6,
+    max_completion_length=100,
+    max_prompt_length=4096,
+    logging_steps=1,
+    use_vllm=True,
+    vllm_mode="colocate",          # or "server" if you use a separate vLLM server
+    vllm_gpu_memory_utilization=0.5,
+)
 
 trainer = GRPOTrainer(
     model=MODEL,
-    args=GRPOConfig(
-        output_dir="outputs/browsergym",
-        per_device_train_batch_size=4,
-        num_generations=2,
-        learning_rate=5e-6,
-        use_vllm=True,
-        vllm_mode="server",
-        vllm_server_base_url=VLLM_URL,
-    ),
+    args=training_args,
     train_dataset=dataset,
     processing_class=tokenizer,
     reward_funcs=reward_func,
-    rollout_func=rollout_func,  # ← eval-protocol handles this!
+    rollout_func=rollout_func,      # ← Eval Protocol handles OpenEnv + vLLM here
     peft_config=LoraConfig(r=16, lora_alpha=16, target_modules="all-linear"),
 )
 
-# 6. Train!
-trainer.train()
+
+def main():
+    trainer.train()
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ## Running the Training
@@ -203,28 +269,7 @@ python -m http.server 8888 --bind 0.0.0.0
 CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python train_browsergym.py
 ```
 
-## Task Rotation
 
-The integration automatically rotates tasks for balanced training:
-
-### Generation-Level Rotation
-
-With `num_generations=2` and `tasks=["task-1", "task-2", "task-3"]`:
-
-- Rollouts 0-1: task-1
-- Rollouts 2-3: task-2
-- Rollouts 4-5: task-3
-- Rollouts 6-7: task-1 (cycles)
-
-### GRPO-Step Level Rotation
-
-The task order rotates between GRPO steps:
-
-- **GRPO Step 1**: `["task-1", "task-2", "task-3"]`
-- **GRPO Step 2**: `["task-2", "task-3", "task-1"]`
-- **GRPO Step 3**: `["task-3", "task-1", "task-2"]`
-
-This ensures each GRPO step focuses on a different primary task, providing balanced coverage.
 
 ## How It Works
 
