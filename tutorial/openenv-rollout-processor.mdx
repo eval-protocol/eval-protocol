@@ -1,0 +1,309 @@
+---
+title: OpenEnv Rollout Processor
+icon: "browser"
+sidebarTitle: OpenEnv Environments
+---
+
+The [OpenEnvRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/openenv_rollout_processor.py) enables evaluation of language models in interactive web environments and other OpenEnv-compatible tasks. It provides a generic interface for any OpenEnv environment (BrowserGym, TextArena, Atari, etc.) without environment-specific code.
+
+## What is OpenEnv?
+
+OpenEnv is a standard interface for agentic environments that provides:
+- Unified HTTP-based client/server architecture
+- Standard `reset()`, `step(action)`, and `state()` methods
+- Docker-based environment isolation
+- Support for multiple environment types (web navigation, text games, Atari, etc.)
+
+## High Level Flow
+
+1. **Environment Creation**: The processor creates OpenEnv environment instances (via Docker or direct HTTP connection)
+2. **Episode Reset**: Each row triggers an `env.reset()` to get initial observations
+3. **Agent Loop**: For each step (up to `max_steps`):
+   - Build a prompt from the current observation
+   - Call the LLM to generate an action
+   - Execute `env.step(action)` in the environment
+   - Collect rewards and update observation
+4. **Completion**: Store the full message history and reward trajectory in the `EvaluationRow`
+
+## Key Features
+
+- **Environment-agnostic**: Works with any OpenEnv-compatible environment
+- **Task rotation**: Automatically cycles through task lists for training scenarios
+- **Multimodal support**: Handles text and vision observations via LiteLLM
+- **Reward tracking**: Collects per-step rewards for RL-style evaluation
+- **Docker isolation**: Each environment runs in its own container
+
+## Basic Usage
+
+### BrowserGym Example
+
+```python
+import os
+from eval_protocol.pytest import evaluation_test, OpenEnvRolloutProcessor
+from eval_protocol.models import EvaluationRow, Message
+from envs.browsergym_env import BrowserGymEnv, BrowserGymAction
+
+def prompt_builder(observation, step: int, history: list[str]) -> str:
+    """Build a prompt from the current observation."""
+    return f"""Step {step}
+Goal: {observation.goal}
+Current URL: {observation.url}
+
+Page content:
+{observation.text[:2000]}
+
+Previous actions:
+{chr(10).join(history[-3:]) if history else 'None'}
+
+What action should you take? Reply with a single BrowserGym action.
+"""
+
+def action_parser(response_text: str) -> BrowserGymAction:
+    """Parse LLM output into a BrowserGym action."""
+    # Extract action from response (e.g., "click('button-id')")
+    action_str = response_text.strip()
+    return BrowserGymAction(action_str=action_str)
+
+@evaluation_test(
+    input_rows=[[EvaluationRow(messages=[Message(role="user", content="start")])]],
+    completion_params=[{
+        "model": "fireworks_ai/accounts/fireworks/models/qwen3-vl-30b-a3b-instruct",
+        "temperature": 0.0,
+        "max_tokens": 512,
+    }],
+    rollout_processor=OpenEnvRolloutProcessor(
+        env_client_cls=BrowserGymEnv,
+        prompt_builder=prompt_builder,
+        action_parser=action_parser,
+        tasks=["click-test", "click-button", "click-checkboxes"],
+        task_var="BROWSERGYM_TASK_NAME",
+        docker_image="browsergym-env:latest",
+        env_vars={
+            "BROWSERGYM_BENCHMARK": "miniwob",
+            "BROWSERGYM_HEADLESS": "true",
+            "BROWSERGYM_VIEWPORT_WIDTH": "1280",
+            "BROWSERGYM_VIEWPORT_HEIGHT": "720",
+            "MINIWOB_URL": "http://host.docker.internal:8888/miniwob/",
+        },
+        num_generations=1,
+    ),
+    steps=8,
+    max_concurrent_rollouts=4,
+)
+def test_browsergym_eval(row: EvaluationRow) -> EvaluationRow:
+    """Evaluate agent performance on BrowserGym tasks."""
+    # Extract rewards from the sentinel message
+    step_rewards = []
+    for msg in row.messages:
+        if msg.role == "system" and msg.content.startswith("__ep_step_rewards__:"):
+            import json
+            step_rewards = json.loads(msg.content.split(":", 1)[1])
+            break
+    
+    total_reward = sum(step_rewards)
+    score = max(0.0, min(1.0, total_reward))
+    
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason=f"Total reward: {total_reward:.2f} over {len(step_rewards)} steps"
+    )
+    return row
+```
+
+## Configuration Parameters
+
+### Required Parameters
+
+<ParamField body="env_client_cls" type="Type[HTTPEnvClient]">
+  The OpenEnv environment client class (e.g., `BrowserGymEnv`, `TextArenaEnv`)
+</ParamField>
+
+<ParamField body="action_parser" type="Callable[[str], Action]" required>
+  Function that converts LLM text output into an environment-specific Action object
+  
+  Example: `lambda text: BrowserGymAction(action_str=text)`
+</ParamField>
+
+### Optional Parameters
+
+<ParamField body="prompt_builder" type="Callable[[Observation, int, List[str]], Any]">
+  Function that builds the user message content from `(observation, step, history)`.
+  
+  Default: `lambda obs, step, history: str(obs)`
+</ParamField>
+
+<ParamField body="policy_factory" type="Callable[..., Any]">
+  Optional factory to create a custom policy instead of the default `LiteLLMPolicy`
+</ParamField>
+
+<ParamField body="env_factory" type="Callable[[], HTTPEnvClient]">
+  Optional callable that creates environment instances directly. If not provided, the processor builds one using the parameters below.
+</ParamField>
+
+### Environment Construction Parameters
+
+<ParamField body="tasks" type="List[str]">
+  List of task identifiers to rotate through. Requires `task_var` to be set.
+</ParamField>
+
+<ParamField body="task_var" type="str">
+  Name of the environment variable used to communicate the selected task (e.g., `"BROWSERGYM_TASK_NAME"`). Required when `tasks` is provided.
+</ParamField>
+
+<ParamField body="env_vars" type="Dict[str, str]">
+  Environment variables to pass to the Docker container. Used for environment-specific configuration.
+</ParamField>
+
+<ParamField body="docker_image" type="str" default="browsergym-env:latest">
+  Docker image name for the environment
+</ParamField>
+
+<ParamField body="env_base_url" type="str">
+  Direct HTTP URL to an already-running environment server (alternative to Docker)
+</ParamField>
+
+<ParamField body="hub_repo_id" type="str">
+  Hugging Face Hub repository ID to pull the Docker image from
+</ParamField>
+
+<ParamField body="num_generations" type="int" default="1">
+  Number of rollouts per task before rotating to the next task (for GRPO-style training)
+</ParamField>
+
+## Task Rotation
+
+The processor supports automatic task rotation for training scenarios:
+
+```python
+OpenEnvRolloutProcessor(
+    env_client_cls=BrowserGymEnv,
+    tasks=["task-1", "task-2", "task-3"],
+    task_var="BROWSERGYM_TASK_NAME",
+    num_generations=4,  # 4 rollouts per task before switching
+    ...
+)
+```
+
+With `num_generations=4` and 3 tasks:
+- Rollouts 0-3: task-1
+- Rollouts 4-7: task-2  
+- Rollouts 8-11: task-3
+- Rollouts 12-15: task-1 (cycles back)
+
+## Installation
+
+Install the OpenEnv extras for your environment:
+
+```bash
+# For BrowserGym
+pip install "eval-protocol[openenv]"
+
+# Or install OpenEnv packages directly
+pip install openenv-core
+pip install "openenv-browsergym-env @ git+https://github.com/facebookresearch/OpenEnv.git#subdirectory=src/envs/browsergym_env"
+```
+
+## Environment Setup
+
+### BrowserGym with MiniWoB++
+
+#### Prerequisites
+
+**Base Image**: Build the OpenEnv base image first:
+
+```bash
+# From the OpenEnv repository root
+docker build -t openenv-base:latest -f src/core/containers/images/Dockerfile .
+```
+
+#### Build the BrowserGym Environment
+
+```bash
+# From the OpenEnv repository root
+docker build -t browsergym-env:latest -f src/envs/browsergym_env/server/Dockerfile .
+```
+
+#### Setup Steps
+
+1. **Serve MiniWoB HTML locally** (for macOS):
+   ```bash
+   cd miniwob-plusplus/miniwob/html
+   python -m http.server 8888 --bind 0.0.0.0
+   ```
+
+2. **Set environment variables**:
+   ```bash
+   export MINIWOB_URL="http://host.docker.internal:8888/miniwob/"
+   export FIREWORKS_API_KEY="your_key_here"
+   ```
+
+4. **Run your evaluation**:
+   ```bash
+   pytest tests/test_browsergym_eval.py
+   ```
+
+## Reward Extraction
+
+The processor stores per-step rewards in a sentinel system message:
+
+```python
+def extract_rewards(row: EvaluationRow) -> list[float]:
+    """Extract step rewards from completed rollout."""
+    for msg in row.messages:
+        if msg.role == "system" and msg.content.startswith("__ep_step_rewards__:"):
+            import json
+            return json.loads(msg.content.split(":", 1)[1])
+    return []
+```
+
+## Advanced: Custom Environments
+
+To use a custom OpenEnv environment:
+
+1. **Create your environment class** following OpenEnv's `HTTPEnvClient` interface
+2. **Define action and observation types**
+3. **Implement action parser** for your environment
+4. **Pass to processor**:
+
+```python
+from my_env import MyCustomEnv, MyAction
+
+def my_action_parser(text: str) -> MyAction:
+    # Parse LLM output into your action format
+    return MyAction(command=text.strip())
+
+processor = OpenEnvRolloutProcessor(
+    env_client_cls=MyCustomEnv,
+    action_parser=my_action_parser,
+    env_vars={
+        "MY_ENV_CONFIG": "value",
+    },
+    docker_image="my-env:latest",
+)
+```
+
+## Troubleshooting
+
+### Docker Container Fails to Start
+
+- Verify the Docker image exists: `docker images | grep browsergym-env`
+- Check container logs: `docker logs <container-id>`
+- Ensure ports aren't already in use
+
+### MiniWoB Connection Refused (macOS)
+
+- Use `host.docker.internal` instead of `localhost` or `172.17.0.1`
+- Bind the HTTP server to `0.0.0.0`: `python -m http.server 8888 --bind 0.0.0.0`
+- Verify the server is accessible: `curl http://127.0.0.1:8888/miniwob/click-test.html`
+
+### Module Not Found Errors
+
+- Install required OpenEnv packages: `pip install "eval-protocol[openenv]"`
+- Verify packages are installed: `pip list | grep openenv`
+
+## Examples
+
+- [BrowserGym MiniWoB++ Example](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_browsergym_eval.py)
+- [OpenEnv Repository](https://github.com/facebookresearch/OpenEnv)
+- [BrowserGym Documentation](https://github.com/ServiceNow/BrowserGym)
+

@@ -34,7 +34,8 @@
         "group": "Rollout Processors",
         "pages": [
           "tutorial/remote-rollout-processor",
-          "tutorial/github-actions-rollout"
+          "tutorial/github-actions-rollout", 
+          "tutorial/openenv-rollout-processor"
         ]
       },
       {
