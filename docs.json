@@ -19,27 +19,12 @@
     "pages": [
       "introduction",
       "quickstart",
+      "authoring-with-ai-agents",
       {
-        "group": "Setup",
-        "pages": ["authoring-with-ai-agents"]
-      },
-      {
-        "group": "Tutorials",
+        "group": "Getting Started",
         "pages": [
-          "tutorial/gsm8k-finetuning-quickstart"
-        ]
-      },
-      {
-        "group": "UI",
-        "pages": [
-          "tutorial/ui/getting-started",
-          "tutorial/ui/table",
-          "tutorial/ui/pivot"
-        ]
-      },
-      {
-        "group": "Rollout Processors",
-        "pages": [
+          "tutorial/evaluation-tests-getting-started",
+          "tutorial/rollout-processors-getting-started",
           "tutorial/remote-rollout-processor",
           "tutorial/github-actions-rollout"
         ]
@@ -53,8 +38,17 @@
         ]
       },
       {
+        "group": "Using the Logs UI",
+        "pages": [
+          "tutorial/ui/getting-started",
+          "tutorial/ui/table",
+          "tutorial/ui/pivot"
+        ]
+      },
+      {
         "group": "Reference",
         "pages": [
+          "tutorial/gsm8k-finetuning-quickstart",
           "common-errors",
           "reference/evaluation-test",
           "reference/rollout-processors",
