@@ -1,0 +1,51 @@
+---
+title: Klavis MCP Integration
+description: "How to use Klavis MCP with eval-protocol"
+---
+
+[Klavis AI](https://klavis.ai/) provides hosted Model Context Protocol (MCP) servers that can be easily integrated with eval-protocol. It allows you to leverage MCP to connect to external applications(like Gmail, Notion, Outlook etc.) This guide will walk you through the steps to set up and use Klavis MCP with eval-protocol.
+
+## Setting Up Klavis MCP
+
+Login to your Klavis AI accounts, then find the applications you want to connect with eval-protocol and enable MCP for those applications. Follow the auth flow to authorize Klavis MCP to access those applications on your behalf. You can follow the Klavis quickstart guide [here](https://www.klavis.ai/docs/quickstart) to set up your MCP.
+
+In the Klavis dashboard, click **Add to Other Clients**, and generate the access token. Save the access token in `.env` file as KLAVIS_API_KEY.
+
+The Klavis MCP is defined as follows in eval-protocol configuration:
+
+```json
+{
+  "mcpServers": {
+    "klavis-strata": {
+      "url": "https://strata.klavis.ai/mcp/",
+      "authorization": "Bearer ${KLAVIS_API_KEY}"
+    }
+  }
+}
+```
+
+## Using Klavis MCP in eval-protocol
+
+We've set up an example in eval-protocol to use Klavis MCP. You can also use it to connect to more applications and add more use cases.
+
+Here is the example [test file](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_klavis_mcp.py). In this example, we connect to Gmail, Notion and Outlook Calendar using Klavis MCP, and have a few example test cases. To run this example RL workflow, you need to set up the test cases in those applications.
+
+### Gmail
+
+No particular setup. You should have at least 5 emails in your Gmail inbox.
+
+### Notion
+
+Copy this [Notion page template](https://painted-tennis-ebc.notion.site/MCPMark-Source-Hub-23181626b6d7805fb3a7d59c63033819) (credit to [MCPMark](https://mcpmark.ai/)) to your Notion workspace. And when you authorize Klavis MCP to access Notion, make sure to give access to this page.
+
+### Outlook Calendar
+
+You should set up the following calendar events in your Outlook calendar. It's recommended to create a new outlook account with a clean calendar for testing.
+
+1. Create 3 events today. It's better one starting at 12 am today, and one ending at 12 am tomorrow.
+2. Create an event that covers the whole workding hours except the first and last hour of your next working day. Outlook calendar default working hour is Monday to Friday, 8 am to 5 pm. In this case, you should create an event from 9 am to 4 pm on your next working day.
+3. Create total 8 events on this week's working days. It should include the above events if they are on working days.
+4. Follow step 1, create 2 events on next week's Thursday.
+5. Follow step 3, create total 5 events on next week's working days.
+6. Follow step 1, create 4 events on Oct 15 2025.
+7. Follow step 3, create total 9 events from Oct 13 to Oct 17, 2025.
