@@ -109,6 +109,8 @@ about wrangling metadata.
 
 ## Fireworks Tracing
 
+### Python Example
+
 The `RemoteRolloutProcessor` detects rollout completion by polling **structured logs** sent to Fireworks Tracing. Your remote server should add `FireworksTracingHttpHandler` as the logging handler, a `RolloutIdFilter`, and log completion status using structured `Status` objects:
 
 ```python remote_server.py highlight={5-6, 11-12, 18-21, 25-28}
@@ -140,6 +142,46 @@ def init(request: InitRequest):
             f"Rollout {request.metadata.rollout_id} failed: {e}",
             extra={"status": Status.rollout_error(str(e))}
         )
+```
+
+### TypeScript / Node (Vercel) Example
+
+For TypeScript servers (for example, a Vercel serverless function), the `eval-protocol` JS/TS SDK provides equivalent helpers:
+
+- **`withFireworksLogging`**: Wraps your handler to automatically send structured logs to Fireworks Tracing.
+- **`createRolloutLogger`**: Creates a rollout-scoped logger tagged with the current `rollout_id`.
+- **`Status` / `mapOpenAIErrorToStatus`**: Helpers for emitting structured completion and error statuses.
+
+```ts api/init.ts highlight={14-15, 20-21, 23-24, 29}
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+    initRequestSchema,
+    type InitRequest,
+    Status,
+    createRolloutLogger,
+    withFireworksLogging,
+} from 'eval-protocol';
+
+async function handler(req: VercelRequest, res: VercelResponse) {
+    const initRequest: InitRequest = initRequestSchema.parse(req.body);
+
+    // Extract rollout id from InitRequest payload and create rollout-specific logger
+    const rolloutId = initRequest.metadata.rollout_id;
+    const logger = createRolloutLogger(rolloutId);
+
+    try {
+        // Execute your rollout here
+
+        const status = Status.rolloutFinished();
+        logger.info(`Rollout ${rolloutId} completed`, { status });
+    } catch (error: any) {
+        const status = Status.rolloutInternalError(error.message);
+        logger.error(`Rollout ${rolloutId} failed: ${error.message}`, { status });
+    }
+}
+
+// Export wrapped handler so all logs go to Fireworks Tracing
+export default withFireworksLogging(handler);
 ```
 
 ### Alternative: Environment Variable Approach
@@ -198,6 +240,7 @@ async def init(request: InitRequest):
 
 ## Example
 
-See the following repo for a simple end to end example:
+See the following repos for end to end examples:
 
 - [Remote Rollout Processor Hello World](https://github.com/eval-protocol/remote-rollout-processor-hello-world)
+- [Typescript Vercel Example Server](https://github.com/eval-protocol/quickstart)
