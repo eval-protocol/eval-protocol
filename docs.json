@@ -26,8 +26,7 @@
           "tutorial/evaluation-tests-getting-started",
           "tutorial/rollout-processors-getting-started",
           "tutorial/remote-rollout-processor",
-          "tutorial/github-actions-rollout", 
-          "tutorial/openenv-rollout-processor"
+          "tutorial/github-actions-rollout"
         ]
       },
       {
@@ -35,6 +34,7 @@
         "pages": [
           "integrations/rllm-trainer",
           "integrations/openai-rft-trainer",
+          "integrations/openenv-rollout-processor",
           "integrations/klavis-mcp"
         ]
       },
