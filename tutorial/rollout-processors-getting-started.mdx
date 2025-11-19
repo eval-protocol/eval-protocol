@@ -1,0 +1,159 @@
+---
+title: Rollout Processors (Getting Started)
+icon: "gears"
+description: "Pick the right rollout processor for your eval and wire it up with minimal boilerplate."
+sidebarTitle: Rollout Processors
+---
+
+## What is a rollout processor?
+
+A rollout processor is **how Eval Protocol turns input rows into trajectories**:
+
+- Takes a batch of `EvaluationRow`s
+- Calls a model, agent, or environment as needed
+- Returns updated rows with new messages attached
+
+You choose **one** rollout processor per `@evaluation_test`, and Eval Protocol handles:
+
+- Concurrency and retries
+- Logging and cost tracking
+- Cleanup of external resources (e.g., MCP servers)
+
+For the full catalog and configuration options, see the [reference page](/reference/rollout-processors). This guide focuses on **choosing and using a processor quickly**.
+
+## Quick decision guide
+
+- **Already have model outputs?** → `NoOpRolloutProcessor`
+- **Single chat completion per row?** → `SingleTurnRolloutProcessor`
+- **Tools / function calling via MCP?** → `AgentRolloutProcessor`
+- **Interactive MCP “gym” environment?** → `MCPGymRolloutProcessor`
+- **Already have an in‑production agent/service you want to eval or train?** → `RemoteRolloutProcessor` (see the next page: [Remote Rollout Processor](/tutorial/remote-rollout-processor))
+
+The examples below all assume you are inside an `@evaluation_test`.
+
+## Single-turn model calls
+
+Use `SingleTurnRolloutProcessor` for classic “prompt → answer” tasks:
+
+```python tutorial_single_turn.py
+import pytest
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
+
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {
+            "model": "openai/gpt-4o",
+            "temperature": 0.0,
+        }
+    ],
+)
+@evaluation_test(
+    input_dataset=["dataset.jsonl"],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+)
+def test_single_turn(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # Each row now has the assistant's reply appended to messages
+    for row in rows:
+        # Read row.messages and write row.evaluation_result.score
+        ...
+    return rows
+```
+
+- Good for **QA, grading, and static benchmarks**
+- For more knobs (e.g., `extra_body.reasoning_effort`), see the [full reference](/reference/rollout-processors#singleturnrolloutprocessor).
+
+## No-op processor for offline evaluation
+
+If you have **pre-generated model outputs**, use `NoOpRolloutProcessor`:
+
+```python tutorial_noop.py
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test, NoOpRolloutProcessor
+
+
+@evaluation_test(
+    input_dataset=["offline_answers.jsonl"],
+    completion_params=[{"model": "not-used-offline"}],
+    rollout_processor=NoOpRolloutProcessor(),
+    mode="all",
+)
+def test_offline(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # rows are passed through unchanged; just score them
+    for row in rows:
+        ...
+    return rows
+```
+
+This is ideal when you **don’t want Eval Protocol to call any models**.
+
+## Agents and tools via MCP
+
+Use `AgentRolloutProcessor` when your eval requires **tools or function calling**:
+
+```python tutorial_agent.py
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test, AgentRolloutProcessor
+
+
+@evaluation_test(
+    input_dataset=["tasks.jsonl"],
+    completion_params=[{"model": "openai/gpt-4o"}],
+    rollout_processor=AgentRolloutProcessor(),
+    mcp_config_path="./mcp.config.json",
+    steps=30,
+)
+def test_agent(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # Each row reflects the full tool-using conversation
+    ...
+    return rows
+```
+
+- The agent will:
+  - Call the model with available tools
+  - Execute any returned tool calls
+  - Loop until there are no more tools to call or `steps` is reached
+
+## MCP gym environments
+
+Use `MCPGymRolloutProcessor` for **interactive environments** exposed via MCP:
+
+```python tutorial_gym.py
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test, MCPGymRolloutProcessor
+
+
+@evaluation_test(
+    input_dataset=["env_tasks.jsonl"],
+    completion_params=[{"model": "openai/gpt-4o"}],
+    rollout_processor=MCPGymRolloutProcessor(),
+    server_script_path="examples/tau2_mcp/server.py",
+    steps=30,
+)
+def test_env(rows: List[EvaluationRow]) -> List[EvaluationRow]:
+    # Each row includes the full trajectory through the environment
+    ...
+    return rows
+```
+
+This is the pattern used by benchmarks like **TauBench** or custom gym‑style environments.
+
+## When to read the full reference
+
+Stay on this page until you need:
+
+- Fine‑grained `RolloutProcessorConfig` usage
+- Pydantic AI–specific integrations
+- Detailed concurrency and retry behavior
+- CLI flags (pytest plugin) for CI tuning
+
+When you do, jump to the [Rollout Processors reference](/reference/rollout-processors) for complete details and edge cases.
+
+

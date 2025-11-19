@@ -1,0 +1,102 @@
+---
+title: Evaluation Tests (Getting Started)
+icon: "clipboard-check"
+description: "Write your first @evaluation_test in a few minutes, then scale up to real benchmarks."
+sidebarTitle: Evaluation Tests
+---
+
+The [`@evaluation_test`](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/evaluation_test.py) decorator is the core component for creating pytest-based evaluation tests in the Evaluation Protocol. It enables you to evaluate AI models by running rollouts and applying evaluation criteria to measure performance.
+
+## What is an `@evaluation_test`?
+
+An `@evaluation_test` is a **pytest test with superpowers**:
+
+- **Takes in rows** (from a dataset, loader, or hard‑coded messages)
+- **Runs rollouts via a [Rollout Processor](/tutorial/rollout-processors-getting-started)** (more on this on the next page)
+- **Evaluates and writes scores** onto each row
+- **Aggregates results** and surfaces a pass/fail signal for CI
+
+You can think of it as:
+
+- pytest for orchestration
+- Eval Protocol for rollouts, retries, and logging
+- Your function body for scoring
+
+For the full API, see the [reference page](/reference/evaluation-test). This guide focuses on the **shortest path to something useful**.
+
+## Smallest useful example (pointwise, single model)
+
+This example:
+
+- Loads rows from a JSONL dataset
+- Calls a model once per row using the default rollout processor
+- Scores each row from 0–1
+
+```python test_math_reasoning.py
+import pytest
+from typing import List
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import evaluation_test, SingleTurnRolloutProcessor
+
+
+def evaluate_math_reasoning(messages) -> float:
+    # Dummy scoring: in a real eval, parse the model's answer and check it
+    text = (messages[-1].content or "").lower()
+    return 1.0 if "4" in text else 0.0
+
+
+@pytest.mark.parametrize(
+    "completion_params",
+    [
+        {"model": "openai/gpt-4o", "temperature": 0.0},
+    ],
+)
+@evaluation_test(
+    input_dataset=["path/to/dataset.jsonl"],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    passed_threshold=0.8,
+    mode="pointwise",
+)
+def test_math_reasoning(row: EvaluationRow) -> EvaluationRow:
+    """Score a single row between 0 and 1."""
+    score = evaluate_math_reasoning(row.messages)
+    row.evaluation_result.score = score
+    return row
+```
+
+Run it with:
+
+```bash
+pytest test_math_reasoning.py
+```
+
+> The decorator handles dataset loading, concurrency, aggregation, and summary generation for you.
+
+## Minimal mental model
+
+- **Input**: rows come from **one** of:
+  - `input_dataset` (JSONL paths)
+  - `input_messages` (inline messages)
+  - `input_rows` (pre‑built `EvaluationRow`s)
+  - `data_loaders` (dynamic loaders)
+- **Rollouts**: controlled by:
+  - `completion_params` (model + generation settings)
+  - `rollout_processor` (how to talk to the model / environment)
+- **Scoring**:
+  - Your function body writes `row.evaluation_result.score` in \[0, 1\]
+  - Optionally add `evaluation_result.reason` and `evaluation_result.metrics`
+
+If you remember **“rows in → rollouts → scores out”**, you’re 80% of the way there.
+
+## When to jump to the full reference
+
+Stay on this page until you need:
+
+- `data_loaders` or custom adapters
+- Advanced **aggregation** configs
+- Custom **exception handling** and backoff strategies
+- Detailed environment variable behavior
+
+When you hit those needs, the [full `@evaluation_test` reference](/reference/evaluation-test) covers every parameter and edge case.
+
+

@@ -1,0 +1,233 @@
+---
+title: rLLM Trainer
+icon: "tornado"
+description: "Reuse Eval Protocol environments and evaluation tests as workflows inside the rLLM reinforcement learning framework"
+---
+
+This adapter lets you **run Eval Protocol environments and evaluation tests as rLLM workflows** for reinforcement learning training. It does this by pointing rLLM at an Eval Protocol `@evaluation_test`, which uses Eval Protocol’s rollout processor to generate trajectories, calls the same evaluation function you use for offline evals, and converts the result into rLLM’s abstractions. This makes it easy to start with rLLM and later move to other Eval-Protocol supported training workflows (or vice versa) without rewriting your evals.
+
+For an end to end example, see the [FrozenLake Eval Protocol example](https://github.com/rllm-org/rllm/tree/main/examples/eval_protocol).
+
+## High Level Overview
+
+The core integration lives in rLLM’s `EvalProtocolWorkflow` (implemented in [`rllm/workflows/eval_protocol_workflow.py`](https://github.com/rllm-org/rllm/blob/main/rllm/workflows/eval_protocol_workflow.py)):
+
+```python
+from rllm.workflows.eval_protocol_workflow import EvalProtocolWorkflow
+```
+
+You typically use it together with rLLM’s workflow engine. Under the hood, `EvalProtocolWorkflow`:
+
+- **Takes** an Eval Protocol `@evaluation_test` (found via its module path, e.g. `"eval_protocol.benchmarks.test_frozen_lake"`).
+- **Reads** the test’s metadata (attached by `@evaluation_test`), including:
+  - `rollout_processor` (e.g., `MCPGymRolloutProcessor`)
+  - `server_script_path` / `mcp_config_path`
+  - rollout kwargs, mode, etc.
+- **Builds** a rollout config combining:
+  - Eval Protocol metadata, and
+  - rLLM’s config (model id, temperature, max tokens, number of steps).
+- **Runs** rollouts through Eval Protocol’s `rollout_processor`, then calls the evaluation function (your `@evaluation_test`) to produce an `EvaluationRow` with an `evaluation_result`.
+- **Converts** the resulting `EvaluationRow` into an rLLM `Episode` / `Trajectory` / `Step`, attaching the final score and metrics.
+
+This design means you can reuse the exact same Eval Protocol tests and MCP environments in rLLM with minimal extra glue code.
+
+## Basic Usage
+
+### 1. Define an Eval Protocol `@evaluation_test`
+
+Start with a normal Eval Protocol test. For example, a FrozenLake environment that uses an MCP rollout processor:
+
+```python test_frozen_lake.py
+@evaluation_test(
+    input_dataset=["tests/pytest/data/frozen_lake_dataset.jsonl"],
+    dataset_adapter=frozen_lake_to_evaluation_row,
+    completion_params=[
+        {
+            "temperature": 0.0,
+            "max_tokens": 4096,
+            "model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct",
+        }
+    ],
+    rollout_processor=MCPGymRolloutProcessor(),
+    passed_threshold=0.66,
+    num_runs=1,
+    max_concurrent_rollouts=3,
+    mode="pointwise",
+    server_script_path="examples/frozen_lake_mcp/server.py",
+)
+def test_frozen_lake_evaluation(row: EvaluationRow) -> EvaluationRow:
+    """
+    Evaluate how well the model plays FrozenLake by checking if it reaches the
+    goal while avoiding holes.
+    """
+    score = row.get_total_reward()
+
+    if score == 1.0:
+        reason = "Agent reached the goal"
+    else:
+        reason = "Agent did not reach the goal"
+
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason=reason,
+    )
+    return row
+```
+
+This is a regular Eval Protocol test: it describes how to roll out (via `rollout_processor`) and how to score (via the body of `test_frozen_lake_evaluation`).
+
+### 2. Prepare a dataset for rLLM
+
+On the rLLM side, you typically build a small dataset of task dicts that `EvalProtocolWorkflow` can map into `EvaluationRow`s. For FrozenLake, rLLM uses a script like:
+
+```python prepare_frozen_lake_data.py
+# examples/eval_protocol/prepare_frozen_lake_data.py (in rLLM)
+from datasets import Dataset
+from rllm.data.dataset import DatasetRegistry
+
+
+def prepare_frozen_lake_data(train_size: int, test_size: int):
+    system_prompt = "..."  # explains the FrozenLake rules and tool usage
+    user_prompt_template = "Current game state grid:\n{observation}\n\n..."
+
+    def create_row(idx, seed):
+        return {
+            "id": f"run_{idx}",
+            "system_prompt": system_prompt,
+            "user_prompt_template": user_prompt_template,
+            "environment_context": {
+                "game": "FrozenLake",
+                "map_name": "4x4",
+                "seed": seed,
+            },
+        }
+
+    # build HF datasets and register with DatasetRegistry under "frozen_lake_eval_protocol"
+    ...
+```
+
+Each task row includes:
+
+- `id`
+- `system_prompt`
+- `user_prompt_template` (e.g., uses `{observation}`)
+- `environment_context` (whatever your Eval Protocol test expects)
+
+Those fields are converted to an `EvaluationRow` by `EvalProtocolWorkflow`’s `_task_to_evaluation_row`.
+
+### 3. Run Eval Protocol tests through `AgentWorkflowEngine`
+
+To run evals (no training), rLLM uses `AgentWorkflowEngine` with `EvalProtocolWorkflow`:
+
+```python run_frozen_lake_flow.py
+# examples/eval_protocol/run_frozen_lake_flow.py (in rLLM)
+from rllm.data.dataset import DatasetRegistry
+from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
+from rllm.engine.rollout.openai_engine import OpenAIEngine
+from rllm.workflows.eval_protocol_workflow import EvalProtocolWorkflow
+
+
+async def main():
+    model_id = "accounts/fireworks/models/kimi-k2-instruct"
+
+    rollout_engine = OpenAIEngine(
+        model=model_id,
+        base_url="https://api.fireworks.ai/inference/v1",
+        api_key=os.getenv("FIREWORKS_API_KEY"),
+    )
+
+    engine = AgentWorkflowEngine(
+        workflow_cls=EvalProtocolWorkflow,
+        workflow_args={
+            "env_path": "eval_protocol.benchmarks.test_frozen_lake",
+            "lite_llm_prefix": "fireworks_ai/",
+            "steps": 30,
+            "temperature": 1.0,
+            "max_tokens": 16384,
+        },
+        rollout_engine=rollout_engine,
+        n_parallel_tasks=4,
+        retry_limit=1,
+    )
+
+    test_dataset = DatasetRegistry.load_dataset("frozen_lake_eval_protocol", "test")
+    tasks = [test_dataset[i] for i in range(4)]
+    episodes = await engine.execute_tasks(tasks)
+    ...
+```
+
+Key points:
+
+- `workflow_cls=EvalProtocolWorkflow` tells rLLM to use the Eval Protocol adapter.
+- `env_path="eval_protocol.benchmarks.test_frozen_lake"` points to the module containing your `@evaluation_test`.
+- `EvalProtocolWorkflow` imports that module, finds the decorated test with its metadata, and wires everything together.
+
+### 4. Train with `AgentTrainer` + `EvalProtocolWorkflow`
+
+For reinforcement learning, rLLM plugs the same workflow into its trainer:
+
+```python train_frozen_lake_flow.py
+# examples/eval_protocol/train_frozen_lake_flow.py (in rLLM)
+import hydra
+from rllm.data.dataset import DatasetRegistry
+from rllm.trainer.agent_trainer import AgentTrainer
+from rllm.workflows.eval_protocol_workflow import EvalProtocolWorkflow
+
+
+@hydra.main(config_path="pkg://rllm.trainer.config", config_name="agent_ppo_trainer", version_base=None)
+def main(config):
+    train_dataset = DatasetRegistry.load_dataset("frozen_lake_eval_protocol", "train")
+    test_dataset = DatasetRegistry.load_dataset("frozen_lake_eval_protocol", "test")
+
+    trainer = AgentTrainer(
+        workflow_class=EvalProtocolWorkflow,
+        workflow_args={
+            "env_path": "eval_protocol.benchmarks.test_frozen_lake",
+            "lite_llm_prefix": "fireworks_ai/",
+            "steps": 30,
+            "temperature": 1.0,
+            "max_tokens": 32768,
+        },
+        config=config,
+        train_dataset=train_dataset,
+        val_dataset=test_dataset,
+        backend="fireworks",
+    )
+    trainer.train()
+```
+
+Here, `AgentTrainer`:
+
+- Uses `EvalProtocolWorkflow` as its sampler/workflow.
+- Collects Episodes from Eval Protocol rollouts.
+- Uses those Episodes as input to the underlying PPO/GRPO trainer.
+
+## End-to-End FrozenLake Example
+
+To see this in action:
+
+1. Clone the rLLM repository.
+2. Prepare the FrozenLake Eval Protocol dataset:
+
+```bash
+cd examples/eval_protocol
+python prepare_frozen_lake_data.py
+```
+
+3. Run the FrozenLake Eval Protocol workflow through rLLM:
+
+```bash
+python run_frozen_lake_flow.py
+```
+
+4. Start training:
+
+```bash
+bash train_frozen_lake_flow.sh
+```
+
+The same pattern applies to any other Eval Protocol test:
+
+- Change `env_path` to the module containing your `@evaluation_test`.
+- Prepare a matching dataset for rLLM (id, system prompt, user prompt template, environment context).
+- Reuse `EvalProtocolWorkflow` with `AgentWorkflowEngine` and/or `AgentTrainer` to run or train on that environment.
