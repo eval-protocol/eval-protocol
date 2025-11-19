@@ -1,0 +1,455 @@
+---
+title: Training with TRL + OpenEnv
+icon: "brain"
+description: "Train language models on OpenEnv environments using TRL and eval-protocol"
+---
+
+Want to train language models on interactive environments like web navigation, text games, or custom tasks? Use **eval-protocol** to handle rollouts with any [OpenEnv](https://meta-pytorch.org/OpenEnv/) (PyTorch) environment while [TRL](https://huggingface.co/docs/trl/en/index) (Hugging Face) handles the training.
+
+**What is OpenEnv?** OpenEnv is PyTorch's framework for creating isolated, Docker-based execution environments for agentic RL training. It provides a standard Gymnasium-style API (`reset()`, `step()`, `state()`) that works across different environment types—web browsers, text games, Atari, coding tasks, and more. Each environment runs in its own Docker container with HTTP-based communication.
+
+## Why Use eval-protocol for TRL Training?
+
+**Eval Protocol handles the rollouts:**
+- Environment management (Docker containers, lifecycle)
+- Rollout execution (observation → LLM → action → environment)
+- Task rotation for balanced training
+- Reward collection and formatting
+- Concurrency control
+
+**TRL handles training:**
+- GRPO optimization
+- Model updates
+- Gradient computation
+- Checkpointing
+
+**You just need to:**
+- Define how to build prompts from observations
+- Define how to parse LLM outputs into actions
+- Configure your environment and training parameters
+
+## Architecture
+
+```
+┌─────────────────┐
+│  TRL Trainer    │ ← Handles training & optimization
+└────────┬────────┘
+         │ calls rollout_func
+         ▼
+┌─────────────────────────────┐
+│ eval-protocol Integration   │ ← Handles rollouts & environments
+│ (create_openenv_vllm_rollout)│
+└────────┬────────────────────┘
+         │
+         ▼
+┌──────────────────────┐      ┌─────────────────┐
+│ OpenEnv Environments │ ◄──► │  vLLM Server    │
+│  (Docker containers) │      └─────────────────┘
+└──────────────────────┘
+```
+
+## Prerequisites
+
+### 1. Install Dependencies
+
+```bash
+# Install eval-protocol with TRL and OpenEnv extras
+pip install "eval-protocol[trl,openenv]"
+
+# Or install separately
+pip install trl transformers peft
+pip install openenv-core
+pip install "openenv-browsergym-env @ git+https://github.com/facebookresearch/OpenEnv.git#subdirectory=src/envs/browsergym_env"
+```
+
+### 2. Build Environment Docker Images
+
+For BrowserGym (example):
+
+```bash
+# Build OpenEnv base image
+cd OpenEnv
+docker build -t openenv-base:latest -f src/core/containers/images/Dockerfile .
+
+# Build BrowserGym environment
+docker build -t browsergym-env:latest -f src/envs/browsergym_env/server/Dockerfile .
+```
+
+### 3. Start vLLM Server
+
+Start TRL's vLLM server on a separate GPU:
+
+```bash
+# Use an INSTRUCT model for better instruction following
+CUDA_VISIBLE_DEVICES=0 trl vllm-serve \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --port 8000
+```
+
+<Note>
+Use a separate GPU for vLLM inference (GPU 0) and training (GPU 1) for best performance.
+</Note>
+
+### 4. Setup Environment (BrowserGym Example)
+
+For MiniWoB++ tasks, serve the HTML locally:
+
+```bash
+cd miniwob-plusplus/miniwob/html
+python -m http.server 8888 --bind 0.0.0.0
+```
+
+Set environment variables:
+
+```bash
+export MINIWOB_URL="http://host.docker.internal:8888/miniwob/"  # macOS
+# or
+export MINIWOB_URL="http://172.17.0.1:8888/miniwob/"  # Linux
+```
+
+## Quick Start
+
+Here's a minimal example training on BrowserGym MiniWoB++ tasks:
+
+```python train_browsergym.py
+from datasets import Dataset
+from transformers import AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from peft import LoraConfig
+
+from eval_protocol.pytest.integrations.openenv_trl_vllm import create_openenv_vllm_rollout_func
+from envs.browsergym_env import BrowserGymEnv, BrowserGymAction
+
+MODEL = "Qwen/Qwen2.5-7B-Instruct"
+VLLM_URL = "http://localhost:8000"
+
+# 1. Define prompt builder (observation → text for LLM)
+def build_prompt(obs, step, history):
+    return f"""Step {step}
+Goal: {obs.goal}
+URL: {obs.url}
+Page: {obs.text[:1000]}
+
+Reply with a BrowserGym action like click('id') or noop().
+"""
+
+# 2. Define action parser (LLM text → environment action)
+def parse_action(text: str) -> BrowserGymAction:
+    import re
+    match = re.search(r"[A-Za-z_]+\s*\(.*\)", text)
+    if match:
+        return BrowserGymAction(action_str=match.group(0))
+    return BrowserGymAction(action_str="noop()")
+
+# 3. Define reward function
+def reward_func(completions, **kwargs):
+    return kwargs.get("step_rewards", [0.0] * len(completions))
+
+# 4. Create rollout function (eval-protocol handles everything!)
+rollout_func = create_openenv_vllm_rollout_func(
+    env_client_cls=BrowserGymEnv,
+    prompt_builder=build_prompt,
+    action_parser=parse_action,
+    vllm_base_url=VLLM_URL,
+    vllm_model=MODEL,
+    tasks=["click-test", "click-button"],
+    task_var="BROWSERGYM_TASK_NAME",
+    docker_image="browsergym-env:latest",
+    env_vars={
+        "BROWSERGYM_BENCHMARK": "miniwob",
+        "BROWSERGYM_HEADLESS": "true",
+        "MINIWOB_URL": "http://host.docker.internal:8888/miniwob/",
+    },
+    max_steps=8,
+)
+
+# 5. Setup TRL trainer
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+dataset = Dataset.from_dict({"prompt": ["Start task"] * 8})
+
+trainer = GRPOTrainer(
+    model=MODEL,
+    args=GRPOConfig(
+        output_dir="outputs/browsergym",
+        per_device_train_batch_size=4,
+        num_generations=2,
+        learning_rate=5e-6,
+        use_vllm=True,
+        vllm_mode="server",
+        vllm_server_base_url=VLLM_URL,
+    ),
+    train_dataset=dataset,
+    processing_class=tokenizer,
+    reward_funcs=reward_func,
+    rollout_func=rollout_func,  # ← eval-protocol handles this!
+    peft_config=LoraConfig(r=16, lora_alpha=16, target_modules="all-linear"),
+)
+
+# 6. Train!
+trainer.train()
+```
+
+## Running the Training
+
+```bash
+# Start vLLM server (GPU 0)
+CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model Qwen/Qwen2.5-7B-Instruct --port 8000
+
+# In another terminal, start MiniWoB server
+cd miniwob-plusplus/miniwob/html
+python -m http.server 8888 --bind 0.0.0.0
+
+# In another terminal, run training (GPU 1)
+CUDA_VISIBLE_DEVICES=1 PYTHONUNBUFFERED=1 python train_browsergym.py
+```
+
+## Task Rotation
+
+The integration automatically rotates tasks for balanced training:
+
+### Generation-Level Rotation
+
+With `num_generations=2` and `tasks=["task-1", "task-2", "task-3"]`:
+
+- Rollouts 0-1: task-1
+- Rollouts 2-3: task-2
+- Rollouts 4-5: task-3
+- Rollouts 6-7: task-1 (cycles)
+
+### GRPO-Step Level Rotation
+
+The task order rotates between GRPO steps:
+
+- **GRPO Step 1**: `["task-1", "task-2", "task-3"]`
+- **GRPO Step 2**: `["task-2", "task-3", "task-1"]`
+- **GRPO Step 3**: `["task-3", "task-1", "task-2"]`
+
+This ensures each GRPO step focuses on a different primary task, providing balanced coverage.
+
+## How It Works
+
+When you call `create_openenv_vllm_rollout_func()`, eval-protocol creates a function that TRL's trainer will call during training. Here's what happens:
+
+1. **TRL calls `rollout_func(prompts, trainer)`** with a batch of prompts
+2. **eval-protocol creates evaluation rows** from the prompts (one row per generation)
+3. **OpenEnvRolloutProcessor executes rollouts**:
+   - Creates Docker containers for environments
+   - Runs the agent loop: observation → LLM → action → environment
+   - Collects rewards and tokens from each step
+4. **eval-protocol formats results** into TRL-compatible format (token IDs + rewards)
+5. **TRL uses the results** to compute policy gradients and update the model
+
+You don't need to worry about Docker management, concurrency, or reward collection—eval-protocol handles it all!
+
+## Configuration Parameters
+
+### Rollout Function Parameters
+
+<ParamField body="env_client_cls" type="Type[HTTPEnvClient]" required>
+  OpenEnv environment client class (e.g., `BrowserGymEnv`, `TextArenaEnv`)
+</ParamField>
+
+<ParamField body="prompt_builder" type="Callable[[obs, int, List[str]], str]" required>
+  Function that converts observation to text prompt for the LLM
+</ParamField>
+
+<ParamField body="action_parser" type="Callable[[str], Action]" required>
+  Function that converts LLM text output to environment action
+</ParamField>
+
+<ParamField body="vllm_base_url" type="str" default="http://localhost:8000">
+  URL of the TRL vLLM server
+</ParamField>
+
+<ParamField body="vllm_model" type="str" required>
+  Model name on the vLLM server
+</ParamField>
+
+<ParamField body="tasks" type="List[str]">
+  List of tasks to rotate through during training
+</ParamField>
+
+<ParamField body="task_var" type="str">
+  Environment variable name for task selection (required when `tasks` is provided)
+</ParamField>
+
+<ParamField body="env_vars" type="Dict[str, str]">
+  Environment variables to pass to Docker containers
+</ParamField>
+
+<ParamField body="docker_image" type="str" default="browsergym-env:latest">
+  Docker image for the environment
+</ParamField>
+
+<ParamField body="max_steps" type="int" default="8">
+  Maximum steps per episode
+</ParamField>
+
+<ParamField body="completion_params" type="Dict">
+  LLM sampling parameters (temperature, max_tokens, etc.)
+</ParamField>
+
+<ParamField body="concurrency" type="int">
+  Maximum concurrent rollouts (defaults to batch size)
+</ParamField>
+
+### GRPO Training Parameters
+
+<ParamField body="per_device_train_batch_size" type="int" required>
+  Batch size per device
+</ParamField>
+
+<ParamField body="num_generations" type="int" required>
+  Number of rollouts per prompt (must divide evenly into batch size)
+</ParamField>
+
+<ParamField body="learning_rate" type="float" default="5e-6">
+  Learning rate for training
+</ParamField>
+
+<ParamField body="temperature" type="float" default="0.7">
+  Sampling temperature for generation
+</ParamField>
+
+<ParamField body="max_completion_length" type="int" default="512">
+  Maximum tokens per generation
+</ParamField>
+
+<ParamField body="use_vllm" type="bool" required>
+  Must be `True` to use vLLM server
+</ParamField>
+
+<ParamField body="vllm_mode" type="str" required>
+  Must be `"server"` to use separate vLLM server
+</ParamField>
+
+<ParamField body="vllm_server_base_url" type="str" required>
+  URL of the vLLM server
+</ParamField>
+
+## Best Practices
+
+### 1. Use Instruct Models
+
+Use instruction-tuned models (e.g., `Qwen2.5-7B-Instruct`) rather than base models for better instruction following:
+
+```python
+MODEL = "Qwen/Qwen2.5-7B-Instruct"  # ✅ Good
+# MODEL = "Qwen/Qwen2.5-7B"  # ❌ Base model may not follow instructions well
+```
+
+### 2. Separate GPUs for Inference and Training
+
+Run vLLM inference on one GPU and training on another:
+
+```bash
+# GPU 0: vLLM inference
+CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model MODEL --port 8000
+
+# GPU 1: Training
+CUDA_VISIBLE_DEVICES=1 python train.py
+```
+
+### 3. Use LoRA for Efficiency
+
+LoRA reduces memory usage and speeds up training:
+
+```python
+peft_config = LoraConfig(
+    r=16,  # Rank (higher = more parameters)
+    lora_alpha=16,
+    target_modules="all-linear",  # Apply to all linear layers
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM",
+)
+```
+
+### 4. Balance Batch Size and Generations
+
+Ensure `per_device_train_batch_size` is divisible by `num_generations`:
+
+```python
+per_device_train_batch_size=4  # ✅ Divisible by num_generations
+num_generations=2
+```
+
+### 5. Monitor Rewards
+
+Track average rewards to ensure learning progress:
+
+```python
+def reward_func(completions, **kwargs):
+    step_rewards = kwargs.get("step_rewards", [])
+    avg_reward = sum(step_rewards) / len(step_rewards) if step_rewards else 0.0
+    print(f"Average reward: {avg_reward:.2f}")
+    return [float(r) for r in step_rewards]
+```
+
+## Troubleshooting
+
+### vLLM Server Not Found
+
+**Error**: `Connection refused to http://localhost:8000`
+
+**Solution**: Ensure vLLM server is running:
+```bash
+CUDA_VISIBLE_DEVICES=0 trl vllm-serve --model MODEL --port 8000
+```
+
+### Docker Container Fails
+
+**Error**: `RuntimeError: Failed to start Docker container`
+
+**Solution**: 
+- Verify Docker image exists: `docker images | grep browsergym-env`
+- Check container logs: `docker logs <container-id>`
+- Ensure environment variables are correct
+
+### Out of Memory
+
+**Error**: `CUDA out of memory`
+
+**Solution**:
+- Use LoRA instead of full fine-tuning
+- Reduce `per_device_train_batch_size`
+- Reduce `max_completion_length`
+- Enable `gradient_checkpointing=True`
+
+### Low Rewards
+
+If rewards remain low:
+- Verify your reward function is correct
+- Check that environment tasks are solvable
+- Review LLM outputs in rollout logs
+- Adjust temperature (lower = more deterministic)
+- Improve prompt engineering
+
+## Advanced: Custom Reward Functions
+
+You can implement custom reward shaping:
+
+```python
+def custom_reward_func(completions, **kwargs):
+    """Custom reward with shaping."""
+    step_rewards = kwargs.get("step_rewards", [])
+    
+    shaped_rewards = []
+    for reward in step_rewards:
+        # Reward shaping: bonus for positive rewards
+        shaped = reward
+        if reward > 0:
+            shaped += 0.1  # Bonus for any success
+        shaped_rewards.append(shaped)
+    
+    return shaped_rewards
+```
+
+## Resources
+
+- [TRL Documentation](https://huggingface.co/docs/trl)
+- [GRPO Paper](https://arxiv.org/abs/2402.03300)
+- [OpenEnv Documentation](https://meta-pytorch.org/OpenEnv/)
+- [eval-protocol TRL Integration](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/integrations/openenv_trl_vllm.py)
+- [Example Training Script](https://github.com/eval-protocol/python-sdk/blob/main/examples/trl/train_browsergym.py)
+

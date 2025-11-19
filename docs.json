@@ -41,7 +41,9 @@
         "group": "Integrations",
         "pages": [
           "integrations/langgraph",
-          "integrations/pydantic-ai"
+          "integrations/pydantic-ai",
+          "integrations/klavis",
+          "integrations/trl"
         ]
       },
       {
