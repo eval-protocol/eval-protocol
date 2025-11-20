@@ -30,7 +30,7 @@ You can use the **same pattern** to write evals for any OpenEnv environment (Bro
 
 At a high level:
 
-1. **Pick an OpenEnv client** for your environment:
+1. **Pick an OpenEnv client** for your environment (see the [OpenEnv environments](https://github.com/meta-pytorch/OpenEnv/tree/main/src/envs) for a full list):
    - BrowserGym: `from envs.browsergym_env import BrowserGymEnv, BrowserGymAction`
    - Echo: `from envs.echo_env import EchoEnv, EchoAction`
    - TextArena: `from envs.textarena_env import TextArenaEnv, TextArenaAction`
@@ -48,6 +48,12 @@ At a high level:
 5. **Use it in an `@evaluation_test`**:
    - Set `rollout_processor=OpenEnvRolloutProcessor(...)`.
    - In the test body, read the step rewards sentinel from `row.messages` and set `row.evaluation_result` based on whatever scoring you want.
+
+Concrete examples of `prompt_builder` and `action_parser` can be found in the Eval Protocol Python SDK:
+
+- BrowserGym: [`tests.pytest.test_openenv_browsergym_eval`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_browsergym_eval.py)
+- Echo: [`tests.pytest.test_openenv_echo_hub`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_echo_hub.py)
+- TextArena: [`tests.pytest.test_openenv_textarena_docker`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_textarena_docker.py)
 
 ## BrowserGym example (MiniWoB via Docker)
 
@@ -227,11 +233,13 @@ This pattern generalizes to **any OpenEnv client**:
   )
   ```
 
-  OpenEnv will pull and start the container for you locally:
+  When you use `EchoEnv.from_hub("openenv/echo-env")`, OpenEnv will pull and start the container for you locally. Internally it runs a command similar to:
 
   ```bash
   docker run -d -p 8001:8000 --platform linux/amd64 registry.hf.space/openenv-echo-env:latest
   ```
+
+  You typically do **not** need to run this yourself; it is shown here so you know what OpenEnv is doing under the hood and can debug or run it manually if needed.
 
 - **Local / Docker image (TextArena, BrowserGym, custom)** — `from_docker_image`:
 
