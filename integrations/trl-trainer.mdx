@@ -52,22 +52,32 @@ When you pass a `rollout_func` created by `create_openenv_vllm_rollout_func` int
 ### 1. Install Dependencies
 
 ```bash
-# Install eval-protocol with TRL and OpenEnv extras
+# Recommended: Eval Protocol with TRL + OpenEnv extras
 pip install "eval-protocol[trl,openenv]"
 
-# Or install separately
-pip install trl transformers peft
+# This installs:
+# - TRL + friends: trl, transformers, peft, accelerate, torch (as needed)
+# - OpenEnv packages: openenv-core, openenv, openenv-browsergym-env
+# You do NOT need to clone the OpenEnv repo just to use hub or remote environments.
+
+# Or install pieces separately
+pip install "eval-protocol[trl]"
 pip install openenv-core
-pip install "openenv-browsergym-env @ git+https://github.com/facebookresearch/OpenEnv.git#subdirectory=src/envs/browsergym_env"
+pip install "openenv @ git+https://github.com/meta-pytorch/OpenEnv.git"
+pip install "openenv-browsergym-env @ git+https://github.com/meta-pytorch/OpenEnv.git#subdirectory=src/envs/browsergym_env"
 ```
 
-### 2. Build Environment Docker Images
+### 2. (Optional) Build local BrowserGym Docker images
 
-For BrowserGym (example):
+You only need this step if you want to run **BrowserGym locally in Docker**.  
+If you are using environments from the **Hugging Face Hub** (for example `EchoEnv.from_hub(...)`) or a **remote HTTP server/Space** via `base_url=...`, you can skip this section.
 
 ```bash
-# Build OpenEnv base image
+# Clone OpenEnv (only needed for building local images)
+git clone https://github.com/meta-pytorch/OpenEnv.git
 cd OpenEnv
+
+# Build OpenEnv base image
 docker build -t openenv-base:latest -f src/core/containers/images/Dockerfile .
 
 # Build BrowserGym environment
@@ -89,11 +99,17 @@ CUDA_VISIBLE_DEVICES=0 trl vllm-serve \
 Use a separate GPU for vLLM inference (GPU 0) and training (GPU 1) for best performance.
 </Note>
 
-### 4. Setup Environment (BrowserGym Example)
+### 4. Setup Environment (BrowserGym + MiniWoB++ example)
+
+This step is only required if you are training on **MiniWoB++ BrowserGym tasks** locally. For other environments (Echo, TextArena, remote BrowserGym on the hub/Spaces), you can skip it.
 
 For MiniWoB++ tasks, serve the HTML locally:
 
 ```bash
+# Clone MiniWoB++ (if you don't have it yet)
+git clone https://github.com/Farama-Foundation/miniwob-plusplus.git
+
+# From the cloned repo root:
 cd miniwob-plusplus/miniwob/html
 python -m http.server 8888 --bind 0.0.0.0
 ```
@@ -113,6 +129,9 @@ The biggest value of this integration is that you can **reuse your existing `@ev
 - The Eval Protocol test owns the **environment wiring** (for example `OpenEnvRolloutProcessor` + BrowserGym/Echo/TextArena config).
 - The test body owns the **reward logic** (it sets `row.evaluation_result`).
 - TRL just points at that test by module path and reuses both environment and scoring.
+
+You can see a concrete example in the Eval Protocol Python SDK repo at:
+[tests.pytest.test_openenv_browsergym_eval](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_browsergym_eval.py).
 
 Eval Protocol’s `create_openenv_vllm_rollout_func` helper:
 
