@@ -1,0 +1,290 @@
+---
+title: OpenEnv Environments
+icon: "browser"
+description: Use any OpenEnv HTTP environment with Eval Protocol via a single rollout processor
+---
+
+## Overview
+
+[OpenEnv](https://github.com/meta-pytorch/OpenEnv/tree/main) is an open-source framework from Meta’s PyTorch team for defining, deploying, and interacting with environments in RL and agentic workflows. It gives you **Gym-style APIs** (`reset()`, `step()`, `state()`) wrapped in HTTP clients (for example `BrowserGymEnv`, `EchoEnv`, `TextArenaEnv`), and lets you run those environments:
+
+- As local Python processes.
+- Inside Docker containers.
+- As hosted Hugging Face Spaces.
+
+Eval Protocol integrates with OpenEnv by talking only to the **environment client**. Once an environment is exposed as an OpenEnv client, Eval Protocol can drive episodes without any environment-specific code in your tests.
+
+`OpenEnvRolloutProcessor` is the component that **runs the OpenEnv loop for you**:
+
+- It calls `env.reset()` to start an episode for each `EvaluationRow`.
+- For each step, it builds a user message from the observation, calls your model, parses the model’s response into an action, and calls `env.step(action)`.
+- It appends a sentinel system message with per-step rewards so your `@evaluation_test` can compute a final score in a single place.
+
+You can use the **same pattern** to write evals for any OpenEnv environment (BrowserGym, Echo, TextArena, Atari-style games, etc.) by changing only:
+
+- Which OpenEnv client you pass (`BrowserGymEnv`, `EchoEnv`, `TextArenaEnv`, …).
+- How you build prompts (`prompt_builder`).
+- How you parse actions (`action_parser`).
+
+## How to use OpenEnvRolloutProcessor
+
+At a high level:
+
+1. **Pick an OpenEnv client** for your environment (see the [OpenEnv environments](https://github.com/meta-pytorch/OpenEnv/tree/main/src/envs) for a full list):
+   - BrowserGym: `from envs.browsergym_env import BrowserGymEnv, BrowserGymAction`
+   - Echo: `from envs.echo_env import EchoEnv, EchoAction`
+   - TextArena: `from envs.textarena_env import TextArenaEnv, TextArenaAction`
+2. **Write a `prompt_builder(observation, step, history)`** that turns the current observation into a user-facing prompt string (or chat messages).
+3. **Write an `action_parser(response_text)`** that converts model output into the environment’s `Action` type.
+4. **Instantiate `OpenEnvRolloutProcessor`** with the right constructor kwargs:
+   - `env_client_cls` or `env_factory` (how to construct the client).
+   - `prompt_builder` and `action_parser`.
+   - Environment wiring:
+     - `docker_image` and `env_vars` for Docker-based envs (BrowserGym, TextArena).
+     - `hub_repo_id` to launch from Hugging Face Hub (for example `"openenv/echo-env"`).
+     - `env_base_url` when connecting to an already running server or remote Space.
+   - Optional task routing:
+     - `tasks` and `task_var` if you want to rotate across multiple tasks (for example multiple MiniWoB levels).
+5. **Use it in an `@evaluation_test`**:
+   - Set `rollout_processor=OpenEnvRolloutProcessor(...)`.
+   - In the test body, read the step rewards sentinel from `row.messages` and set `row.evaluation_result` based on whatever scoring you want.
+
+Concrete examples of `prompt_builder` and `action_parser` can be found in the Eval Protocol Python SDK:
+
+- BrowserGym: [`tests.pytest.test_openenv_browsergym_eval`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_browsergym_eval.py)
+- Echo: [`tests.pytest.test_openenv_echo_hub`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_echo_hub.py)
+- TextArena: [`tests.pytest.test_openenv_textarena_docker`](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_openenv_textarena_docker.py)
+
+## BrowserGym example (MiniWoB via Docker)
+
+```python openenv_browsergym_eval.py
+from typing import Any, Dict, List
+import os
+import re
+
+import pytest
+from eval_protocol.models import EvaluationRow, Message, EvaluateResult
+from eval_protocol.pytest import evaluation_test
+from eval_protocol.pytest.openenv_rollout_processor import OpenEnvRolloutProcessor
+
+
+def browsergym_dataset_to_rows(data: List[Dict[str, Any]]) -> List[EvaluationRow]:
+    """Adapt simple dict rows into EvaluationRow objects."""
+    rows: List[EvaluationRow] = []
+    for row in data:
+        prompt = str(row.get("prompt", "start"))
+        rows.append(EvaluationRow(messages=[Message(role="user", content=prompt)]))
+    return rows
+
+
+ACTION_PATTERN = re.compile(r"[A-Za-z_]+\s*\(.*\)", re.DOTALL)
+
+
+def prompt_builder(observation: Any, step: int, history: List[str]) -> str:
+    """Turn a BrowserGym observation into a text prompt."""
+    goal = getattr(observation, "goal", "") or ""
+    url = getattr(observation, "url", "") or "(unknown)"
+    error_note = "Yes" if getattr(observation, "last_action_error", False) else "No"
+    text = (getattr(observation, "text", "") or "")[:2048]
+    return (
+        f"Step: {step}\n"
+        f"Goal: {goal}\n"
+        f"Current URL: {url}\n"
+        f"Previous steps:\n" + ("\n".join(history[-4:]) if history else "None") + "\n"
+        f"Last action error: {error_note}\n\n"
+        "Reply with a single BrowserGym action, e.g., click('13') or noop().\n\n"
+        f"Page excerpt:\n{text}\n\n"
+        "Reply with exactly one BrowserGym action string."
+    ).strip()
+
+
+def action_parser(response_text: str):
+    """Parse model output into a BrowserGym action."""
+    try:
+        from envs.browsergym_env import BrowserGymAction  # provided by OpenEnv
+    except Exception:
+        pytest.skip("OpenEnv (envs.browsergym_env) is not installed; skipping BrowserGym test.")
+        raise
+
+    if not response_text:
+        return BrowserGymAction(action_str="noop()")
+
+    for raw in response_text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        m = ACTION_PATTERN.search(line)
+        if m:
+            return BrowserGymAction(action_str=m.group(0))
+
+    m = ACTION_PATTERN.search(response_text)
+    if m:
+        return BrowserGymAction(action_str=m.group(0))
+    return BrowserGymAction(action_str="noop()")
+
+
+try:
+    from envs.browsergym_env import BrowserGymEnv  # provided by OpenEnv
+
+    _HAS_BROWSERGYM = True
+except Exception:
+    _HAS_BROWSERGYM = False
+
+
+BROWSERGYM_INLINE_DATA: List[Dict[str, Any]] = [
+    {"id": "click-test", "prompt": "start"},
+]
+
+
+@evaluation_test(  # type: ignore[misc]
+    input_rows=[browsergym_dataset_to_rows(BROWSERGYM_INLINE_DATA)],
+    completion_params=[
+        {
+            "temperature": 0.0,
+            "max_tokens": 512,
+            "model": "fireworks_ai/accounts/fireworks/models/kimi-k2-instruct",
+        }
+    ],
+    num_runs=1,
+    max_concurrent_rollouts=1,
+    mode="pointwise",
+    rollout_processor=(
+        OpenEnvRolloutProcessor(
+            env_client_cls=BrowserGymEnv if _HAS_BROWSERGYM else None,
+            prompt_builder=prompt_builder,
+            action_parser=action_parser,
+            tasks=["click-test"],
+            task_var="BROWSERGYM_TASK_NAME",
+            miniwob_url=os.getenv("MINIWOB_URL", "http://host.docker.internal:8888/miniwob/"),
+            docker_image="browsergym-env:latest",
+            benchmark="miniwob",
+            timeout_ms=10000,
+            num_generations=1,
+            env_vars={
+                "BROWSERGYM_BENCHMARK": "miniwob",
+                "BROWSERGYM_HEADLESS": "true",
+                "BROWSERGYM_VIEWPORT_WIDTH": "1280",
+                "BROWSERGYM_VIEWPORT_HEIGHT": "720",
+                "BROWSERGYM_TIMEOUT": "10000",
+                "BROWSERGYM_OBS_AXTREE": "1",
+                "BROWSERGYM_OBS_PRUNED_HTML": "1",
+                "BROWSERGYM_RETURN_INFO": "1",
+                "MINIWOB_URL": os.getenv("MINIWOB_URL", "http://host.docker.internal:8888/miniwob/"),
+            },
+        )
+        if _HAS_BROWSERGYM
+        else None
+    ),
+)
+def test_openenv_browsergym_eval(row: EvaluationRow) -> EvaluationRow:
+    """
+    Example: run a BrowserGym MiniWoB environment via OpenEnvRolloutProcessor.
+    """
+    if not _HAS_BROWSERGYM:
+        pytest.skip("OpenEnv (envs.browsergym_env) is not installed; skipping BrowserGym test.")
+
+    # The rollout processor appends per-step rewards in a sentinel system message:
+    # "__ep_step_rewards__:[r0, r1, ...]".
+    step_rewards: List[float] = []
+    try:
+        for msg in row.messages or []:
+            if (
+                msg.role == "system"
+                and isinstance(msg.content, str)
+                and msg.content.startswith("__ep_step_rewards__:")
+            ):
+                import json as _json
+
+                payload = msg.content.split(":", 1)[1]
+                step_rewards = _json.loads(payload) or []
+                break
+    except Exception:
+        step_rewards = []
+
+    total = float(sum(step_rewards)) if step_rewards else 0.0
+    # Map total reward into [0, 1]
+    score = max(0.0, min(1.0, total))
+    reason = f"Total reward={total:.2f} across {len(step_rewards)} steps"
+    row.evaluation_result = EvaluateResult(score=score, reason=reason)
+    return row
+```
+
+This pattern generalizes to **any OpenEnv client**:
+
+- Swap `BrowserGymEnv` / `BrowserGymAction` for `EchoEnv` / `EchoAction`, `TextArenaEnv` / `TextArenaAction`, or your own environment class.
+- Keep `prompt_builder` and `action_parser` aligned with the environment’s observation and action types.
+- Reuse the same `@evaluation_test` file across offline evals, dashboards, and RL integrations that call Eval Protocol.
+
+## Echo / TextArena and connection modes
+
+`OpenEnvRolloutProcessor` can construct environments in three main ways, all driven by `env_client_cls`:
+
+- **From Hugging Face Hub (recommended)** — `from_hub`:
+
+  ```python
+  from envs.echo_env import EchoEnv
+
+  processor = OpenEnvRolloutProcessor(
+      env_client_cls=EchoEnv,
+      hub_repo_id="openenv/echo-env",        # HF Space repo_id
+      prompt_builder=prompt_builder,
+      action_parser=action_parser,
+      timeout_ms=5000,
+  )
+  ```
+
+  When you use `EchoEnv.from_hub("openenv/echo-env")`, OpenEnv will pull and start the container for you locally. Internally it runs a command similar to:
+
+  ```bash
+  docker run -d -p 8001:8000 --platform linux/amd64 registry.hf.space/openenv-echo-env:latest
+  ```
+
+  You typically do **not** need to run this yourself; it is shown here so you know what OpenEnv is doing under the hood and can debug or run it manually if needed.
+
+- **Local / Docker image (TextArena, BrowserGym, custom)** — `from_docker_image`:
+
+  ```python
+  from envs.textarena_env import TextArenaEnv
+
+  processor = OpenEnvRolloutProcessor(
+      env_client_cls=TextArenaEnv,
+      docker_image="textarena-env:latest",
+      env_vars={
+          "TEXTARENA_ENV_ID": "Wordle-v0",
+          "TEXTARENA_NUM_PLAYERS": "1",
+      },
+      task_var="TEXTARENA_ENV_ID",
+      tasks=None,  # single env id via TEXTARENA_ENV_ID
+      prompt_builder=textarena_prompt_builder,
+      action_parser=textarena_action_parser,
+  )
+  ```
+
+- **Existing HTTP server / remote Space** — `base_url`:
+
+  ```python
+  from envs.echo_env import EchoEnv
+
+  # Local or Docker-mapped port
+  local_client = EchoEnv(base_url="http://0.0.0.0:8001")
+
+  # Remote Hugging Face Space
+  space_client = EchoEnv(base_url="https://openenv-echo-env.hf.space")
+  ```
+
+  With `OpenEnvRolloutProcessor`, you can pass a factory instead of `env_client_cls`:
+
+  ```python
+  def make_echo_env():
+      return EchoEnv(base_url="https://openenv-echo-env.hf.space")
+
+  processor = OpenEnvRolloutProcessor(
+      env_factory=make_echo_env,
+      prompt_builder=prompt_builder,
+      action_parser=action_parser,
+  )
+  ```
+
+Once your OpenEnv client is wired into `OpenEnvRolloutProcessor`, all Eval Protocol tooling (evaluation tests, logs UI, and integrations like TRL/rLLM) can reuse the same environment + reward logic by simply pointing at your `@evaluation_test` function via its module path.
+
+

@@ -35,6 +35,7 @@
           "integrations/rllm-trainer",
           "integrations/trl-trainer",
           "integrations/openai-rft-trainer",
+          "integrations/openenv-rollout-processor",
           "integrations/klavis-mcp"
         ]
       },
