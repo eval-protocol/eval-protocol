@@ -107,7 +107,38 @@ about wrangling metadata.
 - `run_id`
 - `row_id`
 
-## Fireworks Tracing
+## Fireworks Tracing: Handling `InitRequest` in your Server
+
+This section shows how to **parse the `InitRequest` fields and call your model**. Note: the `model_base_url` is a `tracing.fireworks.ai` URL that proxies your model calls so Fireworks can capture full traces for each rollout.
+
+Below is a minimal FastAPI server showing how to wire this together.
+
+```python remote_server.py
+@app.post("/init")
+def init(req: InitRequest):
+    if not req.messages:
+        raise ValueError("messages is required")
+
+    model = req.completion_params.get("model")
+    if not model:
+        raise ValueError("model is required in completion_params")
+
+    # Spread all completion_params (model, temperature, max_tokens, etc.)
+    completion_kwargs = {"messages": req.messages, **req.completion_params}
+
+    if req.tools:
+        completion_kwargs["tools"] = req.tools
+
+    # Build OpenAI client from InitRequest
+    # You can also use req.api_key instead of an environment variable if preferred.
+    client = OpenAI(
+        base_url=req.model_base_url,
+        api_key=os.environ.get("FIREWORKS_API_KEY"),
+    )
+    completion = client.chat.completions.create(**completion_kwargs)
+```
+
+## Fireworks Tracing: Signaling Rollout Completion
 
 ### Python Example
 
