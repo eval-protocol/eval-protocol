@@ -43,6 +43,52 @@ A collection (list) of rows. When stored, it is a JSONL file where each line is 
 The rubric implemented in the body of an `@evaluation_test`-decorated function. It computes a `score` in 
   \[0, 1\] and writes it to the row’s `evaluation_result`.
 
+## Execution IDs and how they relate
+
+Eval Protocol uses a small set of IDs to make rollouts traceable across systems (log stores, tracing UIs, dataset artifacts, etc.). These IDs are **correlation identifiers**, not “job objects” by themselves.
+
+### ID hierarchy (recommended mental model)
+
+Each rollout/trajectory can be identified by the tuple:
+
+- **`invocation_id`** → **`experiment_id`** → **`run_id`** → **`row_id`** → **`rollout_id`**
+
+In other words:
+
+- An **invocation** contains one or more **experiments**
+- An **experiment** contains one or more **runs** (repetitions)
+- A **run** contains many **rows**
+- For each **row**, there may be one or more **rollouts** (e.g., \(N\) samples per prompt)
+
+### What each ID means
+
+| Field | Stored on | Meaning | Uniqueness / stability expectations |
+|---|---|---|---|
+| `invocation_id` | `row.execution_metadata.invocation_id` | Identifier for one *invocation* (one top-level evaluation execution). All rows produced by the same invocation should share this value. | Stable within an invocation. Commonly set by an orchestrator (CI job id, workflow run id, etc.). |
+| `experiment_id` | `row.execution_metadata.experiment_id` | Identifier for one *experiment* (a specific combination of eval code + dataset + completion params). | Stable for all rows within that experiment; changes when you change the parameterization. |
+| `run_id` | `row.execution_metadata.run_id` | Identifier for one *run* (one repetition of an experiment when `num_runs > 1`). | Stable for the repetition. May be `null`/unset when `num_runs == 1` (implementation default). |
+| `row_id` | `row.input_metadata.row_id` | Identifier for one *dataset row* (one prompt / episode seed / task instance). | Should be stable across reruns so you can compare the “same row” across experiments/runs. If omitted, implementations may deterministically generate one from row content. |
+| `rollout_id` | `row.execution_metadata.rollout_id` | Identifier for one *rollout* (one concrete trajectory for a given row in a given run/experiment/invocation). | Unique per rollout. If you sample multiple trajectories per row, each sampled trajectory should have its own `rollout_id`. |
+
+### Remote rollout processors: why all 5 IDs appear together
+
+When using remote rollout processors, Eval Protocol passes a `RolloutMetadata` object that includes `invocation_id`, `experiment_id`, `run_id`, `row_id`, and `rollout_id` so the remote system can:
+
+- tag logs/traces (e.g., `rollout_id:*`) for retrieval,
+- correlate failures to a specific row and rollout,
+- emit artifacts that can be merged back into the evaluation dataset.
+
+### Mapping these IDs to “RL job” and “RL step”
+
+Eval Protocol itself does not define an “RL job” concept; it defines **rollouts and evaluations**. In RL training pipelines, we recommend:
+
+- **RL job id**: set/use `invocation_id` as the top-level grouping id (e.g., your trainer job id, CI run id, or workflow id).
+- **RL step / epoch / iteration**: encode this in either:
+  - `run_id` (if your “step” is conceptually a repetition of the same experiment), or
+  - `execution_metadata.extra` / `input_metadata.session_data` (preferred when you need multiple axes like epoch + step + shard).
+
+The key requirement is consistency: pick a convention so that all systems (tracing, dataset artifacts, training code) can join on the same keys.
+
 ## Foundational Types
 
 ### JSONType
