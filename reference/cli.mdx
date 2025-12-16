@@ -1,0 +1,288 @@
+---
+title: CLI
+icon: terminal
+---
+
+The `ep` command-line interface can inspect evaluation runs locally, upload evaluators, and create reinforcement fine-tuning jobs on Fireworks.
+
+```bash
+ep [global options] <command> [command options]
+```
+
+## Global Options
+
+These options can be used with any command:
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Enable verbose logging (Short: `-v`)
+</ParamField>
+
+<ParamField path="--profile">
+  Fireworks profile to use (reads ~/.fireworks/profiles/&lt;name&gt;/auth.ini and settings.ini)
+</ParamField>
+
+<ParamField path="--server">
+  Fireworks API server hostname or URL (e.g., dev.api.fireworks.ai or https://dev.api.fireworks.ai)
+</ParamField>
+
+## Commands
+
+### `ep logs`
+
+Serve logs with file watching and real-time updates
+
+<ParamField path="--port" type="number" default="8000">
+  Port to bind to (default: 8000)
+</ParamField>
+
+<ParamField path="--debug" type="boolean" default="false">
+  Enable debug mode
+</ParamField>
+
+<ParamField path="--disable-elasticsearch-setup" type="boolean" default="false">
+  Disable Elasticsearch setup
+</ParamField>
+
+<ParamField path="--use-env-elasticsearch-config" type="boolean" default="false">
+  Use env vars for Elasticsearch config (requires ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, ELASTICSEARCH_INDEX_NAME)
+</ParamField>
+
+<ParamField path="--use-fireworks" type="boolean" default="false">
+  Force Fireworks tracing backend for logs UI (overrides env auto-detection)
+</ParamField>
+
+<ParamField path="--use-elasticsearch" type="boolean" default="false">
+  Force Elasticsearch backend for logs UI (overrides env auto-detection)
+</ParamField>
+
+### `ep upload`
+
+Scan for evaluation tests, select, and upload as Fireworks evaluators
+
+<ParamField path="--path" type="string" default=".">
+  Path to search for evaluation tests (default: current directory)
+</ParamField>
+
+<ParamField path="--entry">
+  Entrypoint of evaluation test to upload (module:function or path::function). For multiple, separate by commas.
+</ParamField>
+
+<ParamField path="--id">
+  Evaluator ID to use (if multiple selections, a numeric suffix is appended)
+</ParamField>
+
+<ParamField path="--display-name">
+  Display name for evaluator (defaults to ID)
+</ParamField>
+
+<ParamField path="--description">
+  Description for evaluator
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing evaluator with the same ID
+</ParamField>
+
+<ParamField path="--yes" type="boolean" default="false">
+  Non-interactive: upload all discovered evaluation tests (Short: `-y`)
+</ParamField>
+
+<ParamField path="--env-file">
+  Path to .env file containing secrets to upload (default: .env in current directory)
+</ParamField>
+
+### `ep create rft`
+
+Create a Reinforcement Fine-tuning Job on Fireworks
+
+<ParamField path="--evaluator">
+  Evaluator ID or fully-qualified resource (accounts/{acct}/evaluators/{id}); if omitted, derive from local tests
+</ParamField>
+
+<ParamField path="--dataset">
+  Use existing dataset (ID or resource 'accounts/{acct}/datasets/{id}') to skip local materialization
+</ParamField>
+
+<ParamField path="--dataset-jsonl">
+  Path to JSONL to upload as a new Fireworks dataset
+</ParamField>
+
+<ParamField path="--dataset-builder">
+  Explicit dataset builder spec (module::function or path::function)
+</ParamField>
+
+<ParamField path="--dataset-display-name">
+  Display name for dataset on Fireworks (defaults to dataset id)
+</ParamField>
+
+<ParamField path="--base-model">
+  Base model resource id
+</ParamField>
+
+<ParamField path="--warm-start-from">
+  Addon model to warm start from
+</ParamField>
+
+<ParamField path="--output-model">
+  Output model id (defaults from evaluator)
+</ParamField>
+
+<ParamField path="--epochs" type="number" default="1">
+  Number of training epochs
+</ParamField>
+
+<ParamField path="--batch-size" type="number" default="128000">
+  Training batch size in tokens
+</ParamField>
+
+<ParamField path="--learning-rate" type="number" default="3e-05">
+  Learning rate for training
+</ParamField>
+
+<ParamField path="--max-context-length" type="number" default="65536">
+  Maximum context length in tokens
+</ParamField>
+
+<ParamField path="--lora-rank" type="number" default="16">
+  LoRA rank for fine-tuning
+</ParamField>
+
+<ParamField path="--gradient-accumulation-steps" type="number">
+  Number of gradient accumulation steps
+</ParamField>
+
+<ParamField path="--learning-rate-warmup-steps" type="number">
+  Number of learning rate warmup steps
+</ParamField>
+
+<ParamField path="--accelerator-count" type="number">
+  Number of accelerators (GPUs) to use
+</ParamField>
+
+<ParamField path="--region">
+  Fireworks region for training
+</ParamField>
+
+<ParamField path="--display-name">
+  Display name for the RFT job
+</ParamField>
+
+<ParamField path="--evaluation-dataset">
+  Separate dataset id for evaluation
+</ParamField>
+
+<ParamField path="--eval-auto-carveout" type="boolean" default="true">
+  Automatically carve out evaluation data from training set
+</ParamField>
+
+<ParamField path="--no-eval-auto-carveout" type="boolean" default="true">
+  Disable automatic evaluation data carveout
+</ParamField>
+
+<ParamField path="--chunk-size" type="number" default="100">
+  Data chunk size for rollout batching
+</ParamField>
+
+<ParamField path="--temperature" type="number">
+  Sampling temperature for rollouts
+</ParamField>
+
+<ParamField path="--top-p" type="number">
+  Top-p (nucleus) sampling parameter
+</ParamField>
+
+<ParamField path="--top-k" type="number">
+  Top-k sampling parameter
+</ParamField>
+
+<ParamField path="--max-output-tokens" type="number" default="32768">
+  Maximum output tokens per rollout
+</ParamField>
+
+<ParamField path="--response-candidates-count" type="number" default="8">
+  Number of response candidates per prompt
+</ParamField>
+
+<ParamField path="--extra-body">
+  JSON string for extra inference params
+</ParamField>
+
+<ParamField path="--mcp-server">
+  MCP server resource name for agentic rollouts
+</ParamField>
+
+<ParamField path="--wandb-enabled" type="boolean" default="false">
+  Enable Weights & Biases logging
+</ParamField>
+
+<ParamField path="--wandb-project">
+  Weights & Biases project name
+</ParamField>
+
+<ParamField path="--wandb-entity">
+  Weights & Biases entity (username or team)
+</ParamField>
+
+<ParamField path="--wandb-run-id">
+  Weights & Biases run id for resuming
+</ParamField>
+
+<ParamField path="--wandb-api-key">
+  Weights & Biases API key
+</ParamField>
+
+<ParamField path="--job-id">
+  Specify an explicit RFT job id
+</ParamField>
+
+<ParamField path="--yes" type="boolean" default="false">
+  Non-interactive mode (Short: `-y`)
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Print planned REST calls without sending
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing evaluator with the same ID
+</ParamField>
+
+<ParamField path="--skip-validation" type="boolean" default="false">
+  Skip local dataset and evaluator validation before creating the RFT job
+</ParamField>
+
+<ParamField path="--ignore-docker" type="boolean" default="false">
+  Ignore Dockerfile even if present; run pytest on host during evaluator validation
+</ParamField>
+
+<ParamField path="--docker-build-extra" type="string" default="">
+  Extra flags to pass to 'docker build' when validating evaluator (quoted string, e.g. "--no-cache --pull --progress=plain")
+</ParamField>
+
+<ParamField path="--docker-run-extra" type="string" default="">
+  Extra flags to pass to 'docker run' when validating evaluator (quoted string, e.g. "--env-file .env --memory=8g")
+</ParamField>
+
+### `ep local-test`
+
+Select an evaluation test and run it locally. If a Dockerfile exists, build and run via Docker; otherwise run on host.
+
+<ParamField path="--entry">
+  Entrypoint to run (path::function or path). If not provided, a selector will be shown (unless --yes).
+</ParamField>
+
+<ParamField path="--ignore-docker" type="boolean" default="false">
+  Ignore Dockerfile even if present; run pytest on host
+</ParamField>
+
+<ParamField path="--yes" type="boolean" default="false">
+  Non-interactive: if multiple tests exist and no --entry, fails with guidance (Short: `-y`)
+</ParamField>
+
+<ParamField path="--docker-build-extra" type="string" default="">
+  Extra flags to pass to 'docker build' (quoted string, e.g. "--no-cache --pull --progress=plain")
+</ParamField>
+
+<ParamField path="--docker-run-extra" type="string" default="">
+  Extra flags to pass to 'docker run' (quoted string, e.g. "--env-file .env --memory=8g")
+</ParamField>
