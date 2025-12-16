@@ -50,6 +50,7 @@
       {
         "group": "Reference",
         "pages": [
+          "reference/cli",
           "tutorial/gsm8k-finetuning-quickstart",
           "common-errors",
           "reference/evaluation-test",
