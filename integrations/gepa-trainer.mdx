@@ -106,6 +106,14 @@ if __name__ == "__main__":
 python my_eval.py
 ```
 
+<Warning>
+**Single System Prompt Requirement**
+
+GEPA extracts and optimizes **only the first system prompt** found in your dataset. All rows must share the same system prompt for GEPA to work correctly.
+
+If your dataset contains different system prompts per row (e.g., different personas or task variations), GEPA will only optimize the first one and apply it to all examples, which may produce unexpected results. Consider splitting such datasets into separate optimization runs.
+</Warning>
+
 ## Case Study: Text-to-SQL
 
 The [text-to-sql-quickstart](https://github.com/eval-protocol/text-to-sql-quickstart) repository demonstrates GEPA on a text-to-SQL benchmark.
@@ -321,6 +329,8 @@ On this benchmark, GEPA discovered that failures clustered around column alias m
 **API timeouts:** Reduce `num_threads` or use a faster model.
 
 **Memory issues:** Reduce `num_threads` or process smaller batches.
+
+**Dataset has multiple system prompts:** GEPA only optimizes the first system prompt found. If your dataset uses different prompts for different tasks, split it into separate datasets with consistent prompts and run GEPA on each.
 
 ## Resources
 
