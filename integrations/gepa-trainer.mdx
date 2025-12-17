@@ -1,0 +1,339 @@
+---
+title: GEPA Prompt Optimizer
+icon: "wand-magic-sparkles"
+description: "Automatically optimize prompts using your existing evaluations"
+sidebarTitle: GEPA Trainer
+---
+
+Eval Protocol integrates with [GEPA](https://arxiv.org/abs/2507.19457) (via [DSPy](https://github.com/stanfordnlp/dspy)) to automatically optimize your prompts using the evaluations you've already written. GEPA analyzes which examples pass or fail, proposes structured edits to the prompt, and keeps changes that improve your metric.
+
+## How It Works
+
+GEPA treats your `@evaluation_test` as the optimization objective. It:
+
+1. Extracts the system prompt from your dataset
+2. Splits your data into training and validation sets
+3. Runs your evaluation function on candidate prompts
+4. Uses a reflection LLM to propose improvements based on failure patterns
+5. Returns the best-performing prompt
+
+The key insight is that your evaluation's `reason` field (in [`EvaluateResult`](/specification#evaluateresult)) tells GEPA *why* examples failed, enabling targeted improvements.
+
+## Prerequisites
+
+Install eval-protocol:
+
+```bash
+pip install eval-protocol
+```
+
+Set your API key:
+
+```bash
+export FIREWORKS_API_KEY="your-fireworks-key"
+```
+
+## Basic Usage
+
+Write a normal `@evaluation_test`, then wrap it with `GEPATrainer`.
+
+### Step 1: Define Your Evaluation Test
+
+```python my_eval.py
+from eval_protocol.models import EvaluationRow, EvaluateResult
+from eval_protocol.pytest.evaluation_test import evaluation_test
+from eval_protocol.pytest.default_single_turn_rollout_process import SingleTurnRolloutProcessor
+
+@evaluation_test(
+    input_dataset=["datasets/my_dataset.jsonl"],
+    dataset_adapter=my_adapter,
+    completion_params=[{
+        "model": "fireworks_ai/accounts/fireworks/models/llama-v3p1-70b-instruct",
+        "max_tokens": 4096,
+    }],
+    rollout_processor=SingleTurnRolloutProcessor(),
+    mode="pointwise",
+)
+def test_my_task(row: EvaluationRow) -> EvaluationRow:
+    predicted = row.get_last_message_content()
+    expected = row.ground_truth
+    
+    is_correct = predicted.strip() == expected.strip()
+    
+    # Feedback tells GEPA why this example failed
+    if is_correct:
+        feedback = "Correct answer."
+    else:
+        feedback = f"Incorrect. Expected '{expected}', got '{predicted}'."
+    
+    row.evaluation_result = EvaluateResult(
+        score=1.0 if is_correct else 0.0,
+        reason=feedback,
+        is_score_valid=True,
+    )
+    return row
+```
+
+### Step 2: Add GEPA Training
+
+```python my_eval.py
+from eval_protocol.training import GEPATrainer, build_reflection_lm
+
+if __name__ == "__main__":
+    trainer = GEPATrainer(
+        test_my_task,
+        train_ratio=0.7,
+        val_ratio=0.3,
+    )
+    
+    reflection_lm = build_reflection_lm(
+        "fireworks_ai/accounts/fireworks/models/llama-v3p1-70b-instruct"
+    )
+    
+    optimized_program = trainer.train(
+        reflection_lm=reflection_lm,
+        max_metric_calls=1500,
+        num_threads=4,
+    )
+    
+    print(trainer.evaluate(optimized_program))
+    print(trainer.get_optimized_system_prompt(optimized_program))
+```
+
+### Step 3: Run
+
+```bash
+python my_eval.py
+```
+
+<Warning>
+**Single System Prompt Requirement**
+
+GEPA extracts and optimizes **only the first system prompt** found in your dataset. All rows must share the same system prompt for GEPA to work correctly.
+
+If your dataset contains different system prompts per row (e.g., different personas or task variations), GEPA will only optimize the first one and apply it to all examples, which may produce unexpected results. Consider splitting such datasets into separate optimization runs.
+</Warning>
+
+## Case Study: Text-to-SQL
+
+The [text-to-sql-quickstart](https://github.com/eval-protocol/text-to-sql-quickstart) repository demonstrates GEPA on a text-to-SQL benchmark.
+
+### Repository Structure
+
+```text
+text-to-sql-quickstart/
+├── data/
+│   └── synthetic_openflights.db    # DuckDB database with airlines/airports/routes
+├── datasets/
+│   ├── final_rft_sql_train_data.jsonl   # Training examples
+│   └── final_rft_sql_test_data.jsonl    # Held-out test set
+├── mcp_server/                     # HTTP server that executes SQL queries
+├── evaluator/
+│   └── sql_gepa_training.py        # GEPA training script
+└── scripts/
+    └── eval_baseline.py            # Evaluate prompts on test set
+```
+
+### The Database
+
+The benchmark uses a synthetic OpenFlights database (`synthetic_openflights.db`) containing tables for airlines, airports, countries, planes, and routes. This database is shared between:
+
+1. Ground truth generation (SQL queries executed to create expected results)
+2. The MCP server (executes model-generated SQL during evaluation)
+
+### The MCP Server
+
+The MCP server is a simple HTTP service that accepts SQL queries and returns results from the DuckDB database:
+
+```python
+# mcp_server/run_mcp_server.py
+DB = os.environ.get("DB_PATH", "data/synthetic_openflights.db")
+```
+
+When you run the training script, the MCP server starts automatically. It receives the model's generated SQL, executes it against the database, and returns the results for comparison with ground truth.
+
+### The Evaluation Function
+
+The evaluation compares the model's SQL output against ground truth by executing both and checking if they return the same data:
+
+```python
+def test_sql_generation(row: EvaluationRow) -> EvaluationRow:
+    generated_sql = row.get_last_message_content()
+    
+    # Ground truth is stored as list[dict] from the original query
+    expected_results = row.ground_truth
+    
+    # Execute the model's SQL via MCP server
+    actual_results = execute_sql_via_mcp(generated_sql)
+    
+    # Compare results semantically (values match, ignoring column order)
+    is_correct = compare_results(expected_results, actual_results)
+    
+    # Build detailed feedback for GEPA
+    if is_correct:
+        feedback = "Query returned correct results."
+    else:
+        feedback = analyze_mismatch(expected_results, actual_results)
+    
+    row.evaluation_result = EvaluateResult(
+        score=1.0 if is_correct else 0.0,
+        reason=feedback,
+        is_score_valid=True,
+    )
+    return row
+```
+
+The feedback function provides specific details about failures:
+
+```python
+def analyze_mismatch(expected, actual):
+    issues = []
+    
+    if len(expected) != len(actual):
+        issues.append(f"Row count: expected {len(expected)}, got {len(actual)}")
+    
+    expected_cols = set(expected[0].keys()) if expected else set()
+    actual_cols = set(actual[0].keys()) if actual else set()
+    
+    missing = expected_cols - actual_cols
+    if missing:
+        issues.append(f"Missing columns: {missing}")
+    
+    return " | ".join(issues)
+```
+
+### Running the Example
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/eval-protocol/text-to-sql-quickstart
+cd text-to-sql-quickstart
+pip install -r requirements.txt
+```
+
+2. Set your API key:
+
+```bash
+export FIREWORKS_API_KEY="your-key"
+```
+
+3. The repository includes pre-generated data. To run GEPA training:
+
+```bash
+python evaluator/sql_gepa_training.py
+```
+
+This starts the MCP server automatically, runs GEPA optimization, and prints the optimized prompt.
+
+4. To compare original vs optimized prompts on the test set:
+
+```bash
+python scripts/eval_baseline.py --prompt both
+```
+
+### Data Generation (Optional)
+
+If you want to regenerate the synthetic data from scratch:
+
+```bash
+make all-data
+```
+
+This runs:
+1. Download real OpenFlights data
+2. Generate synthetic rows using an LLM
+3. Generate SQL queries
+4. Execute queries to get ground truth results
+5. Generate natural language questions from SQL
+
+The `scripts/08_regenerate_balanced_data.py` script generates data with consistent column naming for better train/test distribution.
+
+### Results
+
+On this benchmark, GEPA discovered that failures clustered around column alias mismatches (`avg_altitude` vs `average_altitude`) and missing columns. It rewrote the prompt to include explicit naming conventions and a validation checklist.
+
+| Metric | Original | Optimized |
+|--------|----------|-----------|
+| Test Set | 38.3% | 48.3% |
+| Validation | 30.9% | 36.4% |
+
+## Configuration
+
+### GEPATrainer Parameters
+
+<ParamField body="test_fn" type="TestFunction" required>
+  The @evaluation_test decorated function to optimize
+</ParamField>
+
+<ParamField body="train_ratio" type="float" default="0.8">
+  Proportion of data for training
+</ParamField>
+
+<ParamField body="val_ratio" type="float" default="0.1">
+  Proportion of data for validation
+</ParamField>
+
+<ParamField body="seed" type="int" default="42">
+  Random seed for dataset splits
+</ParamField>
+
+<ParamField body="input_field" type="str" default="problem">
+  Name of the input field in DSPy signature
+</ParamField>
+
+<ParamField body="output_field" type="str" default="answer">
+  Name of the output field in DSPy signature
+</ParamField>
+
+<ParamField body="module_type" type="DSPyModuleType" default="CHAIN_OF_THOUGHT">
+  DSPy module type: PREDICT, CHAIN_OF_THOUGHT, or PROGRAM_OF_THOUGHT
+</ParamField>
+
+### train() Parameters
+
+<ParamField body="reflection_lm" type="LM">
+  DSPy LM for proposing prompt improvements
+</ParamField>
+
+<ParamField body="max_metric_calls" type="int">
+  Total budget of LLM calls for optimization
+</ParamField>
+
+<ParamField body="auto" type="str">
+  Budget preset: "light", "medium", or "heavy". Alternative to max_metric_calls.
+</ParamField>
+
+<ParamField body="reflection_minibatch_size" type="int" default="3">
+  Number of examples shown to reflection LLM per iteration
+</ParamField>
+
+<ParamField body="num_threads" type="int">
+  Parallel threads for running evaluations
+</ParamField>
+
+## Tips
+
+**Provide specific feedback.** GEPA learns from your `evaluation_result.reason`. Instead of "Incorrect", say "Missing column 'airport_count'".
+
+**Choose appropriate budget.** For small datasets (under 50 examples), use `auto="light"`. For larger datasets, increase to `"medium"` or `"heavy"`.
+
+**Use the right module type.** `PREDICT` for simple tasks, `CHAIN_OF_THOUGHT` for reasoning tasks, `PROGRAM_OF_THOUGHT` for code generation.
+
+**Keep a held-out test set.** GEPA should never see your final test data during optimization.
+
+## Troubleshooting
+
+**GEPA finds no improvement:** Add more detailed feedback, increase `reflection_minibatch_size`, or increase budget.
+
+**API timeouts:** Reduce `num_threads` or use a faster model.
+
+**Memory issues:** Reduce `num_threads` or process smaller batches.
+
+**Dataset has multiple system prompts:** GEPA only optimizes the first system prompt found. If your dataset uses different prompts for different tasks, split it into separate datasets with consistent prompts and run GEPA on each.
+
+## Resources
+
+[GEPA Paper](https://arxiv.org/abs/2507.19457) ·
+[DSPy Documentation](https://dspy.ai/) ·
+[Text-to-SQL Quickstart](https://github.com/eval-protocol/text-to-sql-quickstart)

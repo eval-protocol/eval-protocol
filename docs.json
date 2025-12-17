@@ -32,6 +32,7 @@
       {
         "group": "Integrations",
         "pages": [
+          "integrations/gepa-trainer",
           "integrations/rllm-trainer",
           "integrations/trl-trainer",
           "integrations/openai-rft-trainer",
