@@ -26,6 +26,8 @@ jobs:
         run: pip install eval-protocol
 
       - name: Generate CLI documentation
+        env:
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
         run: ep export-docs --output reference/cli.mdx
 
       - name: Check for changes
