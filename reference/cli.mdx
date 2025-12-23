@@ -14,7 +14,7 @@ ep [global options] <command> [command options]
 These options can be used with any command:
 
 <ParamField path="--verbose" type="boolean" default="false">
-  Enable verbose logging (Short: `-v`)
+  Enable verbose logging (Aliases: `-v`)
 </ParamField>
 
 <ParamField path="--server">
@@ -80,7 +80,7 @@ Scan for evaluation tests, select, and upload as Fireworks evaluators
 </ParamField>
 
 <ParamField path="--yes" type="boolean" default="false">
-  Non-interactive: upload all discovered evaluation tests (Short: `-y`)
+  Non-interactive: upload all discovered evaluation tests (Aliases: `-y`)
 </ParamField>
 
 <ParamField path="--env-file">
@@ -92,7 +92,7 @@ Scan for evaluation tests, select, and upload as Fireworks evaluators
 Create a Reinforcement Fine-tuning Job on Fireworks
 
 <ParamField path="--yes" type="boolean" default="false">
-  Non-interactive mode (Short: `-y`)
+  Non-interactive mode (Aliases: `-y`)
 </ParamField>
 
 <ParamField path="--dry-run" type="boolean" default="false">
@@ -136,7 +136,7 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 </ParamField>
 
 <ParamField path="--reinforcement-fine-tuning-job-id" type="string">
-  ID of the reinforcement fine-tuning job, a random UUID will be generated if not specified.
+  ID of the reinforcement fine-tuning job, a random UUID will be generated if not specified. (Aliases: `--job-id`)
 </ParamField>
 
 <ParamField path="--chunk-size" type="number">
@@ -153,36 +153,36 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 
 <ParamField path="--inference-parameters-extra-body" type="string">
   Additional parameters for the inference request as a JSON string. For example:
-    "{"stop": ["\n"]}".
+    "&#123;"stop": ["\n"]&#125;". (Aliases: `--extra-body`)
 </ParamField>
 
 <ParamField path="--inference-parameters-max-output-tokens" type="number">
-  Maximum number of tokens to generate per response.
+  Maximum number of tokens to generate per response. (Aliases: `--max-output-tokens`)
 </ParamField>
 
 <ParamField path="--inference-parameters-response-candidates-count" type="number">
-  Number of response candidates to generate per input.
+  Number of response candidates to generate per input. (Aliases: `--response-candidates-count`)
 </ParamField>
 
 <ParamField path="--inference-parameters-temperature" type="number">
-  Sampling temperature, typically between 0 and 2.
+  Sampling temperature, typically between 0 and 2. (Aliases: `--temperature`)
 </ParamField>
 
 <ParamField path="--inference-parameters-top-k" type="number">
-  Top-k sampling parameter, limits the token selection to the top k tokens.
+  Top-k sampling parameter, limits the token selection to the top k tokens. (Aliases: `--top-k`)
 </ParamField>
 
 <ParamField path="--inference-parameters-top-p" type="number">
-  Top-p sampling parameter, typically between 0 and 1.
+  Top-p sampling parameter, typically between 0 and 1. (Aliases: `--top-p`)
 </ParamField>
 
 <ParamField path="--loss-config-kl-beta" type="number">
   KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
-    default is used.
+    default is used. (Aliases: `--rl-kl-beta`, `--kl-beta`)
 </ParamField>
 
 <ParamField path="--loss-config-method" type="Literal">
-  RL loss method for underlying trainers. One of {grpo,dapo}.
+  RL loss method for underlying trainers. One of &#123;grpo,dapo&#125;. (Aliases: `--rl-loss-method`, `--method`)
 </ParamField>
 
 <ParamField path="--mcp-server" type="string">
@@ -190,67 +190,67 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 </ParamField>
 
 <ParamField path="--node-count" type="number">
-  The number of nodes to use for the fine-tuning job. If not specified, the default is 1.
+  The number of nodes to use for the fine-tuning job. If not specified, the default is 1. (Aliases: `--nodes`)
 </ParamField>
 
 <ParamField path="--training-config-base-model" type="string">
   The name of the base model to be fine-tuned Only one of 'base_model' or
-    'warm_start_from' should be specified.
+    'warm_start_from' should be specified. (Aliases: `--base-model`)
 </ParamField>
 
 <ParamField path="--training-config-batch-size" type="number">
-  The maximum packed number of tokens per batch for training in sequence packing.
+  The maximum packed number of tokens per batch for training in sequence packing. (Aliases: `--batch-size`)
 </ParamField>
 
 <ParamField path="--training-config-epochs" type="number">
-  The number of epochs to train for.
+  The number of epochs to train for. (Aliases: `--epochs`)
 </ParamField>
 
 <ParamField path="--training-config-gradient-accumulation-steps" type="number">
-  The number of batches to accumulate gradients before updating the model parameters. The effective batch size will be batch-size multiplied by this value.
+  The number of batches to accumulate gradients before updating the model parameters. The effective batch size will be batch-size multiplied by this value. (Aliases: `--gradient-accumulation-steps`)
 </ParamField>
 
 <ParamField path="--training-config-learning-rate" type="number">
-  The learning rate used for training.
+  The learning rate used for training. (Aliases: `--learning-rate`)
 </ParamField>
 
 <ParamField path="--training-config-learning-rate-warmup-steps" type="number">
-  The number of learning rate warmup steps for the reinforcement fine-tuning job.
+  The number of learning rate warmup steps for the reinforcement fine-tuning job. (Aliases: `--learning-rate-warmup-steps`)
 </ParamField>
 
 <ParamField path="--training-config-lora-rank" type="number">
-  The rank of the LoRA layers.
+  The rank of the LoRA layers. (Aliases: `--lora-rank`)
 </ParamField>
 
 <ParamField path="--training-config-max-context-length" type="number">
-  The maximum context length to use with the model.
+  The maximum context length to use with the model. (Aliases: `--max-context-length`)
 </ParamField>
 
 <ParamField path="--training-config-output-model" type="string">
   The model ID to be assigned to the resulting fine-tuned model.
 
-    If not specified, the job ID will be used.
+    If not specified, the job ID will be used. (Aliases: `--output-model`)
 </ParamField>
 
 <ParamField path="--training-config-warm-start-from" type="string">
   The PEFT addon model in Fireworks format to be fine-tuned from Only one of
-    'base_model' or 'warm_start_from' should be specified.
+    'base_model' or 'warm_start_from' should be specified. (Aliases: `--warm-start-from`)
 </ParamField>
 
 <ParamField path="--wandb-config-api-key" type="string">
-  The API key for the wandb service.
+  The API key for the wandb service. (Aliases: `--wandb-api-key`, `--api-key`)
 </ParamField>
 
 <ParamField path="--wandb-config-enabled" type="boolean" default="false">
-  Whether to enable wandb logging.
+  Whether to enable wandb logging. (Aliases: `--wandb`, `--enabled`)
 </ParamField>
 
 <ParamField path="--wandb-config-entity" type="string">
-  The entity name for the wandb service.
+  The entity name for the wandb service. (Aliases: `--wandb-entity`, `--entity`)
 </ParamField>
 
 <ParamField path="--wandb-config-project" type="string">
-  The project name for the wandb service.
+  The project name for the wandb service. (Aliases: `--wandb-project`, `--project`)
 </ParamField>
 
 ### `ep local-test`
@@ -266,7 +266,7 @@ Select an evaluation test and run it locally. If a Dockerfile exists, build and 
 </ParamField>
 
 <ParamField path="--yes" type="boolean" default="false">
-  Non-interactive: if multiple tests exist and no --entry, fails with guidance (Short: `-y`)
+  Non-interactive: if multiple tests exist and no --entry, fails with guidance (Aliases: `-y`)
 </ParamField>
 
 <ParamField path="--docker-build-extra" type="string" default="">
