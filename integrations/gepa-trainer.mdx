@@ -21,10 +21,10 @@ The key insight is that your evaluation's `reason` field (in [`EvaluateResult`](
 
 ## Prerequisites
 
-Install eval-protocol:
+Install eval-protocol with the `dspy` extra:
 
 ```bash
-pip install eval-protocol
+pip install eval-protocol[dspy]
 ```
 
 Set your API key:
@@ -210,6 +210,7 @@ def analyze_mismatch(expected, actual):
 git clone https://github.com/eval-protocol/text-to-sql-quickstart
 cd text-to-sql-quickstart
 pip install -r requirements.txt
+pip install eval-protocol[dspy]  # Required for GEPA training
 ```
 
 2. Set your API key:
