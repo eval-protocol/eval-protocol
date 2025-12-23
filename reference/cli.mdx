@@ -17,10 +17,6 @@ These options can be used with any command:
   Enable verbose logging (Short: `-v`)
 </ParamField>
 
-<ParamField path="--profile">
-  Fireworks profile to use (reads ~/.fireworks/profiles/&lt;name&gt;/auth.ini and settings.ini)
-</ParamField>
-
 <ParamField path="--server">
   Fireworks API server hostname or URL (e.g., dev.api.fireworks.ai or https://dev.api.fireworks.ai)
 </ParamField>
@@ -95,152 +91,12 @@ Scan for evaluation tests, select, and upload as Fireworks evaluators
 
 Create a Reinforcement Fine-tuning Job on Fireworks
 
-<ParamField path="--evaluator">
-  Evaluator ID or fully-qualified resource (accounts/{acct}/evaluators/{id}); if omitted, derive from local tests
-</ParamField>
-
-<ParamField path="--dataset">
-  Use existing dataset (ID or resource 'accounts/{acct}/datasets/{id}') to skip local materialization
-</ParamField>
-
-<ParamField path="--dataset-jsonl">
-  Path to JSONL to upload as a new Fireworks dataset
-</ParamField>
-
-<ParamField path="--dataset-builder">
-  Explicit dataset builder spec (module::function or path::function)
-</ParamField>
-
-<ParamField path="--dataset-display-name">
-  Display name for dataset on Fireworks (defaults to dataset id)
-</ParamField>
-
-<ParamField path="--base-model">
-  Base model resource id
-</ParamField>
-
-<ParamField path="--warm-start-from">
-  Addon model to warm start from
-</ParamField>
-
-<ParamField path="--output-model">
-  Output model id (defaults from evaluator)
-</ParamField>
-
-<ParamField path="--epochs" type="number" default="1">
-  Number of training epochs
-</ParamField>
-
-<ParamField path="--batch-size" type="number" default="128000">
-  Training batch size in tokens
-</ParamField>
-
-<ParamField path="--learning-rate" type="number" default="3e-05">
-  Learning rate for training
-</ParamField>
-
-<ParamField path="--max-context-length" type="number" default="65536">
-  Maximum context length in tokens
-</ParamField>
-
-<ParamField path="--lora-rank" type="number" default="16">
-  LoRA rank for fine-tuning
-</ParamField>
-
-<ParamField path="--gradient-accumulation-steps" type="number">
-  Number of gradient accumulation steps
-</ParamField>
-
-<ParamField path="--learning-rate-warmup-steps" type="number">
-  Number of learning rate warmup steps
-</ParamField>
-
-<ParamField path="--accelerator-count" type="number">
-  Number of accelerators (GPUs) to use
-</ParamField>
-
-<ParamField path="--region">
-  Fireworks region for training
-</ParamField>
-
-<ParamField path="--display-name">
-  Display name for the RFT job
-</ParamField>
-
-<ParamField path="--evaluation-dataset">
-  Separate dataset id for evaluation
-</ParamField>
-
-<ParamField path="--eval-auto-carveout" type="boolean" default="true">
-  Automatically carve out evaluation data from training set
-</ParamField>
-
-<ParamField path="--no-eval-auto-carveout" type="boolean" default="true">
-  Disable automatic evaluation data carveout
-</ParamField>
-
-<ParamField path="--chunk-size" type="number" default="100">
-  Data chunk size for rollout batching
-</ParamField>
-
-<ParamField path="--temperature" type="number">
-  Sampling temperature for rollouts
-</ParamField>
-
-<ParamField path="--top-p" type="number">
-  Top-p (nucleus) sampling parameter
-</ParamField>
-
-<ParamField path="--top-k" type="number">
-  Top-k sampling parameter
-</ParamField>
-
-<ParamField path="--max-output-tokens" type="number" default="32768">
-  Maximum output tokens per rollout
-</ParamField>
-
-<ParamField path="--response-candidates-count" type="number" default="8">
-  Number of response candidates per prompt
-</ParamField>
-
-<ParamField path="--extra-body">
-  JSON string for extra inference params
-</ParamField>
-
-<ParamField path="--mcp-server">
-  MCP server resource name for agentic rollouts
-</ParamField>
-
-<ParamField path="--wandb-enabled" type="boolean" default="false">
-  Enable Weights & Biases logging
-</ParamField>
-
-<ParamField path="--wandb-project">
-  Weights & Biases project name
-</ParamField>
-
-<ParamField path="--wandb-entity">
-  Weights & Biases entity (username or team)
-</ParamField>
-
-<ParamField path="--wandb-run-id">
-  Weights & Biases run id for resuming
-</ParamField>
-
-<ParamField path="--wandb-api-key">
-  Weights & Biases API key
-</ParamField>
-
-<ParamField path="--job-id">
-  Specify an explicit RFT job id
-</ParamField>
-
 <ParamField path="--yes" type="boolean" default="false">
   Non-interactive mode (Short: `-y`)
 </ParamField>
 
 <ParamField path="--dry-run" type="boolean" default="false">
-  Print planned REST calls without sending
+  Print planned SDK call without sending
 </ParamField>
 
 <ParamField path="--force" type="boolean" default="false">
@@ -248,7 +104,7 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 </ParamField>
 
 <ParamField path="--skip-validation" type="boolean" default="false">
-  Skip local dataset and evaluator validation before creating the RFT job
+  Skip local dataset/evaluator validation
 </ParamField>
 
 <ParamField path="--ignore-docker" type="boolean" default="false">
@@ -261,6 +117,140 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 
 <ParamField path="--docker-run-extra" type="string" default="">
   Extra flags to pass to 'docker run' when validating evaluator (quoted string, e.g. "--env-file .env --memory=8g")
+</ParamField>
+
+<ParamField path="--source-job">
+  The source reinforcement fine-tuning job to copy configuration from. If other flags are set, they will override the source job's configuration.
+</ParamField>
+
+<ParamField path="--quiet" type="boolean" default="false">
+  If set, only errors will be printed.
+</ParamField>
+
+<ParamField path="--dataset" type="string">
+  The name of the dataset used for training.
+</ParamField>
+
+<ParamField path="--evaluator" type="string">
+  The evaluator resource name to use for RLOR fine-tuning job.
+</ParamField>
+
+<ParamField path="--reinforcement-fine-tuning-job-id" type="string">
+  ID of the reinforcement fine-tuning job, a random UUID will be generated if not specified.
+</ParamField>
+
+<ParamField path="--chunk-size" type="number">
+  Data chunking for rollout, default size 200, enabled when dataset &gt; 300. Valid range is 1-10,000.
+</ParamField>
+
+<ParamField path="--eval-auto-carveout" type="boolean" default="false">
+  Whether to auto-carve the dataset for eval.
+</ParamField>
+
+<ParamField path="--evaluation-dataset" type="string">
+  The name of a separate dataset to use for evaluation.
+</ParamField>
+
+<ParamField path="--inference-parameters-extra-body" type="string">
+  Additional parameters for the inference request as a JSON string. For example:
+    "{"stop": ["\n"]}".
+</ParamField>
+
+<ParamField path="--inference-parameters-max-output-tokens" type="number">
+  Maximum number of tokens to generate per response.
+</ParamField>
+
+<ParamField path="--inference-parameters-response-candidates-count" type="number">
+  Number of response candidates to generate per input.
+</ParamField>
+
+<ParamField path="--inference-parameters-temperature" type="number">
+  Sampling temperature, typically between 0 and 2.
+</ParamField>
+
+<ParamField path="--inference-parameters-top-k" type="number">
+  Top-k sampling parameter, limits the token selection to the top k tokens.
+</ParamField>
+
+<ParamField path="--inference-parameters-top-p" type="number">
+  Top-p sampling parameter, typically between 0 and 1.
+</ParamField>
+
+<ParamField path="--loss-config-kl-beta" type="number">
+  KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
+    default is used.
+</ParamField>
+
+<ParamField path="--loss-config-method" type="Literal">
+  RL loss method for underlying trainers. One of {grpo,dapo}.
+</ParamField>
+
+<ParamField path="--mcp-server" type="string">
+  The MCP server resource name to use for the reinforcement fine-tuning job. (Optional)
+</ParamField>
+
+<ParamField path="--node-count" type="number">
+  The number of nodes to use for the fine-tuning job. If not specified, the default is 1.
+</ParamField>
+
+<ParamField path="--training-config-base-model" type="string">
+  The name of the base model to be fine-tuned Only one of 'base_model' or
+    'warm_start_from' should be specified.
+</ParamField>
+
+<ParamField path="--training-config-batch-size" type="number">
+  The maximum packed number of tokens per batch for training in sequence packing.
+</ParamField>
+
+<ParamField path="--training-config-epochs" type="number">
+  The number of epochs to train for.
+</ParamField>
+
+<ParamField path="--training-config-gradient-accumulation-steps" type="number">
+  The number of batches to accumulate gradients before updating the model parameters. The effective batch size will be batch-size multiplied by this value.
+</ParamField>
+
+<ParamField path="--training-config-learning-rate" type="number">
+  The learning rate used for training.
+</ParamField>
+
+<ParamField path="--training-config-learning-rate-warmup-steps" type="number">
+  The number of learning rate warmup steps for the reinforcement fine-tuning job.
+</ParamField>
+
+<ParamField path="--training-config-lora-rank" type="number">
+  The rank of the LoRA layers.
+</ParamField>
+
+<ParamField path="--training-config-max-context-length" type="number">
+  The maximum context length to use with the model.
+</ParamField>
+
+<ParamField path="--training-config-output-model" type="string">
+  The model ID to be assigned to the resulting fine-tuned model.
+
+    If not specified, the job ID will be used.
+</ParamField>
+
+<ParamField path="--training-config-warm-start-from" type="string">
+  The PEFT addon model in Fireworks format to be fine-tuned from Only one of
+    'base_model' or 'warm_start_from' should be specified.
+</ParamField>
+
+<ParamField path="--wandb-config-api-key" type="string">
+  The API key for the wandb service.
+</ParamField>
+
+<ParamField path="--wandb-config-enabled" type="boolean" default="false">
+  Whether to enable wandb logging.
+</ParamField>
+
+<ParamField path="--wandb-config-entity" type="string">
+  The entity name for the wandb service.
+</ParamField>
+
+<ParamField path="--wandb-config-project" type="string">
+  The project name for the wandb service.
 </ParamField>
 
 ### `ep local-test`
