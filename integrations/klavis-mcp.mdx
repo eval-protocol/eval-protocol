@@ -1,16 +1,194 @@
 ---
 title: Klavis MCP Environments
 icon: "k"
-description: "How to use Klavis MCP with Eval Protocol"
+description: "How to use Klavis with Eval Protocol"
 ---
 
-[Klavis AI](https://klavis.ai/) provides hosted Model Context Protocol (MCP) servers that can be easily integrated with Eval Protocol. It allows you to leverage MCP to connect to external applications(like Gmail, Notion, Outlook etc.) This guide will walk you through the steps to set up and use Klavis MCP with Eval Protocol.
+[Klavis AI](https://klavis.ai/) provides hosted Model Context Protocol (MCP) servers and managed sandbox environments that integrate with Eval Protocol. This guide covers two ways to use Klavis:
 
-## Setting Up Klavis MCP
+1. **Klavis MCP Sandbox** - Fully managed isolated environments for model training and evaluation at scale
+2. **Klavis MCP Server** - Direct MCP server connections using your own accounts
 
-Login to your Klavis AI accounts, then find the applications you want to connect with Eval Protocol and enable MCP for those applications. Follow the auth flow to authorize Klavis MCP to access those applications on your behalf. You can follow the Klavis quickstart guide [here](https://www.klavis.ai/docs/quickstart) to set up your MCP.
+## Which Option Should You Choose?
 
-In the Klavis dashboard, click **Add to Other Clients**, and generate the access token. Save the access token in `.env` file as KLAVIS_API_KEY.
+### Use Klavis MCP Sandbox
+
+Use Klavis MCP Sandbox if you **only have input data and ground truth** for your RL work. Klavis Sandbox handles all the tooling infrastructure for you:
+
+- **Hosted MCP Servers** - hundreds of pre-built servers ready to use
+- **Authentication** - OAuth and session management handled automatically
+- **Isolated Concurrency Environments** - run 64+ models in parallel without interference
+- **Tooling State Management** - automatic initialization, reset, and cleanup
+- **Scaling** - dedicated QPS per instance with automatic account pooling
+
+This is the **turnkey solution** for model training and reinforcement learning with tools.
+
+### Use Klavis MCP Server
+
+Use Klavis MCP Server if you **already have your own tooling infrastructure** (authentication, isolated environments, state management, scaling) but only need Klavis hosted MCP servers to perform tool calls for your RL or model training work.
+
+This option allows you to connect directly to 100+ external applications through Klavis MCP while maintaining full control over your evaluation and training pipeline.
+
+---
+
+## Use with Klavis MCP Sandbox
+
+Klavis MCP Sandbox provides fully managed, isolated sandbox environments designed for training and evaluating models at scale. Each sandbox has dedicated accounts, automatic state initialization, and cleanup - allowing you to focus on model interaction without managing sandbox environments.
+
+<iframe
+  style={{
+    width: '100%',
+    aspectRatio: '16/9',
+    border: 'none'
+  }}
+  src="https://www.youtube.com/embed/I-Agqy-MeIo"
+  title="Klavis Sandbox"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen
+></iframe>
+
+### Key Features
+
+- **Isolated Environments**: Each sandbox gets dedicated, authenticated sessions with automatic token management
+- **Account Pooling**: Dynamic pool of test accounts supporting 64+ concurrent models
+- **State Management**: Built-in `initialize`, `dump`, and `reset` APIs for environment lifecycle
+- **Supported Services**: Gmail, Jira, Salesforce, Slack, Linear, Google Calendar, and 100+ more
+
+### Setup
+
+Set up your API keys:
+
+```bash
+export KLAVIS_API_KEY=your_klavis_api_key
+export FIREWORKS_API_KEY=your_fireworks_api_key
+```
+
+### Step 1: Define Your Input Data and Ground Truth
+
+Create a JSONL dataset file with your test cases. Each row should include:
+- `initialize_data`: Initial state to seed the sandbox
+- `messages`: The task instruction for your model
+- `ground_truth`: Expected final state after the model completes the task
+
+Example dataset structure:
+
+```json
+{
+  "initialize_data": {
+    "messages": [
+      {
+        "subject": "Project Update",
+        "to": "zihao@klavisai.com",
+        "body": "The project is progressing well.",
+        "from": "sarah@klavisai.com",
+        "labels": ["INBOX"]
+      }
+    ],
+    "drafts": []
+  },
+  "messages": "Please delete the email with subject 'Spam Newsletter' from my inbox.",
+  "ground_truth": {
+    "messages": [
+      {
+        "subject": "Project Update",
+        "to": "zihao@klavisai.com",
+        "body": "The project is progressing well.",
+        "from": "sarah@klavisai.com",
+        "labels": ["INBOX"]
+      }
+    ],
+    "drafts": []
+  }
+}
+```
+
+See [full example dataset](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/datasets/klavis_gmail_sandbox_test.jsonl) for more test cases.
+
+### Step 2: Implement Your RolloutProcessor
+
+Use the `KlavisSandboxRolloutProcessor` to handle sandbox lifecycle management. The processor will:
+
+1. Create an isolated sandbox instance
+2. Initialize the sandbox with your input data
+3. Run your model with MCP tools from the sandbox
+4. Dump the final state after model interaction
+5. Clean up and return sandbox to pool
+
+```python
+from eval_protocol.pytest import KlavisSandboxRolloutProcessor
+
+rollout_processor = KlavisSandboxRolloutProcessor(
+    server_name="gmail",  # or "jira", "salesforce", "slack", etc.
+)
+```
+
+For custom initialization logic, you can extend `KlavisSandboxRolloutProcessor`:
+
+```python
+from typing import Dict, Any
+from eval_protocol.models import EvaluationRow
+from eval_protocol.pytest import KlavisSandboxRolloutProcessor
+
+def custom_initialize_data(row: EvaluationRow) -> Dict[str, Any]:
+    # Custom logic to transform your row data
+    # into sandbox initialization format
+    return {
+        "messages": row.input_metadata.session_data.get("emails", []),
+        "drafts": []
+    }
+
+rollout_processor = KlavisSandboxRolloutProcessor(
+    server_name="gmail",
+    initialize_data_factory=custom_initialize_data
+)
+```
+
+See the [full implementation](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/default_klavis_sandbox_rollout_processor.py) for advanced customization.
+
+### Step 3: Evaluate by Comparing State with Ground Truth
+
+Create your evaluation test that compares the final sandbox state with your ground truth:
+
+```python
+from eval_protocol.pytest import evaluation_test, KlavisSandboxRolloutProcessor
+from eval_protocol.models import EvaluationRow, EvaluateResult
+from openai import AsyncOpenAI
+
+@evaluation_test(
+    input_dataset=["datasets/klavis_gmail_sandbox_test.jsonl"],
+    completion_params=[{"model": "fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct"}],
+    rollout_processor=KlavisSandboxRolloutProcessor(server_name="gmail"),
+    mode="pointwise",
+)
+async def test_gmail_sandbox(row: EvaluationRow) -> EvaluationRow:
+    # Extract final sandbox state and ground truth
+    sandbox_data = row.execution_metadata.extra.get("sandbox_data", {})
+    ground_truth = row.ground_truth
+    
+    # Use LLM judge to evaluate
+    async with AsyncOpenAI(api_key=os.environ["FIREWORKS_API_KEY"]) as client:
+        response = await client.chat.completions.create(
+            model="accounts/fireworks/models/kimi-k2-thinking",
+            messages=[{"role": "user", "content": f"Compare final state {sandbox_data} with expected {ground_truth}. Return score 0-1."}],
+            response_format={"type": "json_schema", ...},
+        )
+        score = json.loads(response.choices[0].message.content).get("score", 0.0)
+        row.evaluation_result = EvaluateResult(score=score)
+    
+    return row
+```
+
+The final sandbox state is available in `row.execution_metadata.extra["sandbox_data"]`. Use an LLM judge to semantically compare it with your ground truth.
+
+See the [complete test implementation](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_klavis_sandbox.py) for the full example.
+
+## Use with Klavis MCP Server
+
+### Setting Up Klavis MCP Server
+
+Login to your Klavis AI account, then find the applications you want to connect with Eval Protocol and enable MCP for those applications. Follow the auth flow to authorize Klavis MCP to access those applications on your behalf. You can follow the Klavis quickstart guide [here](https://www.klavis.ai/docs/quickstart) to set up your MCP.
+
+In the Klavis dashboard, click **Add to Other Clients**, and generate the access token. Save the access token in `.env` file as `KLAVIS_API_KEY`.
 
 The Klavis MCP is defined as follows in Eval Protocol configuration:
 
@@ -25,21 +203,21 @@ The Klavis MCP is defined as follows in Eval Protocol configuration:
 }
 ```
 
-## Using Klavis MCP in Eval Protocol
+### Using Klavis MCP Server in Eval Protocol
 
-We've set up an example in Eval Protocol to use Klavis MCP. You can also use it to connect to more applications and add more use cases.
+We've set up an example in Eval Protocol to use Klavis MCP Server. You can also use it to connect to more applications and add more use cases.
 
-Here is the example [test file](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_klavis_mcp.py). In this example, we connect to Gmail, Notion and Outlook Calendar using Klavis MCP, and have a few example test cases. To run this example RL workflow, you need to set up the test cases in those applications.
+Here is the example [test file](https://github.com/eval-protocol/python-sdk/blob/main/tests/pytest/test_pytest_klavis_mcp.py). In this example, we connect to Gmail, Notion and Outlook Calendar using Klavis MCP, and have a few example test cases. To run this example workflow, you need to set up the test cases in those applications.
 
-### Gmail
+#### Gmail
 
 No particular setup. You should have at least 5 emails in your Gmail inbox.
 
-### Notion
+#### Notion
 
 Copy this [Notion page template](https://painted-tennis-ebc.notion.site/MCPMark-Source-Hub-23181626b6d7805fb3a7d59c63033819) (credit to [MCPMark](https://mcpmark.ai/)) to your Notion workspace. And when you authorize Klavis MCP to access Notion, make sure to give access to this page.
 
-### Outlook Calendar
+#### Outlook Calendar
 
 You should set up the following calendar events in your Outlook calendar. It's recommended to create a new outlook account with a clean calendar for testing.
 
@@ -50,3 +228,26 @@ You should set up the following calendar events in your Outlook calendar. It's r
 5. Follow step 3, create total 5 events on next week's working days.
 6. Follow step 1, create 4 events on Oct 15 2025.
 7. Follow step 3, create total 9 events from Oct 13 to Oct 17, 2025.
+
+
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Klavis Sandbox Intro" icon="cube" href="https://www.klavis.ai/docs/concepts/sandbox">
+    Learn about tooling infrastructure for LLM training, RL and evaluation.
+  </Card>
+  <Card title="Klavis MCP Servers" icon="server" href="https://www.klavis.ai/mcp-servers">
+    Browse all high quality MCP servers written and evaluated by Klavis AI.
+  </Card>
+  <Card
+    title="Example Notebook"
+    icon="book-open"
+    href="https://github.com/Klavis-AI/klavis/blob/main/examples/klavis-sandbox/klavis_sandbox.ipynb"
+  >
+    Create sandboxes, seed data, run an agent, then dump and clean up.
+  </Card>
+  <Card title="Klavis Sandbox API" icon="box" href="https://www.klavis.ai/docs/api-reference/sandbox/create">
+    Manage isolated sandbox environments for training/eval: pooling, init, export, teardown.
+  </Card>
+</CardGroup>
