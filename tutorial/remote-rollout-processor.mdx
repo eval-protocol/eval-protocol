@@ -107,7 +107,7 @@ about wrangling metadata.
 - `run_id`
 - `row_id`
 
-## Fireworks Tracing: Handling `InitRequest` in your Server
+## Handling `InitRequest` in your Server
 
 This section shows how to **parse the `InitRequest` fields and call your model**. Note: the `model_base_url` is a `tracing.fireworks.ai` URL that proxies your model calls so Fireworks can capture full traces for each rollout.
 
@@ -138,82 +138,85 @@ def init(req: InitRequest):
     completion = client.chat.completions.create(**completion_kwargs)
 ```
 
-## Fireworks Tracing: Signaling Rollout Completion
+## Signaling Rollout Completion
 
-### Python Example
+The `RemoteRolloutProcessor` detects rollout completion by polling **structured logs** sent to Fireworks Tracing. Your remote server should use the appropriate SDK for your language to emit structured completion statuses.
 
-The `RemoteRolloutProcessor` detects rollout completion by polling **structured logs** sent to Fireworks Tracing. Your remote server should add `FireworksTracingHttpHandler` as the logging handler, a `RolloutIdFilter`, and log completion status using structured `Status` objects:
+<Tabs>
+  <Tab title="TypeScript / Node (Vercel)">
+    The `eval-protocol` JS/TS SDK provides equivalent helpers:
 
-```python remote_server.py highlight={5-6, 11-12, 18-21, 25-28}
-import logging
-from eval_protocol import Status, InitRequest, FireworksTracingHttpHandler, RolloutIdFilter
+    - **`withFireworksLogging`**: Wraps your handler to automatically send structured logs to Fireworks Tracing.
+    - **`createRolloutLogger`**: Creates a rollout-scoped logger tagged with the current `rollout_id`.
+    - **`Status` / `mapOpenAIErrorToStatus`**: Helpers for emitting structured completion and error statuses.
 
-# Configure Fireworks tracing handler
-fireworks_handler = FireworksTracingHttpHandler()
-logging.getLogger().addHandler(fireworks_handler)
+    ```ts api/init.ts highlight={14-15, 20-21, 23-24, 29}
+    import type { VercelRequest, VercelResponse } from '@vercel/node';
+    import {
+        initRequestSchema,
+        type InitRequest,
+        Status,
+        createRolloutLogger,
+        withFireworksLogging,
+    } from 'eval-protocol';
 
-@app.post("/init") 
-def init(request: InitRequest):
-    # Create rollout-specific logger with filter
-    rollout_logger = logging.getLogger(f"eval_server.{request.metadata.rollout_id}")
-    rollout_logger.addFilter(RolloutIdFilter(request.metadata.rollout_id))
-    
-    try:
-        # Execute your rollout here
-        
-        # Then log successful completion with structured status
-        rollout_logger.info(
-            f"Rollout {request.metadata.rollout_id} completed",
-            extra={"status": Status.rollout_finished()}
-        )
-            
-    except Exception as e:
-        # Log errors with structured status
-        rollout_logger.error(
-            f"Rollout {request.metadata.rollout_id} failed: {e}",
-            extra={"status": Status.rollout_error(str(e))}
-        )
-```
+    async function handler(req: VercelRequest, res: VercelResponse) {
+        const initRequest: InitRequest = initRequestSchema.parse(req.body);
 
-### TypeScript / Node (Vercel) Example
+        // Extract rollout id from InitRequest payload and create rollout-specific logger
+        const rolloutId = initRequest.metadata.rollout_id;
+        const logger = createRolloutLogger(rolloutId);
 
-For TypeScript servers (for example, a Vercel serverless function), the `eval-protocol` JS/TS SDK provides equivalent helpers:
+        try {
+            // Execute your rollout here
 
-- **`withFireworksLogging`**: Wraps your handler to automatically send structured logs to Fireworks Tracing.
-- **`createRolloutLogger`**: Creates a rollout-scoped logger tagged with the current `rollout_id`.
-- **`Status` / `mapOpenAIErrorToStatus`**: Helpers for emitting structured completion and error statuses.
-
-```ts api/init.ts highlight={14-15, 20-21, 23-24, 29}
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import {
-    initRequestSchema,
-    type InitRequest,
-    Status,
-    createRolloutLogger,
-    withFireworksLogging,
-} from 'eval-protocol';
-
-async function handler(req: VercelRequest, res: VercelResponse) {
-    const initRequest: InitRequest = initRequestSchema.parse(req.body);
-
-    // Extract rollout id from InitRequest payload and create rollout-specific logger
-    const rolloutId = initRequest.metadata.rollout_id;
-    const logger = createRolloutLogger(rolloutId);
-
-    try {
-        // Execute your rollout here
-
-        const status = Status.rolloutFinished();
-        logger.info(`Rollout ${rolloutId} completed`, { status });
-    } catch (error: any) {
-        const status = Status.rolloutInternalError(error.message);
-        logger.error(`Rollout ${rolloutId} failed: ${error.message}`, { status });
+            const status = Status.rolloutFinished();
+            logger.info(`Rollout ${rolloutId} completed`, { status });
+        } catch (error: any) {
+            const status = Status.rolloutInternalError(error.message);
+            logger.error(`Rollout ${rolloutId} failed: ${error.message}`, { status });
+        }
     }
-}
 
-// Export wrapped handler so all logs go to Fireworks Tracing
-export default withFireworksLogging(handler);
-```
+    // Export wrapped handler so all logs go to Fireworks Tracing
+    export default withFireworksLogging(handler);
+    ```
+  </Tab>
+  <Tab title="Python">
+    Add `FireworksTracingHttpHandler` as the logging handler, a `RolloutIdFilter`, and log completion status using structured `Status` objects:
+
+    ```python remote_server.py highlight={5-6, 11-12, 18-21, 25-28}
+    import logging
+    from eval_protocol import Status, InitRequest, FireworksTracingHttpHandler, RolloutIdFilter
+
+    # Configure Fireworks tracing handler
+    fireworks_handler = FireworksTracingHttpHandler()
+    logging.getLogger().addHandler(fireworks_handler)
+
+    @app.post("/init") 
+    def init(request: InitRequest):
+        # Create rollout-specific logger with filter
+        rollout_logger = logging.getLogger(f"eval_server.{request.metadata.rollout_id}")
+        rollout_logger.addFilter(RolloutIdFilter(request.metadata.rollout_id))
+        
+        try:
+            # Execute your rollout here
+            
+            # Then log successful completion with structured status
+            rollout_logger.info(
+                f"Rollout {request.metadata.rollout_id} completed",
+                extra={"status": Status.rollout_finished()}
+            )
+                
+        except Exception as e:
+            # Log errors with structured status
+            rollout_logger.error(
+                f"Rollout {request.metadata.rollout_id} failed: {e}",
+                extra={"status": Status.rollout_error(str(e))}
+            )
+    ```
+  </Tab>
+</Tabs>
 
 ### Alternative: Environment Variable Approach
 
@@ -268,6 +271,69 @@ async def init(request: InitRequest):
 1. **Remote server logs completion**: Uses `Status.rollout_finished()` or `Status.rollout_error()`
 2. **RemoteRolloutProcessor polls**: Searches logs by `rollout_id` tag until completion found
 3. **Status extraction**: Reads structured status fields (`code`, `message`, `details`)
+
+## Multi-Agent Setup Fine-tuning / Artifact Storage
+
+One other use-case the `RemoteRolloutProcessor` enables is fine-tuning on multi-agent setups by storing artifacts. For example, let's say you have a Deep Research multi-agent setup and you want to fine-tune the first subagent, but the evaluation is on the artifact produced at the end of this entire multi-agent pipeline, e.g. the final deep research output. To accomplish this, we must store the artifact and correlate it with the subagent's output.
+
+Pass custom data in the `extras` field when logging completion status:
+
+<Warning>
+Only log `Status.rolloutFinished()` **after the entire pipeline completes** and the final artifact is ready—not immediately when the subagent finishes. The completion log signals that evaluation can begin, so it must include all artifacts needed for scoring.
+</Warning>
+
+<Tabs>
+  <Tab title="TypeScript / Node (Vercel)">
+    ```ts api/init.ts
+    // Wait for full pipeline to complete, then log with extras
+    const status = Status.rolloutFinished();
+    logger.info(`Rollout ${rolloutId} completed`, { 
+        status, 
+        extras: {
+            messages: result.messages,
+            research_report: result.report,
+            sources: result.citations,
+        } 
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python remote_server.py
+    # Wait for full pipeline to complete, then log with extras
+    rollout_logger.info(
+        f"Rollout {request.metadata.rollout_id} completed",
+        extra={
+            "status": Status.rollout_finished(),
+            "extras": {
+                "messages": result.messages,
+                "research_report": result.report,
+                "sources": result.citations,
+            }
+        }
+    )
+    ```
+  </Tab>
+</Tabs>
+
+The `RemoteRolloutProcessor` automatically extracts `extras` from the completion log and stores them in `row.execution_metadata.extra`. Access them in your evaluation function:
+
+```python test_deep_research.py
+@evaluation_test(
+    input_dataset=[str(Path(__file__).parent / "research_dataset.jsonl")],
+    completion_params=[{"model": "accounts/fireworks/models/gpt-oss-120b"}],
+    rollout_processor=RemoteRolloutProcessor(
+        remote_base_url="https://your-server.vercel.app",
+    ),
+)
+async def deep_research_evaluation(row: EvaluationRow) -> EvaluationRow:
+    # Access artifacts stored by your remote server
+    research_report = row.execution_metadata.extra["research_report"]
+    sources = row.execution_metadata.extra["sources"]
+    
+    # Evaluate the final artifact
+    row.evaluation_result = evaluate_report_quality(research_report, sources)
+    return row
+```
 
 ## Example
 
