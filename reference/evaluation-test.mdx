@@ -510,6 +510,49 @@ Each returned row should have:
 - Optional `evaluation_result.metrics`: Additional metric scores
 - Optional `execution_metadata.cost_metrics`: Automatically populated when token usage and model info are present (input, output, total costs).
 
+## Scoring
+
+### Setting `is_score_valid` for Training
+
+The `is_score_valid` field in `EvaluateResult` controls whether a rollout's score should be used in training algorithms. When set to `False`, the rollout is excluded from training data (e.g., RFT, GRPO, TRL) while still being logged for analysis.
+
+**When to set `is_score_valid=False`:**
+- No assistant response exists (malformed rollout)
+- The evaluation cannot produce a meaningful score
+- External dependencies failed (e.g., tool execution errors)
+- The response is unparseable or invalid
+
+**Example: Excluding invalid rollouts from training**
+
+```python
+from eval_protocol.models import EvaluateResult, EvaluationRow
+
+def test_my_evaluation(row: EvaluationRow) -> EvaluationRow:
+    # Check if the last message is from the assistant
+    if not row.messages or row.messages[-1].role != "assistant":
+        row.evaluation_result = EvaluateResult(
+            score=0.0,
+            reason="No assistant response",
+            is_score_valid=False  # Exclude from training
+        )
+        return row
+    
+    # Normal evaluation logic
+    response = row.messages[-1].content
+    score = compute_score(response, row.ground_truth)
+    
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason="Evaluation completed",
+        is_score_valid=True  # Include in training (default)
+    )
+    return row
+```
+
+<Note>
+Training pipelines (TRL, rLLM, OpenAI RFT) use `is_score_valid` to filter rollouts before computing gradients. A rollout with `is_score_valid=False` will not contribute to the loss function, preventing noisy or invalid samples from affecting model updates.
+</Note>
+
 ## Dataset loading and input formats
 
 - **Data loaders (`data_loaders`)**: Preferred for reusable and parameterized inputs. Accepts one or more `EvaluationDataLoader` instances (e.g., `DynamicDataLoader`, `InlineDataLoader`). Each loader can emit multiple variants and apply `preprocess_fn` internally. Cannot be combined with `input_dataset`, `input_messages`, or `input_rows`.
