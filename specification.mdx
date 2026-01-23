@@ -302,6 +302,43 @@ class EvaluateResult(BaseModel):
 - **Trajectory Info**: Additional metadata for trajectory-based evaluations
 - **Aggregation**: Optional `agg_score` and `standard_error` for multi-run summaries
 
+### Using `is_score_valid` for Training
+
+The `is_score_valid` field controls whether a rollout's score should be used in training algorithms. When set to `False`, the rollout is excluded from training data (e.g., RFT, GRPO) while still being logged for analysis.
+
+**When to set `is_score_valid=False`:**
+- No assistant response exists (malformed rollout)
+- The evaluation cannot produce a meaningful score
+- External dependencies failed (e.g., tool execution errors)
+- The response is unparseable or invalid
+
+**Example: Excluding rollouts without assistant responses**
+
+```python
+def evaluate(row: EvaluationRow) -> EvaluationRow:
+    # Check if the last message is from the assistant
+    if not row.messages or row.messages[-1].role != "assistant":
+        row.evaluation_result = EvaluateResult(
+            score=0.0,
+            reason="No assistant response",
+            is_score_valid=False  # Exclude from training
+        )
+        return row
+    
+    # Normal evaluation logic
+    score = compute_score(row)
+    row.evaluation_result = EvaluateResult(
+        score=score,
+        reason="Evaluation completed",
+        is_score_valid=True  # Include in training (default)
+    )
+    return row
+```
+
+<Note>
+Training pipelines (TRL, rLLM, OpenAI RFT) use `is_score_valid` to filter rollouts before computing gradients. A rollout with `is_score_valid=False` will not contribute to the loss function, preventing noisy or invalid samples from affecting model updates.
+</Note>
+
 ## EvaluationRow
 
 The `EvaluationRow` is the canonical JSON-serializable unit of data used for both single-turn and trajectory evaluations. It contains the conversation, tool context, evaluation results, and metadata needed for reproducibility and analysis.
