@@ -272,64 +272,6 @@ async def init(request: InitRequest):
 2. **RemoteRolloutProcessor polls**: Searches logs by `rollout_id` tag until completion found
 3. **Status extraction**: Reads structured status fields (`code`, `message`, `details`)
 
-## Handling Rollout Failures
-
-Rollouts can fail for various reasons: your remote server might crash, tracing might fail, or the model might not produce an assistant response. The `RemoteRolloutProcessor` automatically detects these failures and sets `row.rollout_status` accordingly.
-
-The most common failure is when the rollout produces no assistant response. The SDK detects this and sets `row.rollout_status` to `Internal (13)` with the message "Rollout finished with the same number of messages as the original row".
-
-<Note>
-Even when a rollout fails, your evaluation function is still called—giving you control over how to handle errors.
-</Note>
-
-**Best practice:** Check `row.rollout_status.is_error()` at the start of your evaluation function to catch failed rollouts. This method returns `True` when the status code is `INTERNAL`:
-
-```python test_my_eval.py
-from eval_protocol import EvaluateResult, EvaluationRow, evaluation_test
-from eval_protocol.pytest import RemoteRolloutProcessor
-
-@evaluation_test(
-    input_dataset=["dataset.jsonl"],
-    rollout_processor=RemoteRolloutProcessor(
-        remote_base_url="https://your-server.vercel.app",
-    ),
-    completion_params=[{"model": "accounts/fireworks/models/gpt-oss-120b"}],
-)
-def test_my_evaluation(row: EvaluationRow) -> EvaluationRow:
-    # Check if rollout failed with internal error (e.g., no assistant response)
-    if row.rollout_status.is_error():
-        row.evaluation_result = EvaluateResult(
-            score=0.0,
-            reason=f"Rollout failed: {row.rollout_status.message}",
-            is_score_valid=False,
-        )
-        return row
-    
-    # Proceed with normal evaluation logic
-    ...
-```
-
-This catches the most common failure mode—when your remote server fails to produce an assistant response or encounters an internal error.
-
-**Alternative:** Check the messages directly instead of relying on the SDK's error detection:
-
-```python test_my_eval.py
-def test_my_evaluation(row: EvaluationRow) -> EvaluationRow:
-    # Check if no assistant response was produced
-    if not row.messages or row.messages[-1].role != "assistant":
-        row.evaluation_result = EvaluateResult(
-            score=0.0,
-            reason="No assistant response - rollout may have failed",
-            is_score_valid=False,
-        )
-        return row
-    
-    # Proceed with normal evaluation logic
-    ...
-```
-
-This approach doesn't depend on the SDK's status detection and directly validates that an assistant response exists.
-
 ## Multi-Agent Setup Fine-tuning / Artifact Storage
 
 One other use-case the `RemoteRolloutProcessor` enables is fine-tuning on multi-agent setups by storing artifacts. For example, let's say you have a Deep Research multi-agent setup and you want to fine-tune the first subagent, but the evaluation is on the artifact produced at the end of this entire multi-agent pipeline, e.g. the final deep research output. To accomplish this, we must store the artifact and correlate it with the subagent's output.
@@ -392,6 +334,64 @@ async def deep_research_evaluation(row: EvaluationRow) -> EvaluationRow:
     row.evaluation_result = evaluate_report_quality(research_report, sources)
     return row
 ```
+
+## Handling Rollout Failures
+
+Rollouts can fail for various reasons: your remote server might crash, tracing might fail, or the model might not produce an assistant response. The `RemoteRolloutProcessor` automatically detects these failures and sets `row.rollout_status` accordingly.
+
+The most common failure is when the rollout produces no assistant response. The SDK detects this and sets `row.rollout_status` to `Internal (13)` with the message "Rollout finished with the same number of messages as the original row".
+
+<Note>
+Even when a rollout fails, your evaluation function is still called—giving you control over how to handle errors.
+</Note>
+
+**Best practice:** Check `row.rollout_status.is_error()` at the start of your evaluation function to catch failed rollouts. This method returns `True` when the status code is `INTERNAL`:
+
+```python test_my_eval.py
+from eval_protocol import EvaluateResult, EvaluationRow, evaluation_test
+from eval_protocol.pytest import RemoteRolloutProcessor
+
+@evaluation_test(
+    input_dataset=["dataset.jsonl"],
+    rollout_processor=RemoteRolloutProcessor(
+        remote_base_url="https://your-server.vercel.app",
+    ),
+    completion_params=[{"model": "accounts/fireworks/models/gpt-oss-120b"}],
+)
+def test_my_evaluation(row: EvaluationRow) -> EvaluationRow:
+    # Check if rollout failed with internal error (e.g., no assistant response)
+    if row.rollout_status.is_error():
+        row.evaluation_result = EvaluateResult(
+            score=0.0,
+            reason=f"Rollout failed: {row.rollout_status.message}",
+            is_score_valid=False,
+        )
+        return row
+    
+    # Proceed with normal evaluation logic
+    ...
+```
+
+This catches the most common failure mode—when your remote server fails to produce an assistant response or encounters an internal error.
+
+**Alternative:** Check the messages directly instead of relying on the SDK's error detection:
+
+```python test_my_eval.py
+def test_my_evaluation(row: EvaluationRow) -> EvaluationRow:
+    # Check if no assistant response was produced
+    if not row.messages or row.messages[-1].role != "assistant":
+        row.evaluation_result = EvaluateResult(
+            score=0.0,
+            reason="No assistant response - rollout may have failed",
+            is_score_valid=False,
+        )
+        return row
+    
+    # Proceed with normal evaluation logic
+    ...
+```
+
+This approach doesn't depend on the SDK's status detection and directly validates that an assistant response exists.
 
 ## Example
 
