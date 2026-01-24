@@ -63,28 +63,40 @@ Scan for evaluation tests, select, and upload as Fireworks evaluators
   Entrypoint of evaluation test to upload (module:function or path::function). For multiple, separate by commas.
 </ParamField>
 
-<ParamField path="--id">
-  Evaluator ID to use (if multiple selections, a numeric suffix is appended)
-</ParamField>
-
-<ParamField path="--display-name">
-  Display name for evaluator (defaults to ID)
-</ParamField>
-
-<ParamField path="--description">
-  Description for evaluator
-</ParamField>
-
-<ParamField path="--force" type="boolean" default="false">
-  Overwrite existing evaluator with the same ID
-</ParamField>
-
 <ParamField path="--yes" type="boolean" default="false">
   Non-interactive: upload all discovered evaluation tests (Aliases: `-y`)
 </ParamField>
 
 <ParamField path="--env-file">
   Path to .env file containing secrets to upload (default: .env in current directory)
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing evaluator with the same ID
+</ParamField>
+
+<ParamField path="--evaluator-default-dataset" type="string">
+  Default dataset to use with this evaluator (Aliases: `--default-dataset`)
+</ParamField>
+
+<ParamField path="--evaluator-description" type="string">
+  Description for evaluator (Aliases: `--description`)
+</ParamField>
+
+<ParamField path="--evaluator-display-name" type="string">
+  Display name for evaluator (defaults to ID) (Aliases: `--name`, `--display-name`)
+</ParamField>
+
+<ParamField path="--evaluator-entry-point" type="string">
+  Pytest-style entrypoint (e.g., test_file.py::test_func). Auto-detected if not provided. (Aliases: `--entry-point`)
+</ParamField>
+
+<ParamField path="--evaluator-requirements" type="string">
+  Requirements for evaluator (auto-detected from requirements.txt if not provided) (Aliases: `--requirements`)
+</ParamField>
+
+<ParamField path="--evaluator-id" type="string">
+  Evaluator ID to use (if multiple selections, a numeric suffix is appended) (Aliases: `--id`)
 </ParamField>
 
 ### `ep create rft`
@@ -117,6 +129,10 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 
 <ParamField path="--docker-run-extra" type="string" default="">
   Extra flags to pass to 'docker run' when validating evaluator (quoted string, e.g. "--env-file .env --memory=8g")
+</ParamField>
+
+<ParamField path="--env-file">
+  Path to .env file containing secrets to upload to Fireworks (default: .env in project root)
 </ParamField>
 
 <ParamField path="--source-job">
