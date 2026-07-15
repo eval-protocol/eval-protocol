@@ -40,7 +40,9 @@ jobs:
           fi
 
       - name: Create Pull Request
+        id: create_pr
         if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -54,3 +56,14 @@ jobs:
           delete-branch: true
           labels: documentation
 
+      - name: Report manual pull request follow-up
+        if: steps.create_pr.outcome == 'failure'
+        run: |
+          echo "::warning title=Manual PR creation required::The docs update branch was prepared, but this repository currently does not allow GitHub Actions to create pull requests with GITHUB_TOKEN. Open a PR manually from docs/update-cli-reference to main."
+          {
+            echo "## Manual PR creation required"
+            echo
+            echo "The docs update branch \`docs/update-cli-reference\` was prepared, but this repository currently does not allow GitHub Actions to create pull requests with \`GITHUB_TOKEN\`."
+            echo
+            echo "Open a pull request manually from \`docs/update-cli-reference\` to \`main\`."
+          } >> "$GITHUB_STEP_SUMMARY"
