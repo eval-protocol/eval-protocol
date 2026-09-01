@@ -75,6 +75,10 @@ Scan for evaluation tests, select, and upload as Fireworks evaluators
   Overwrite existing evaluator with the same ID
 </ParamField>
 
+<ParamField path="--evaluator-criteria" type="Iterable">
+  Aliases: `--criteria`
+</ParamField>
+
 <ParamField path="--evaluator-default-dataset" type="string">
   Default dataset to use with this evaluator (Aliases: `--default-dataset`)
 </ParamField>
@@ -155,6 +159,30 @@ Create a Reinforcement Fine-tuning Job on Fireworks
   ID of the reinforcement fine-tuning job, a random UUID will be generated if not specified. (Aliases: `--job-id`)
 </ParamField>
 
+<ParamField path="--aws-s3-config-credentials-secret" type="string">
+  Aliases: `--credentials-secret`
+</ParamField>
+
+<ParamField path="--aws-s3-config-iam-role-arn" type="string">
+  Aliases: `--iam-role-arn`
+</ParamField>
+
+<ParamField path="--azure-blob-storage-config-credentials-secret" type="string">
+  Reference to a Secret resource containing Azure credentials. Format:
+    accounts/&#123;account_id&#125;/secrets/&#123;secret_id&#125; The secret value must be JSON:
+    &#123;"connection_string": "..."&#125; or &#123;"sas_token": "..."&#125; or &#123;"account_key": "..."&#125;
+    Mutually exclusive with managed_identity_client_id.
+</ParamField>
+
+<ParamField path="--azure-blob-storage-config-managed-identity-client-id" type="string">
+  Managed Identity Client ID for GCP-to-Azure Workload Identity Federation.
+    Format: uuid Mutually exclusive with credentials_secret. (Aliases: `--managed-identity-client-id`)
+</ParamField>
+
+<ParamField path="--azure-blob-storage-config-tenant-id" type="string">
+  Aliases: `--tenant-id`
+</ParamField>
+
 <ParamField path="--chunk-size" type="number">
   Data chunking for rollout, default size 200, enabled when dataset &gt; 300. Valid range is 1-10,000.
 </ParamField>
@@ -177,7 +205,7 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 </ParamField>
 
 <ParamField path="--inference-parameters-response-candidates-count" type="number">
-  Number of response candidates to generate per input. (Aliases: `--response-candidates-count`)
+  Aliases: `--response-candidates-count`
 </ParamField>
 
 <ParamField path="--inference-parameters-temperature" type="number">
@@ -192,13 +220,28 @@ Create a Reinforcement Fine-tuning Job on Fireworks
   Top-p sampling parameter, typically between 0 and 1. (Aliases: `--top-p`)
 </ParamField>
 
+<ParamField path="--loss-config-dpo" type="DpoConfig">
+  DPO-specific configuration. Intended for METHOD=DPO. (Aliases: `--dpo`)
+</ParamField>
+
 <ParamField path="--loss-config-kl-beta" type="number">
   KL coefficient (beta) override for GRPO-like methods. If unset, the trainer
     default is used. (Aliases: `--rl-kl-beta`, `--kl-beta`)
 </ParamField>
 
 <ParamField path="--loss-config-method" type="Literal">
-  RL loss method for underlying trainers. One of &#123;grpo,dapo&#125;. (Aliases: `--rl-loss-method`, `--method`)
+  RL loss method for underlying trainers. One of &#123;grpo,dapo,gspo-token&#125;. (Aliases: `--rl-loss-method`, `--method`)
+</ParamField>
+
+<ParamField path="--max-concurrent-evaluations" type="number">
+  Maximum number of concurrent evaluations during the RFT job.
+</ParamField>
+
+<ParamField path="--max-concurrent-rollouts" type="number">
+  Maximum number of concurrent rollouts during the RFT job.
+</ParamField>
+
+<ParamField path="--max-inference-replica-count" type="number">
 </ParamField>
 
 <ParamField path="--mcp-server" type="string">
@@ -209,6 +252,10 @@ Create a Reinforcement Fine-tuning Job on Fireworks
   The number of nodes to use for the fine-tuning job. If not specified, the default is 1. (Aliases: `--nodes`)
 </ParamField>
 
+<ParamField path="--reservation-target" type="string">
+  The reservation resource this job consumes from.
+</ParamField>
+
 <ParamField path="--training-config-base-model" type="string">
   The name of the base model to be fine-tuned Only one of 'base_model' or
     'warm_start_from' should be specified. (Aliases: `--base-model`)
@@ -216,6 +263,10 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 
 <ParamField path="--training-config-batch-size" type="number">
   The maximum packed number of tokens per batch for training in sequence packing. (Aliases: `--batch-size`)
+</ParamField>
+
+<ParamField path="--training-config-batch-size-samples" type="number">
+  The number of samples per gradient batch. (Aliases: `--batch-size-samples`)
 </ParamField>
 
 <ParamField path="--training-config-epochs" type="number">
@@ -235,11 +286,17 @@ Create a Reinforcement Fine-tuning Job on Fireworks
 </ParamField>
 
 <ParamField path="--training-config-lora-rank" type="number">
-  The rank of the LoRA layers. (Aliases: `--lora-rank`)
+  The rank of the LoRA layers.
+
+    For service-mode RLOR trainer jobs (`serviceMode=true`), this must be 0. (Aliases: `--lora-rank`)
 </ParamField>
 
 <ParamField path="--training-config-max-context-length" type="number">
   The maximum context length to use with the model. (Aliases: `--max-context-length`)
+</ParamField>
+
+<ParamField path="--training-config-optimizer-weight-decay" type="number">
+  Weight decay (L2 regularization) for optimizer. (Aliases: `--optimizer-weight-decay`)
 </ParamField>
 
 <ParamField path="--training-config-output-model" type="string">
