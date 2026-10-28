@@ -5,6 +5,10 @@ icon: "rocket"
 sidebarTitle: Quickstart
 ---
 
+<Warning>
+**Deprecated:** The hosted Fireworks tracing gateway (`tracing.fireworks.ai`) was shut down on October 28, 2026. Remote rollouts that depend on it, including `RemoteRolloutProcessor` and `GithubActionRolloutProcessor`, are deprecated and no longer work against the hosted endpoint.
+</Warning>
+
 <Frame>
   <iframe
     src="https://www.loom.com/embed/24ba433601de45ba8b63d9fb34c31fd5"
@@ -247,7 +251,7 @@ Eval Protocol enables **reinforcement learning that meets you where you are**. I
 
 Your remote server is only responsible for:
 - **Executing rollouts** - Run your agent logic (in this case, SVG generation from text prompts)
-- **Logging to tracing** - Send structured logs to `tracing.fireworks.ai` for evaluation (see the below linked docs for more information)
+- **Logging to tracing** - Send structured logs to `tracing.fireworks.ai` for evaluation (see the below linked docs for more information). This hosted gateway was shut down on October 28, 2026.
 
 In this example, we showcase a **Vercel TypeScript server** that executes single-turn SVG code generation.
 

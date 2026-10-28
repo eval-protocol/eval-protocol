@@ -29,6 +29,10 @@ For the full catalog and configuration options, see the [reference page](/refere
 - **Interactive MCP “gym” environment?** → `MCPGymRolloutProcessor`
 - **Already have an in‑production agent/service you want to eval or train?** → `RemoteRolloutProcessor` (see the next page: [Remote Rollout Processor](/tutorial/remote-rollout-processor))
 
+<Warning>
+**Deprecated:** The hosted Fireworks tracing gateway (`tracing.fireworks.ai`) was shut down on October 28, 2026. Remote rollouts that depend on it, including `RemoteRolloutProcessor` and `GithubActionRolloutProcessor`, are deprecated and no longer work against the hosted endpoint.
+</Warning>
+
 The examples below all assume you are inside an `@evaluation_test`.
 
 ## Single-turn model calls
