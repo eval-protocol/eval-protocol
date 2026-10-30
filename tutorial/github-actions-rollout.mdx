@@ -4,6 +4,10 @@ icon: "github"
 sidebarTitle: GitHub Actions
 ---
 
+<Warning>
+**Deprecated:** The hosted Fireworks tracing gateway (`tracing.fireworks.ai`) was shut down on October 28, 2026. Remote rollouts that depend on it, including `RemoteRolloutProcessor` and `GithubActionRolloutProcessor`, are deprecated and no longer work against the hosted endpoint.
+</Warning>
+
 If you already have an agent, you can integrate it with Eval Protocol by
 using the [GithubActionRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/github_action_rollout_processor.py).
 
@@ -45,7 +49,7 @@ We expect the GitHub Actions workflow to accept the following inputs:
 </ParamField>
 
 <ParamField body="model_base_url" type="string" required>
-  Base URL for the model API (e.g., "https://tracing.fireworks.ai")
+  Base URL for the model API (e.g., "https://tracing.fireworks.ai"; that hosted gateway was shut down on October 28, 2026)
 </ParamField>
 
 <ParamField body="api_key" type="string" required>

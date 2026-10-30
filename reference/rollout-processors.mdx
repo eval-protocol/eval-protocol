@@ -241,6 +241,10 @@ def gym_eval(rows):
 
 ### RemoteRolloutProcessor (HTTP)
 
+<Warning>
+**Deprecated:** The hosted Fireworks tracing gateway (`tracing.fireworks.ai`) was shut down on October 28, 2026. Remote rollouts that depend on it, including `RemoteRolloutProcessor` and `GithubActionRolloutProcessor`, are deprecated and no longer work against the hosted endpoint.
+</Warning>
+
 Using a remote HTTP service to perform the rollout is advanced. See [Remote
 Rollout Processor](/tutorial/remote-rollout-processor) for more details.
 

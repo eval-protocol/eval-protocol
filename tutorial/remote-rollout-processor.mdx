@@ -4,6 +4,10 @@ icon: "server"
 sidebarTitle: Remote Server
 ---
 
+<Warning>
+**Deprecated:** The hosted Fireworks tracing gateway (`tracing.fireworks.ai`) was shut down on October 28, 2026. Remote rollouts that depend on it, including `RemoteRolloutProcessor` and `GithubActionRolloutProcessor`, are deprecated and no longer work against the hosted endpoint.
+</Warning>
+
 If you already have an agent, you can integrate it with Eval Protocol by
 using the [RemoteRolloutProcessor](https://github.com/eval-protocol/python-sdk/blob/main/eval_protocol/pytest/remote_rollout_processor.py).
 
@@ -109,7 +113,7 @@ about wrangling metadata.
 
 ## Handling `InitRequest` in your Server
 
-This section shows how to **parse the `InitRequest` fields and call your model**. Note: the `model_base_url` is a `tracing.fireworks.ai` URL that proxies your model calls so Fireworks can capture full traces for each rollout.
+This section shows how to **parse the `InitRequest` fields and call your model**. Note: the `model_base_url` points at `tracing.fireworks.ai`, the hosted gateway that proxied your model calls so Fireworks could capture full traces for each rollout. That gateway was shut down on October 28, 2026.
 
 Below is a minimal FastAPI server showing how to wire this together.
 
